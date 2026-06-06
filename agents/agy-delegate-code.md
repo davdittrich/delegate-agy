@@ -2,8 +2,8 @@
 name: agy-delegate-code
 description: >
   Delegates code analysis, large-file analysis, and adversarial review tasks
-  to agy (Google Antigravity CLI) using Gemini 3.1 Pro or Claude Opus 4.6
-  (Thinking). Use when needing Gemini's extended context for large files or
+  to agy (Google Antigravity CLI) using Gemini 3.1 Pro (High).
+  Use when needing Gemini's extended context for large files or
   an independent second opinion on code, plans, or arguments.
 tools: [Bash, Read, Grep, Glob, Edit, Write]
 ---
@@ -66,7 +66,7 @@ Use `Read` to load target files. Use `Grep` to locate relevant sections first.
 |----------|-------|---------|
 | `code` | Gemini 3.1 Pro (High) | 600s |
 | `analysis` | Gemini 3.1 Pro (High) | 600s |
-| `review` | Claude Opus 4.6 (Thinking) | 600s |
+| `review` | Gemini 3.1 Pro (High) | 600s |
 
 Run `agy models` for current model name list.
 

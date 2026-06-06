@@ -1,12 +1,12 @@
 ---
 command: agy-review
-description: Adversarial critique via agy using Claude Opus 4.6 (Thinking) — independent second opinion on code, plans, or arguments
+description: Adversarial critique via agy using Gemini 3.1 Pro (High) — independent second opinion on code, plans, or arguments
 version: 1.0.2
 category: ai-delegation
-tags: [agy, review, critique, adversarial, opus, second-opinion]
+tags: [agy, review, critique, adversarial, gemini, second-opinion]
 ---
 
-Run an adversarial review via agy using Claude Opus 4.6 (Thinking) for an independent perspective.
+Run an adversarial review via agy using Gemini 3.1 Pro (High) for an independent perspective.
 
 Target: $ARGUMENTS
 

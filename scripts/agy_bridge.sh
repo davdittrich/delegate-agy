@@ -54,7 +54,7 @@ while [[ $# -gt 0 ]]; do
             printf '%-12s %-30s %s\n' 'search' 'Gemini 3.5 Flash (High)' '300s'
             printf '%-12s %-30s %s\n' 'code' 'Gemini 3.1 Pro (High)' '600s'
             printf '%-12s %-30s %s\n' 'analysis' 'Gemini 3.1 Pro (High)' '600s'
-            printf '%-12s %-30s %s\n' 'review' 'Claude Opus 4.6 (Thinking)' '600s'
+            printf '%-12s %-30s %s\n' 'review' 'Gemini 3.1 Pro (High)' '600s'
             exit 0 ;;
         --help)
             grep '^#' "$0" | head -20 | sed 's/^# \?//'
@@ -75,7 +75,7 @@ esac
 if [[ -z "$MODEL" ]]; then
     case "$TYPE" in
         search)   MODEL="Gemini 3.5 Flash (High)" ;;
-        review)   MODEL="Claude Opus 4.6 (Thinking)" ;;
+        review)   MODEL="Gemini 3.1 Pro (High)" ;;
         analysis) MODEL="Gemini 3.1 Pro (High)" ;;
         code)     MODEL="Gemini 3.1 Pro (High)" ;;
     esac

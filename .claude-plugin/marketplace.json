@@ -1,0 +1,17 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "agy-delegate",
+  "description": "Delegate web searches and tasks to agy (Google Antigravity CLI). Grounded search with citations via Gemini 3.1/3.5 and GPT-OSS.",
+  "owner": {
+    "name": "Dennis Dittrich",
+    "url": "https://github.com/davdittrich"
+  },
+  "plugins": [
+    {
+      "name": "agy-delegate",
+      "description": "Route web searches and AI tasks through agy with Gemini, Claude, and GPT-OSS models. Native search_web grounding with source citations.",
+      "source": "./",
+      "category": "productivity"
+    }
+  ]
+}
