@@ -22,11 +22,11 @@ if [[ ! -L "$BRIDGE" ]]; then
 fi
 TARGET=$(readlink "$BRIDGE")
 echo "agy-bridge → $TARGET"
-if echo "$TARGET" | grep -q "agy-delegate"; then
+if [[ "$TARGET" == *"/agy_bridge.sh" ]]; then
   rm "$BRIDGE"
   echo "Removed $BRIDGE"
 else
-  echo "SKIP: $BRIDGE points to '$TARGET' (not an agy-delegate path) — not removing"
+  echo "SKIP: $BRIDGE points to '$TARGET' (not agy_bridge.sh) — not removing"
 fi
 ```
 
