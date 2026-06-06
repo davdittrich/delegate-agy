@@ -4,15 +4,6 @@
 # Usage:
 #   echo "prompt" | agy_bridge.sh [OPTIONS]
 #   agy_bridge.sh [OPTIONS] -- "prompt text"
-#
-# Options:
-#   --type search|code|review|analysis
-#   --model "model name"       (see: agy models)
-#   --timeout N                seconds (default: 300 search, 600 other)
-#   --json                     output JSON envelope
-#   --verbose                  diagnostics to stderr
-#   --help                     show this message
-#   --                         treat remaining args as prompt text
 
 set -euo pipefail
 
@@ -20,6 +11,7 @@ set -euo pipefail
 if ! command -v agy &>/dev/null; then
     echo "ERROR: agy not found in PATH (expected at ~/.local/bin/agy)" >&2; exit 2
 fi
+AGY_BIN=$(command -v agy)
 _require_jq() {
     command -v jq &>/dev/null || {
         echo "ERROR: jq not found in PATH (required for --json output)" >&2; exit 2
@@ -30,6 +22,8 @@ _require_jq() {
 TYPE="code"
 MODEL=""
 TIMEOUT=""
+STDIN_TIMEOUT=30
+LOG_FILE=""
 JSON_OUTPUT=0
 VERBOSE=0
 PROMPT_ARGS=()
@@ -47,6 +41,13 @@ while [[ $# -gt 0 ]]; do
             [[ $# -lt 2 ]] && { echo "ERROR: --timeout requires a value" >&2; exit 2; }
             [[ "$2" =~ ^[1-9][0-9]*$ ]] || { echo "ERROR: --timeout must be a positive integer" >&2; exit 2; }
             TIMEOUT="$2"; shift 2 ;;
+        --stdin-timeout)
+            [[ $# -lt 2 ]] && { echo "ERROR: --stdin-timeout requires a value" >&2; exit 2; }
+            [[ "$2" =~ ^[1-9][0-9]*$ ]] || { echo "ERROR: --stdin-timeout must be a positive integer" >&2; exit 2; }
+            STDIN_TIMEOUT="$2"; shift 2 ;;
+        --log-file)
+            [[ $# -lt 2 ]] && { echo "ERROR: --log-file requires a value" >&2; exit 2; }
+            LOG_FILE="$2"; shift 2 ;;
         --json)    JSON_OUTPUT=1; shift ;;
         --verbose) VERBOSE=1; shift ;;
         --types)
@@ -57,7 +58,25 @@ while [[ $# -gt 0 ]]; do
             printf '%-12s %-30s %s\n' 'review' 'Gemini 3.1 Pro (High)' '600s'
             exit 0 ;;
         --help)
-            grep '^#' "$0" | head -20 | sed 's/^# \?//'
+            cat <<'HELP'
+agy_bridge.sh — Bridge for Google Antigravity CLI (agy)
+
+Usage:
+  echo "prompt" | agy_bridge.sh [OPTIONS]
+  agy_bridge.sh [OPTIONS] -- "prompt text"
+
+Options:
+  --type search|code|review|analysis
+  --model "model name"       (see: agy models)
+  --timeout N                seconds (default: 300 search, 600 other)
+  --stdin-timeout N          seconds for stdin read (default: 30)
+  --log-file PATH            write verbose metadata to file instead of stderr
+  --json                     output JSON envelope
+  --verbose                  diagnostics to stderr (or --log-file)
+  --types                    list type/model/timeout table
+  --help                     show this message
+  --                         treat remaining args as prompt text
+HELP
             exit 0 ;;
         --)        shift; PROMPT_ARGS+=("$@"); break ;;
         --*)       echo "ERROR: unknown flag: $1" >&2; exit 2 ;;
@@ -66,9 +85,10 @@ while [[ $# -gt 0 ]]; do
 done
 
 # ── Validate type ─────────────────────────────────────────────────────────────
-case "$TYPE" in
-    search|code|review|analysis) ;;
-    *) echo "WARNING: unknown --type '$TYPE'; defaulting to code" >&2; TYPE="code" ;;
+TYPE_SAFE=$(printf '%s' "$TYPE" | tr -dc '[:alnum:]-_')
+case "$TYPE_SAFE" in
+    search|code|review|analysis) TYPE="$TYPE_SAFE" ;;
+    *) echo "ERROR: unknown --type '${TYPE_SAFE}'; expected search|code|review|analysis" >&2; exit 2 ;;
 esac
 
 # ── Model auto-selection ──────────────────────────────────────────────────────
@@ -81,6 +101,14 @@ if [[ -z "$MODEL" ]]; then
     esac
 fi
 
+# ── Model allowlist validation ────────────────────────────────────────────────
+VALID_MODELS=$("$AGY_BIN" models </dev/null 2>/dev/null) || {
+    echo "ERROR: failed to retrieve model list from agy" >&2; exit 2
+}
+if ! printf '%s\n' "$VALID_MODELS" | grep -qxF "$MODEL"; then
+    echo "ERROR: unknown --model '${MODEL}'; run 'agy models' for valid names" >&2; exit 2
+fi
+
 # ── Default timeout ───────────────────────────────────────────────────────────
 if [[ -z "$TIMEOUT" ]]; then
     case "$TYPE" in
@@ -89,8 +117,12 @@ if [[ -z "$TIMEOUT" ]]; then
     esac
 fi
 
-# ── Temp files (one dir, one trap) ────────────────────────────────────────────
-WORK_DIR=$(mktemp -d -t "agy-bridge.XXXXXX")
+# ── Temp files (prefer /dev/shm on Linux for reduced SIGKILL persistence) ─────
+if [[ -d /dev/shm ]] && touch /dev/shm/.agy-bridge-test 2>/dev/null && rm -f /dev/shm/.agy-bridge-test; then
+    WORK_DIR=$(mktemp -d /dev/shm/agy-bridge.XXXXXX)
+else
+    WORK_DIR=$(mktemp -d -t "agy-bridge.XXXXXX")
+fi
 PROMPT_FILE="$WORK_DIR/prompt"
 STDOUT_FILE="$WORK_DIR/stdout"
 STDERR_FILE="$WORK_DIR/stderr"
@@ -98,12 +130,10 @@ trap 'rm -rf "$WORK_DIR"' EXIT HUP INT QUIT TERM
 
 # ── Read prompt ───────────────────────────────────────────────────────────────
 if [[ ${#PROMPT_ARGS[@]} -gt 0 ]]; then
-    # Each positional arg becomes its own line (natural for multi-arg prompts).
     printf '%s\n' "${PROMPT_ARGS[@]}" > "$PROMPT_FILE"
 elif [[ ! -t 0 ]]; then
-    # timeout guard: hanging stdin (e.g. stalled pipe) kills early
-    timeout 30 cat > "$PROMPT_FILE" || {
-        echo "ERROR: stdin read timed out after 30s" >&2; exit 2
+    timeout "$STDIN_TIMEOUT" cat > "$PROMPT_FILE" || {
+        echo "ERROR: stdin read timed out after ${STDIN_TIMEOUT}s" >&2; exit 2
     }
 else
     echo "ERROR: no prompt (no stdin, no -- args)" >&2; exit 2
@@ -116,8 +146,15 @@ if [[ "$TYPE" == "search" ]] && ! grep -q "search_web" "$PROMPT_FILE"; then
         "$ORIG" > "$PROMPT_FILE"
 fi
 
-[[ "$VERBOSE" -eq 1 ]] && printf '[agy_bridge] type=%s model=%s timeout=%ss\n' \
-    "$TYPE" "$MODEL" "$TIMEOUT" >&2
+# ── Verbose metadata output (metadata only — no prompt content) ───────────────
+if [[ "$VERBOSE" -eq 1 ]]; then
+    _verbose_msg=$(printf '[agy_bridge] type=%s model=%s timeout=%ss\n' "$TYPE" "$MODEL" "$TIMEOUT")
+    if [[ -n "$LOG_FILE" ]]; then
+        printf '%s\n' "$_verbose_msg" >> "$LOG_FILE"
+    else
+        printf '%s\n' "$_verbose_msg" >&2
+    fi
+fi
 
 # ── Run agy ──────────────────────────────────────────────────────────────────
 # Prompt delivered via stdin redirect — never appears in ps/proc/cmdline.
@@ -126,7 +163,7 @@ EXIT_CODE=0
 set +e
 AGY_FLAGS=(--print --model "$MODEL")
 [[ "${AGY_SKIP_PERMISSIONS:-0}" == "1" ]] && AGY_FLAGS+=(--dangerously-skip-permissions)
-timeout --foreground "$TIMEOUT" agy \
+timeout "$TIMEOUT" "$AGY_BIN" \
     "${AGY_FLAGS[@]}" \
     < "$PROMPT_FILE" \
     > "$STDOUT_FILE" \
@@ -160,7 +197,6 @@ elif [[ "$EXIT_CODE" -ne 0 ]]; then
 fi
 
 # ── Output ────────────────────────────────────────────────────────────────────
-# Use printf to preserve trailing newlines (cat strips them)
 RESPONSE=$(cat "$STDOUT_FILE"; printf x); RESPONSE="${RESPONSE%x}"
 
 if [[ "$JSON_OUTPUT" -eq 1 ]]; then
