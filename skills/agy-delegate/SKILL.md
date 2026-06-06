@@ -23,7 +23,7 @@ agy (Google Antigravity CLI) provides grounded web search with source citations 
 
 ## Usage
 
-Bridge: `agy-bridge` (symlink in `~/.local/bin/` — run `/agy-setup` once after plugin install). Wraps `agy` with `--dangerously-skip-permissions`, shell-safe prompt passing, and consistent exit-code handling.
+Bridge: `agy-bridge` (symlink in `~/.local/bin/` — run `/agy-setup` once after plugin install). Wraps `agy` with shell-safe prompt delivery (stdin), type routing, and consistent exit-code handling. Set `AGY_SKIP_PERMISSIONS=1` to pass `--dangerously-skip-permissions` when required.
 
 ### Web search
 
@@ -84,7 +84,7 @@ Run `agy models` for current model names — values above match bridge defaults 
 | Model name rejected | Exact string required — run `agy models` for current names |
 | `agy: command not found` | Binary at `~/.local/bin/agy` — check PATH |
 | `agy-bridge: command not found` | Symlink not created — run `/agy-setup` once. Until fixed: WebSearch for search tasks; native tools for code/review. |
-| Calling `agy` directly | Use bridge — direct calls miss `--dangerously-skip-permissions` |
+| Calling `agy` directly | Use bridge — direct calls miss type routing and exit-code normalization |
 
 ## Reference
 

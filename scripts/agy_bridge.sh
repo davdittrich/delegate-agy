@@ -124,10 +124,10 @@ fi
 START=$SECONDS
 EXIT_CODE=0
 set +e
+AGY_FLAGS=(--print --model "$MODEL")
+[[ "${AGY_SKIP_PERMISSIONS:-0}" == "1" ]] && AGY_FLAGS+=(--dangerously-skip-permissions)
 timeout --foreground "$TIMEOUT" agy \
-    --print \
-    --model "$MODEL" \
-    --dangerously-skip-permissions \
+    "${AGY_FLAGS[@]}" \
     < "$PROMPT_FILE" \
     > "$STDOUT_FILE" \
     2> "$STDERR_FILE"
