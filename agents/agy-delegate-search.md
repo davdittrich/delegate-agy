@@ -46,4 +46,5 @@ Run `agy models` for current model name list.
 |------|-------|--------|
 | 0 | OK | Return output |
 | 124 | Timeout | Report; retry with `--timeout 600` or simpler query |
+| 127 | bridge not installed | Run `/agy-setup` to create symlink. Until fixed: fall back to native `WebSearch` tool. |
 | other | agy error | Report stderr verbatim; check model name with `agy models` |

@@ -83,6 +83,7 @@ Run `agy models` for current model names — values above match bridge defaults 
 | Exit 124 | Timeout — simplify query or pass `--timeout 600` |
 | Model name rejected | Exact string required — run `agy models` for current names |
 | `agy: command not found` | Binary at `~/.local/bin/agy` — check PATH |
+| `agy-bridge: command not found` | Symlink not created — run `/agy-setup` once. Until fixed: WebSearch for search tasks; native tools for code/review. |
 | Calling `agy` directly | Use bridge — direct calls miss `--dangerously-skip-permissions` |
 
 ## Reference
