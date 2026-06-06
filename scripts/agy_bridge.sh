@@ -109,13 +109,6 @@ else
     echo "ERROR: no prompt (no stdin, no -- args)" >&2; exit 2
 fi
 
-# ── ARG_MAX guard (~2 MiB kernel limit) ──────────────────────────────────────
-PROMPT_SIZE=$(wc -c < "$PROMPT_FILE")
-if [[ $PROMPT_SIZE -gt 1500000 ]]; then
-    echo "ERROR: prompt too large (${PROMPT_SIZE} bytes; max ~1.5 MB for --print arg)" >&2
-    exit 2
-fi
-
 # ── Search prefix ─────────────────────────────────────────────────────────────
 if [[ "$TYPE" == "search" ]] && ! grep -q "search_web" "$PROMPT_FILE"; then
     ORIG=$(cat "$PROMPT_FILE")
@@ -126,18 +119,16 @@ fi
 [[ "$VERBOSE" -eq 1 ]] && printf '[agy_bridge] type=%s model=%s timeout=%ss\n' \
     "$TYPE" "$MODEL" "$TIMEOUT" >&2
 
-PROMPT_TEXT=$(cat "$PROMPT_FILE")
-
 # ── Run agy ──────────────────────────────────────────────────────────────────
-# Note: prompt passed as --print arg; visible in ps for local processes.
-# Alternative (stdin) causes Claude Code's Bash tool to background the process.
+# Prompt delivered via stdin redirect — never appears in ps/proc/cmdline.
 START=$SECONDS
 EXIT_CODE=0
 set +e
 timeout --foreground "$TIMEOUT" agy \
-    --print "$PROMPT_TEXT" \
+    --print \
     --model "$MODEL" \
     --dangerously-skip-permissions \
+    < "$PROMPT_FILE" \
     > "$STDOUT_FILE" \
     2> "$STDERR_FILE"
 EXIT_CODE=$?

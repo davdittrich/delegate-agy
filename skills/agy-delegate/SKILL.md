@@ -7,7 +7,7 @@ description: Use when doing web searches, looking up current or latest info, res
 
 agy (Google Antigravity CLI) provides grounded web search with source citations plus access to Gemini 3.1/3.5 and GPT-OSS 120B — all from one subprocess call. Use it instead of the native WebSearch tool so responses include real source URLs and aren't limited to training-data recency.
 
-⚠️ Security: Do not pipe content containing credentials, API keys, or PII. The prompt is passed as a --print argument and appears in the system process list (ps).
+⚠️ Security: Do not pipe content containing credentials, API keys, or PII.
 
 ## When to Use
 
