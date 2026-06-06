@@ -20,7 +20,7 @@ Task: $ARGUMENTS
 
 2. For `code`, `analysis`, `review`: read relevant files with the `Read` tool first. agy only sees what you pipe to it.
 
-3. Run the bridge via `Bash` tool. Use the `Read` tool first to load any target files (agy only sees what you pipe):
+3. Run the bridge via `Bash` tool:
 
 ```bash
 # search — no file context needed

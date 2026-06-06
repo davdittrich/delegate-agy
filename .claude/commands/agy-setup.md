@@ -15,8 +15,14 @@ Run this ONCE after installing the plugin. Safe to re-run — skips if already c
 1. Resolve the plugin install path automatically:
 
 ```bash
-PLUGIN_PATH=$(claude plugin list --json 2>/dev/null | \
-  python3 -c "
+command -v python3 &>/dev/null || { echo "ERROR: python3 required for plugin path resolution" >&2; exit 2; }
+
+CLAUDE_JSON=$(claude plugin list --json 2>&1)
+if [[ $? -ne 0 ]]; then
+  echo "ERROR: 'claude plugin list' failed: $CLAUDE_JSON" >&2
+  exit 1
+fi
+PLUGIN_PATH=$(printf '%s' "$CLAUDE_JSON" | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
 m = [x for x in data if x.get('id','').startswith('agy-delegate@')]

@@ -33,7 +33,7 @@ Use `Read` to load target files. Use `Grep` to locate relevant sections first.
 ```bash
 # Pattern: build prompt with file content inline
 {
-  echo "<question or task>"
+  echo "$TASK"
   echo "---"
   cat "$FILE_PATH"
 } | agy-bridge --type code
@@ -43,16 +43,16 @@ Use `Read` to load target files. Use `Grep` to locate relevant sections first.
 
 ```bash
 # Code/analysis with piped content
-{ echo "<task>"; echo "---"; cat "$FILE_PATH"; } | agy-bridge --type code
+{ echo "$TASK"; echo "---"; cat "$FILE_PATH"; } | agy-bridge --type code
 
 # Adversarial review
 { echo "Critique this:"; cat "$FILE_PATH"; } | agy-bridge --type review
 
 # Custom model override
-{ echo "<task>"; cat "$FILE_PATH"; } | agy-bridge --type code --model "Gemini 3.5 Flash (High)"
+{ echo "$TASK"; cat "$FILE_PATH"; } | agy-bridge --type code --model "Gemini 3.5 Flash (High)"
 
 # JSON envelope (machine-readable)
-{ echo "<task>"; cat "$FILE_PATH"; } | agy-bridge --type analysis --json
+{ echo "$TASK"; cat "$FILE_PATH"; } | agy-bridge --type analysis --json
 ```
 
 ### 4. Apply results

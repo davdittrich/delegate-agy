@@ -19,13 +19,13 @@ Bridge: `agy-bridge` (symlink in `~/.local/bin/` — user runs `/agy-setup` once
 
 ```bash
 # Inline query
-agy-bridge --type search -- "<query>"
+agy-bridge --type search -- "$QUERY"
 
 # Piped query
 echo "latest dplyr release notes" | agy-bridge --type search
 
 # JSON envelope (machine-readable)
-agy-bridge --type search --json -- "<query>"
+agy-bridge --type search --json -- "$QUERY"
 ```
 
 ### Apply results

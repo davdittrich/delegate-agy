@@ -69,7 +69,7 @@ echo "query" | agy-bridge --type search --json
 | `search` | Gemini 3.5 Flash (High) | Fast, web-grounded |
 | `code` | Gemini 3.1 Pro (High) | Extended context |
 | `analysis` | Gemini 3.1 Pro (High) | Large file analysis |
-| `review` | Gemini 3.1 Pro (High) | Independent adversarial view |
+| `review` | Gemini 3.1 Pro (High) | Second-pass critique, adversarial prompt framing |
 
 Omitting `--type` defaults to `code`. Override: `--model "Gemini 3.5 Flash (Low)"`.
 
