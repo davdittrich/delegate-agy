@@ -1,7 +1,7 @@
 ---
 command: agy-review
 description: Adversarial critique via agy using Claude Opus 4.6 (Thinking) — independent second opinion on code, plans, or arguments
-version: 1.0.0
+version: 1.0.2
 category: ai-delegation
 tags: [agy, review, critique, adversarial, opus, second-opinion]
 ---

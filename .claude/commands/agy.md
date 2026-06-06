@@ -1,7 +1,7 @@
 ---
 command: agy
 description: Delegate any task to agy (Google Antigravity CLI) — auto-selects model by task type
-version: 1.0.0
+version: 1.0.2
 category: ai-delegation
 tags: [agy, antigravity, gemini, gpt, delegate, multi-model]
 ---

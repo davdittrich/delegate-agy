@@ -1,7 +1,7 @@
 ---
 command: agy-uninstall
 description: Remove agy-delegate plugin artifacts — only removes agy-bridge symlink if it points to this plugin's script
-version: 1.0.1
+version: 1.0.2
 category: ai-delegation
 tags: [agy, uninstall, cleanup]
 ---

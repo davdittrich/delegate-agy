@@ -1,7 +1,7 @@
 ---
 command: agy-search
 description: Web search via agy (Google Antigravity CLI) with source citations — prefer over native WebSearch
-version: 1.0.0
+version: 1.0.2
 category: ai-delegation
 tags: [agy, search, web, gemini, citations, grounded]
 ---
