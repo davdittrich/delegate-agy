@@ -1,0 +1,28 @@
+{
+  "name": "agy-delegate",
+  "version": "1.0.1",
+  "description": "Delegate web searches and tasks to agy (Google Antigravity CLI). Routes searches through Gemini 3.1/3.5, Claude Opus, or GPT-OSS with native web grounding and source citations.",
+  "author": {
+    "name": "Dennis Dittrich",
+    "url": "https://github.com/davdittrich"
+  },
+  "license": "MIT",
+  "keywords": [
+    "agy",
+    "antigravity",
+    "gemini",
+    "web-search",
+    "multi-model",
+    "delegate",
+    "claude-code-plugin"
+  ],
+  "skills": [
+    "./skills/agy-delegate"
+  ],
+  "commands": [
+    "./.claude/commands/agy-setup.md",
+    "./.claude/commands/agy.md",
+    "./.claude/commands/agy-search.md",
+    "./.claude/commands/agy-review.md"
+  ]
+}
