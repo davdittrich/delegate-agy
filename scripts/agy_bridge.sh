@@ -20,9 +20,11 @@ set -euo pipefail
 if ! command -v agy &>/dev/null; then
     echo "ERROR: agy not found in PATH (expected at ~/.local/bin/agy)" >&2; exit 2
 fi
-if ! command -v jq &>/dev/null; then
-    echo "ERROR: jq not found in PATH (required for --json and error output)" >&2; exit 2
-fi
+_require_jq() {
+    command -v jq &>/dev/null || {
+        echo "ERROR: jq not found in PATH (required for --json output)" >&2; exit 2
+    }
+}
 
 # ── Defaults ─────────────────────────────────────────────────────────────────
 TYPE="code"
@@ -47,6 +49,13 @@ while [[ $# -gt 0 ]]; do
             TIMEOUT="$2"; shift 2 ;;
         --json)    JSON_OUTPUT=1; shift ;;
         --verbose) VERBOSE=1; shift ;;
+        --types)
+            printf '%-12s %-30s %s\n' 'type' 'model' 'timeout'
+            printf '%-12s %-30s %s\n' 'search' 'Gemini 3.5 Flash (High)' '300s'
+            printf '%-12s %-30s %s\n' 'code' 'Gemini 3.1 Pro (High)' '600s'
+            printf '%-12s %-30s %s\n' 'analysis' 'Gemini 3.1 Pro (High)' '600s'
+            printf '%-12s %-30s %s\n' 'review' 'Claude Opus 4.6 (Thinking)' '600s'
+            exit 0 ;;
         --help)
             grep '^#' "$0" | head -20 | sed 's/^# \?//'
             exit 0 ;;
@@ -89,6 +98,7 @@ trap 'rm -rf "$WORK_DIR"' EXIT HUP INT QUIT TERM
 
 # ── Read prompt ───────────────────────────────────────────────────────────────
 if [[ ${#PROMPT_ARGS[@]} -gt 0 ]]; then
+    # Each positional arg becomes its own line (natural for multi-arg prompts).
     printf '%s\n' "${PROMPT_ARGS[@]}" > "$PROMPT_FILE"
 elif [[ ! -t 0 ]]; then
     # timeout guard: hanging stdin (e.g. stalled pipe) kills early
@@ -107,7 +117,7 @@ if [[ $PROMPT_SIZE -gt 1500000 ]]; then
 fi
 
 # ── Search prefix ─────────────────────────────────────────────────────────────
-if [[ "$TYPE" == "search" ]]; then
+if [[ "$TYPE" == "search" ]] && ! grep -q "search_web" "$PROMPT_FILE"; then
     ORIG=$(cat "$PROMPT_FILE")
     printf 'Use your search_web tool to answer this query. Cite sources with URLs.\n\n%s\n' \
         "$ORIG" > "$PROMPT_FILE"
@@ -137,6 +147,7 @@ DURATION=$(( SECONDS - START ))
 # ── Handle errors ─────────────────────────────────────────────────────────────
 if [[ "$EXIT_CODE" -eq 124 ]]; then
     if [[ "$JSON_OUTPUT" -eq 1 ]]; then
+        _require_jq
         jq -n --arg m "$MODEL" --arg t "$TYPE" --argjson d "$DURATION" \
             --arg e "Timeout after ${TIMEOUT}s" \
             '{success:false,model_used:$m,type:$t,duration_seconds:$d,error:$e}'
@@ -147,6 +158,7 @@ if [[ "$EXIT_CODE" -eq 124 ]]; then
 elif [[ "$EXIT_CODE" -ne 0 ]]; then
     ERR=$(cat "$STDERR_FILE")
     if [[ "$JSON_OUTPUT" -eq 1 ]]; then
+        _require_jq
         jq -n --arg m "$MODEL" --arg t "$TYPE" --argjson d "$DURATION" \
             --arg e "$ERR" \
             '{success:false,model_used:$m,type:$t,duration_seconds:$d,error:$e}'
@@ -161,6 +173,7 @@ fi
 RESPONSE=$(cat "$STDOUT_FILE"; printf x); RESPONSE="${RESPONSE%x}"
 
 if [[ "$JSON_OUTPUT" -eq 1 ]]; then
+    _require_jq
     jq -n --arg m "$MODEL" --arg t "$TYPE" --argjson d "$DURATION" \
         --arg r "$RESPONSE" \
         '{success:true,model_used:$m,type:$t,duration_seconds:$d,response:$r}'
