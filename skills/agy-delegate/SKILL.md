@@ -37,7 +37,7 @@ Read target files first (agy only sees what you pipe — it has no filesystem ac
 
 ```bash
 {
-  echo "Question: <question>"
+  echo "$QUESTION"
   echo "---"
   cat src/foo.R
 } | agy-bridge --type code
@@ -46,7 +46,7 @@ Read target files first (agy only sees what you pipe — it has no filesystem ac
 ### Adversarial review
 
 ```bash
-echo "Critique this plan: <plan>" | agy-bridge --type review
+echo "$TASK" | agy-bridge --type review
 ```
 
 ### Inline prompt (no stdin)
