@@ -17,12 +17,21 @@ Target: $ARGUMENTS
 
 2. Run via `Bash` tool:
 
+If `$ARGUMENTS` is a file path, use the `Read` tool first and pipe the file content:
+
 ```bash
+# Inline content — arguments are the content to review
 {
   echo "Critique this critically. Identify all flaws, risks, assumptions, and weaknesses:"
   echo ""
   echo "$ARGUMENTS"
-  # if file: cat <file> here instead
+} | agy-bridge --type review
+
+# File path — Read the file first, then pipe it
+{
+  echo "Critique this critically. Identify all flaws, risks, assumptions, and weaknesses:"
+  echo ""
+  cat "$ARGUMENTS"
 } | agy-bridge --type review
 ```
 

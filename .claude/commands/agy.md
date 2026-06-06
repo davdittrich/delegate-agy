@@ -20,14 +20,17 @@ Task: $ARGUMENTS
 
 2. For `code`, `analysis`, `review`: read relevant files with the `Read` tool first. agy only sees what you pipe to it.
 
-3. Run the bridge via `Bash` tool:
+3. Run the bridge via `Bash` tool. Use the `Read` tool first to load any target files (agy only sees what you pipe):
 
 ```bash
-# search (no file context needed)
+# search — no file context needed
 agy-bridge --type search -- "$ARGUMENTS"
 
-# code/analysis/review (pipe file content)
-{ echo "$ARGUMENTS"; echo "---"; cat <file>; } | agy-bridge --type <type>
+# code or analysis — Read the target file, then pipe its content
+{ echo "$ARGUMENTS"; echo "---"; cat "$FILE_PATH"; } | agy-bridge --type code
+
+# review — pipe inline content or a Read-loaded file
+{ echo "Critique this:"; echo "---"; cat "$FILE_PATH"; } | agy-bridge --type review
 ```
 
 4. Return result. For search: preserve source URLs verbatim. For code suggestions: apply with `Edit` tool and report what changed.
