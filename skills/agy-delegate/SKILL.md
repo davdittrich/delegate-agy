@@ -5,7 +5,9 @@ description: Use when doing web searches, looking up current or latest info, res
 
 # AGY Delegate
 
-agy (Google Antigravity CLI) provides grounded web search with source citations plus access to Gemini 3.1/3.5, Claude 4.6, and GPT-OSS 120B — all from one subprocess call. Use it instead of the native WebSearch tool so responses include real source URLs and aren't limited to training-data recency.
+agy (Google Antigravity CLI) provides grounded web search with source citations plus access to Gemini 3.1/3.5, Claude Opus 4.6 (Thinking), and GPT-OSS 120B — all from one subprocess call. Use it instead of the native WebSearch tool so responses include real source URLs and aren't limited to training-data recency.
+
+⚠️ Security: Do not pipe content containing credentials, API keys, or PII. The prompt is passed as a --print argument and appears in the system process list (ps).
 
 ## When to Use
 
@@ -68,9 +70,10 @@ echo "query" | agy-bridge --type search --json
 | `code` | Gemini 3.1 Pro (High) | Extended context |
 | `analysis` | Gemini 3.1 Pro (High) | Large file analysis |
 | `review` | Claude Opus 4.6 (Thinking) | Independent adversarial view |
-| (default) | Gemini 3.5 Flash (Medium) | Cost-effective |
 
-Override: `--model "Gemini 3.5 Flash (Low)"`. Full list: `agy models`.
+Omitting `--type` defaults to `code`. Override: `--model "Gemini 3.5 Flash (Low)"`.
+
+Run `agy models` for current model names — values above match bridge defaults and may lag agy updates.
 
 ## Common Mistakes
 
