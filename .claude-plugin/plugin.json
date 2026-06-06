@@ -21,6 +21,7 @@
   ],
   "commands": [
     "./.claude/commands/agy-setup.md",
+    "./.claude/commands/agy-uninstall.md",
     "./.claude/commands/agy.md",
     "./.claude/commands/agy-search.md",
     "./.claude/commands/agy-review.md"
