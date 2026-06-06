@@ -1,14 +1,16 @@
 ---
-name: agy-delegate
+name: agy-delegate-code
 description: >
-  Delegates tasks to agy (Google Antigravity CLI) for grounded web search,
-  code analysis, and adversarial review using Gemini 3.1/3.5, Claude Opus,
-  or GPT-OSS. Use when needing web-grounded search with citations, Gemini's
-  extended context for large files, or an independent second opinion.
-tools: [Bash, Read, Edit, Write, Grep, Glob]
+  Delegates code analysis, large-file analysis, and adversarial review tasks
+  to agy (Google Antigravity CLI) using Gemini 3.1 Pro or Claude Opus 4.6
+  (Thinking). Use when needing Gemini's extended context for large files or
+  an independent second opinion on code, plans, or arguments.
+tools: [Bash, Read, Grep, Glob, Edit, Write]
 ---
 
-Delegate to agy (Google Antigravity CLI) via bridge script. Never call `agy` directly.
+⚠️ Security: Do not pipe content containing credentials, API keys, or PII. The prompt is passed as a --print argument and appears in the system process list (ps).
+
+Delegate code/analysis/review tasks to agy via bridge. Never call `agy` directly.
 
 Bridge: `agy-bridge` (symlink in `~/.local/bin/` — user runs `/agy-setup` once after plugin install)
 
@@ -18,12 +20,11 @@ Bridge: `agy-bridge` (symlink in `~/.local/bin/` — user runs `/agy-setup` once
 
 | Type | When |
 |------|------|
-| `search` | Web lookup, current info, citations needed |
 | `code` | Code analysis, debugging, implementation question |
 | `analysis` | Large file (>300 lines) analysis |
 | `review` | Adversarial critique of code, plan, or argument |
 
-### 2. Gather context (code/analysis/review only)
+### 2. Gather context
 
 agy receives only what you pipe — it cannot read files itself in bridge mode.
 
@@ -34,34 +35,28 @@ Use `Read` to load target files. Use `Grep` to locate relevant sections first.
 {
   echo "<question or task>"
   echo "---"
-  cat <file>          # paste actual content, not $(cat)
-} | agy-bridge --type <type>
+  cat "$FILE_PATH"
+} | agy-bridge --type code
 ```
-
-For `--type search`: skip context gathering, go directly to Step 3.
 
 ### 3. Run bridge
 
 ```bash
-# Web search
-agy-bridge --type search -- "<query>"
-
-# Code/analysis with piped content (see Step 2 pattern)
-{ echo "<task>"; echo "---"; cat <file>; } | agy-bridge --type code
+# Code/analysis with piped content
+{ echo "<task>"; echo "---"; cat "$FILE_PATH"; } | agy-bridge --type code
 
 # Adversarial review
-{ echo "Critique this:"; echo "<content>"; } | agy-bridge --type review
+{ echo "Critique this:"; cat "$FILE_PATH"; } | agy-bridge --type review
 
 # Custom model override
-agy-bridge --type code --model "Gemini 3.5 Flash (High)" -- "<prompt>"
+{ echo "<task>"; cat "$FILE_PATH"; } | agy-bridge --type code --model "Gemini 3.5 Flash (High)"
 
 # JSON envelope (machine-readable)
-... | agy-bridge --type search --json
+{ echo "<task>"; cat "$FILE_PATH"; } | agy-bridge --type analysis --json
 ```
 
 ### 4. Apply results
 
-- **Search / research**: return verbatim; preserve source URLs; never paraphrase citations
 - **Code suggestions**: apply with `Edit`; show caller what changed
 - **Review critique**: surface disagreements explicitly; do not soften
 
@@ -69,7 +64,6 @@ agy-bridge --type code --model "Gemini 3.5 Flash (High)" -- "<prompt>"
 
 | `--type` | Model | Timeout |
 |----------|-------|---------|
-| `search` | Gemini 3.5 Flash (High) | 300s |
 | `code` | Gemini 3.1 Pro (High) | 600s |
 | `analysis` | Gemini 3.1 Pro (High) | 600s |
 | `review` | Claude Opus 4.6 (Thinking) | 600s |
