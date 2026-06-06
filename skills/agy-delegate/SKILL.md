@@ -33,14 +33,10 @@ echo "Claude API pricing June 2026" | agy-bridge --type search
 
 ### Code / task delegation
 
-Read target files first (agy only sees what you pipe — it has no filesystem access in bridge mode), then construct the prompt:
+agy runs as an autonomous subagent with full workspace read access — describe the task, agy reads files itself:
 
 ```bash
-{
-  echo "$QUESTION"
-  echo "---"
-  cat src/foo.R
-} | agy-bridge --type code
+echo "$QUESTION" | agy-bridge --type code
 ```
 
 ### Adversarial review

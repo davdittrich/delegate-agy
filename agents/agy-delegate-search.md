@@ -7,7 +7,7 @@ description: >
 tools: [Bash]
 ---
 
-⚠️ Security: Do not pipe content containing credentials, API keys, or PII. The prompt is passed as a --print argument and appears in the system process list (ps).
+⚠️ Security: Do not pipe content containing credentials, API keys, or PII.
 
 Delegate web search to agy via bridge. Never call `agy` directly.
 

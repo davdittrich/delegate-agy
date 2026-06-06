@@ -8,7 +8,7 @@ description: >
 tools: [Bash, Read, Grep, Glob, Edit, Write]
 ---
 
-⚠️ Security: Do not pipe content containing credentials, API keys, or PII. The prompt is passed as a --print argument and appears in the system process list (ps).
+⚠️ Security: Do not pipe content containing credentials, API keys, or PII.
 
 Delegate code/analysis/review tasks to agy via bridge. Never call `agy` directly.
 
@@ -26,17 +26,11 @@ Bridge: `agy-bridge` (symlink in `~/.local/bin/` — user runs `/agy-setup` once
 
 ### 2. Gather context
 
-agy receives only what you pipe — it cannot read files itself in bridge mode.
-
-Use `Read` to load target files. Use `Grep` to locate relevant sections first.
+agy runs as an autonomous subagent with access to the current workspace. It can read files, grep, and search the project directly — no need to inline file content in the prompt. Describe the task; agy retrieves what it needs.
 
 ```bash
-# Pattern: build prompt with file content inline
-{
-  echo "$TASK"
-  echo "---"
-  cat "$FILE_PATH"
-} | agy-bridge --type code
+# Just describe the task — agy reads the repo itself
+echo "Review scripts/agy_bridge.sh for security issues" | agy-bridge --type review
 ```
 
 ### 3. Run bridge

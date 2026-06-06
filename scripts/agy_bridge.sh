@@ -202,13 +202,13 @@ fi
 START=$SECONDS
 EXIT_CODE=0
 set +e
-AGY_FLAGS=(--print --sandbox --model "$MODEL")
+AGY_FLAGS=(--print --sandbox --model "$MODEL" --add-dir "$WORK_DIR")
 [[ "${AGY_SKIP_PERMISSIONS:-0}" == "1" ]] && AGY_FLAGS+=(--dangerously-skip-permissions)
-(cd "$WORK_DIR" && timeout "$TIMEOUT" "$AGY_BIN" \
+timeout "$TIMEOUT" "$AGY_BIN" \
     "${AGY_FLAGS[@]}" \
     < "$PROMPT_FILE" \
     > "$STDOUT_FILE" \
-    2> "$STDERR_FILE")
+    2> "$STDERR_FILE"
 EXIT_CODE=$?
 set -e
 DURATION=$(( SECONDS - START ))
