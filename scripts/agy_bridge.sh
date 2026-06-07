@@ -234,26 +234,23 @@ if [[ "$EXIT_CODE" -eq 124 ]]; then
     fi
     exit 124
 elif [[ "$EXIT_CODE" -ne 0 ]]; then
-    ERR=$(cat "$STDERR_FILE")
     if [[ "$JSON_OUTPUT" -eq 1 ]]; then
         _require_jq
         jq -n --arg m "$MODEL" --arg t "$TYPE" --argjson d "$DURATION" \
-            --arg e "$ERR" \
-            '{success:false,model_used:$m,type:$t,duration_seconds:$d,error:$e}'
+            --rawfile e "$STDERR_FILE" \
+            '{success:false,model_used:$m,type:$t,duration_seconds:$d,error:$e}' || true
     else
-        printf 'ERROR: agy exit %d: %s\n' "$EXIT_CODE" "$ERR" >&2
+        printf 'ERROR: agy exit %d: %s\n' "$EXIT_CODE" "$(cat "$STDERR_FILE" 2>/dev/null || true)" >&2
     fi
     exit "$EXIT_CODE"
 fi
 
 # ── Output ────────────────────────────────────────────────────────────────────
-RESPONSE=$(cat "$STDOUT_FILE"; printf x); RESPONSE="${RESPONSE%x}"
-
 if [[ "$JSON_OUTPUT" -eq 1 ]]; then
     _require_jq
     jq -n --arg m "$MODEL" --arg t "$TYPE" --argjson d "$DURATION" \
-        --arg r "$RESPONSE" \
+        --rawfile r "$STDOUT_FILE" \
         '{success:true,model_used:$m,type:$t,duration_seconds:$d,response:$r}'
 else
-    printf '%s' "$RESPONSE"
+    cat "$STDOUT_FILE"
 fi
