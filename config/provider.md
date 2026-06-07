@@ -17,7 +17,7 @@ Authentication is handled by the Antigravity CLI itself. Run `agy` interactively
 
 ```bash
 # Non-interactive (primary bridge mode)
-agy --print "prompt text" --model "model name" --dangerously-skip-permissions
+agy --print "prompt text" --model "model name" --sandbox
 
 # Continue last conversation
 agy --continue --print "follow-up"
@@ -42,10 +42,9 @@ agy --conversation <session-id> --print "follow-up"
 
 1. **Web Search with Citations** — Native `search_web` tool with URL sources
 2. **Extended Context** — Gemini 3.1 Pro handles large codebases
-3. **Subagent Orchestration** — Can spawn and coordinate subagents internally
-4. **MCP Integration** — lean-ctx MCP tools available inside agy sessions
-5. **Multi-model Access** — Gemini, Claude, GPT-OSS in one CLI
-6. **File Operations** — Native read/write/edit without Claude Code permission prompts
+3. **MCP Integration** — lean-ctx MCP tools available inside agy sessions
+4. **Multi-model Access** — Gemini, Claude, GPT-OSS in one CLI
+5. **File Operations** — Native read/write/edit without Claude Code permission prompts
 
 ## Timeout Guidance
 
@@ -55,7 +54,6 @@ agy --conversation <session-id> --print "follow-up"
 | Code analysis (<500 lines) | 300s |
 | Code analysis (>500 lines) | 600s |
 | Adversarial review | 600s |
-| Subagent orchestration | 900s |
 
 ## Error Patterns
 
@@ -64,7 +62,6 @@ agy --conversation <session-id> --print "follow-up"
 | `timeout: command not found` | GNU coreutils not installed | `brew install coreutils` (macOS) |
 | Model name rejected | Exact string required | Run `agy models` for exact names |
 | Empty output | Prompt too long for shell substitution | Write to file, use heredoc |
-| Permission denied | Not run with `--dangerously-skip-permissions` | Bridge adds this flag automatically |
 
 ## Integration Notes
 
