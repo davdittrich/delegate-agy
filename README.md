@@ -63,8 +63,18 @@ sudo apt install jq
 
 **3. Install this plugin.**
 
+Directly from GitHub:
+
 ```bash
-claude plugin install /path/to/delegate-agy
+claude plugin marketplace add https://github.com/davdittrich/delegate-agy
+claude plugin install agy-delegate
+```
+
+Or from a local clone:
+
+```bash
+git clone https://github.com/davdittrich/delegate-agy
+claude plugin install ./delegate-agy
 ```
 
 **4. Create the bridge symlink.**
