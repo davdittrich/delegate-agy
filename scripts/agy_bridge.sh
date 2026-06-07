@@ -12,6 +12,13 @@ if ! command -v agy &>/dev/null; then
     echo "ERROR: agy not found in PATH (expected at ~/.local/bin/agy)" >&2; exit 2
 fi
 AGY_BIN=$(command -v agy)
+if command -v timeout &>/dev/null; then
+    TIMEOUT_BIN="timeout"
+elif command -v gtimeout &>/dev/null; then
+    TIMEOUT_BIN="gtimeout"
+else
+    echo "ERROR: timeout/gtimeout not found in PATH (install coreutils)" >&2; exit 2
+fi
 _require_jq() {
     command -v jq &>/dev/null || {
         echo "ERROR: jq not found in PATH (required for --json output)" >&2; exit 2
@@ -180,7 +187,7 @@ esac
 if [[ ${#PROMPT_ARGS[@]} -gt 0 ]]; then
     printf '%s\n' "${PROMPT_ARGS[@]}" > "$PROMPT_FILE"
 elif [[ ! -t 0 ]]; then
-    timeout "$STDIN_TIMEOUT" cat > "$PROMPT_FILE" || {
+    "$TIMEOUT_BIN" "$STDIN_TIMEOUT" cat > "$PROMPT_FILE" || {
         echo "ERROR: stdin read timed out after ${STDIN_TIMEOUT}s" >&2; exit 2
     }
 else
@@ -213,7 +220,7 @@ EXIT_CODE=0
 set +e
 AGY_FLAGS=(--print --sandbox --model "$MODEL" --add-dir "$WORK_DIR")
 [[ "${AGY_SKIP_PERMISSIONS:-0}" == "1" ]] && AGY_FLAGS+=(--dangerously-skip-permissions)
-timeout "$TIMEOUT" "$AGY_BIN" \
+"$TIMEOUT_BIN" "$TIMEOUT" "$AGY_BIN" \
     "${AGY_FLAGS[@]}" \
     < "$PROMPT_FILE" \
     > "$STDOUT_FILE" \

@@ -59,7 +59,7 @@ agy --conversation <session-id> --print "follow-up"
 
 | Error | Cause | Fix |
 |-------|-------|-----|
-| `timeout: command not found` | GNU coreutils not installed | `brew install coreutils` (macOS) |
+| `ERROR: timeout/gtimeout not found in PATH` | `timeout` or `gtimeout` not in PATH | `brew install coreutils` (macOS) |
 | Model name rejected | Exact string required | Run `agy models` for exact names |
 | Empty output | Prompt too long for shell substitution | Write to file, use heredoc |
 
