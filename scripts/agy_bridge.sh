@@ -112,9 +112,20 @@ if [[ -z "$MODEL" ]]; then
 fi
 
 # ── Model allowlist validation ────────────────────────────────────────────────
-VALID_MODELS=$("$AGY_BIN" models </dev/null 2>/dev/null) || {
-    echo "ERROR: failed to retrieve model list from agy" >&2; exit 2
-}
+CACHE_FILE="$HOME/.cache/agy-bridge-models"
+_agy_models=""
+if [[ ! -s "$CACHE_FILE" ]] || [[ -n "$(find "$CACHE_FILE" -mmin +60 2>/dev/null)" ]]; then
+    _agy_models=$("$AGY_BIN" models </dev/null 2>/dev/null) || {
+        echo "ERROR: failed to retrieve model list from agy" >&2; exit 2
+    }
+    mkdir -p "${CACHE_FILE%/*}" 2>/dev/null || true
+    printf '%s' "$_agy_models" > "$CACHE_FILE" || true
+fi
+VALID_MODELS="${_agy_models:-}"
+if [[ -z "$VALID_MODELS" ]]; then
+    VALID_MODELS=$(cat "$CACHE_FILE" 2>/dev/null) || true
+fi
+[[ -n "$VALID_MODELS" ]] || { echo "ERROR: failed to retrieve model list from agy" >&2; exit 2; }
 if ! printf '%s\n' "$VALID_MODELS" | grep -qxF "$MODEL"; then
     echo "ERROR: unknown --model '${MODEL}'; run 'agy models' for valid names" >&2; exit 2
 fi
