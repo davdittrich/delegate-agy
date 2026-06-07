@@ -1,0 +1,4 @@
+.beads/
+.claude-octopus/
+.metaswarm/
+*.tmp
