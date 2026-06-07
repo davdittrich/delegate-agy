@@ -66,6 +66,7 @@ echo "query" | agy-bridge --type search --json
 | `code` | Gemini 3.1 Pro (High) | Extended context |
 | `analysis` | Gemini 3.1 Pro (High) | Large file analysis |
 | `review` | Gemini 3.1 Pro (High) | Second-pass critique, adversarial prompt framing |
+| `implement` | Gemini 3.1 Pro (High) | File read+write, no shell exec — use when agy must write output files |
 
 Omitting `--type` defaults to `code`. Override: `--model "Gemini 3.5 Flash (Low)"`.
 
