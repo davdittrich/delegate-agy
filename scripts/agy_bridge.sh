@@ -189,9 +189,10 @@ fi
 
 # ── Search prefix ─────────────────────────────────────────────────────────────
 if [[ "$TYPE" == "search" ]] && ! grep -q "search_web" "$PROMPT_FILE"; then
-    ORIG=$(cat "$PROMPT_FILE")
-    printf 'Use your search_web tool to answer this query. Cite sources with URLs.\n\n%s\n' \
-        "$ORIG" > "$PROMPT_FILE"
+    printf 'Use your search_web tool to answer this query. Cite sources with URLs.\n\n' \
+        > "$WORK_DIR/prefix.tmp"
+    cat "$PROMPT_FILE" >> "$WORK_DIR/prefix.tmp"
+    mv "$WORK_DIR/prefix.tmp" "$PROMPT_FILE"
 fi
 
 # ── Verbose metadata output (metadata only — no prompt content) ───────────────
