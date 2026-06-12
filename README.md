@@ -41,7 +41,7 @@ Omit `--type` to default to `code`. Override the model with `--model "Gemini 3.5
 ## Requirements
 
 - [agy](https://github.com/google/agy) installed and authenticated via OAuth
-- `jq` 1.6 or later (required for `--json` output mode only)
+- `python3` 3.6 or later (standard on all modern systems)
 - `timeout` or `gtimeout` — Linux ships `timeout`; macOS needs `brew install coreutils`
 
 ## Installation
@@ -53,12 +53,12 @@ Follow the agy project's installation instructions. After installing, run `agy` 
 **2. Install dependencies.**
 
 ```bash
-# macOS
-brew install jq coreutils
+# macOS — python3 and timeout (coreutils)
+brew install coreutils
 
-# Debian/Ubuntu
-sudo apt install jq
-# timeout is included in coreutils, already present on most Linux systems
+# Debian/Ubuntu — timeout is in coreutils, already present on most systems
+# python3 is standard; install if missing:
+sudo apt install python3
 ```
 
 **3. Install this plugin.**
@@ -179,9 +179,15 @@ no config changes in those frameworks required.
 |-------------|----------|
 | `pro` (metaswarm default) | `Gemini 3.1 Pro (High)` |
 | `flash` | `Gemini 3.5 Flash (High)` |
-| `gemini-2.5-pro*` / `gemini-3.1-pro*` | `Gemini 3.1 Pro (High)` |
-| `gemini-2.5-flash*` / `gemini-3.5-flash*` | `Gemini 3.5 Flash (High)` |
-| already an agy model name | pass through |
+| `gemini-pro` | `Gemini 3.1 Pro (High)` |
+| `gemini-2.5-pro` / `gemini-3.1-pro` | `Gemini 3.1 Pro (High)` |
+| `gemini-2.5-pro-preview-06-05` | `Gemini 3.1 Pro (High)` |
+| `gemini-flash` | `Gemini 3.5 Flash (High)` |
+| `gemini-2.5-flash` / `gemini-3.5-flash` | `Gemini 3.5 Flash (High)` |
+| `gemini-2.5-flash-preview-04-17` | `Gemini 3.5 Flash (High)` |
+| any other string | pass through unchanged |
+
+Mappings are in `config/model-map.json` — add aliases there without touching scripts.
 
 ### Install as drop-in
 
@@ -220,4 +226,13 @@ scripts/agy_bridge.sh          — typed bridge (symlinked to ~/.local/bin/agy-b
 scripts/gemini_shim.sh         — drop-in gemini CLI shim (symlinked to ~/.local/bin/gemini)
 skills/agy-delegate/SKILL.md   — skill definition
 config/provider.md             — provider details, auth, timeout guidance
+config/model-map.json          — gemini alias → agy model name mapping table
+config/policies/               — GEMINI.md tool restriction policies (one file per mode)
+  search.md                    — web search only
+  code.md                      — read + grep, no writes
+  review-analysis.md           — read + grep, no writes
+  implement.md                 — read + write, no shell
+  shim-yolo.md                 — gemini shim --yolo (read + write, no shell)
+  shim-sandbox.md              — gemini shim --sandbox (read only)
+  shim-default.md              — gemini shim default (read only)
 ```
