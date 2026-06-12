@@ -235,11 +235,11 @@ if [[ "${AGY_SKIP_PERMISSIONS:-0}" == "1" ]]; then
     echo "WARNING: AGY_SKIP_PERMISSIONS=1 — running with --dangerously-skip-permissions" >&2
     AGY_FLAGS+=(--dangerously-skip-permissions)
 fi
-"$TIMEOUT_BIN" "$TIMEOUT" "$AGY_BIN" \
+( cd "$WORK_DIR" && "$TIMEOUT_BIN" "$TIMEOUT" "$AGY_BIN" \
     "${AGY_FLAGS[@]}" \
     < "$PROMPT_FILE" \
     > "$STDOUT_FILE" \
-    2> "$STDERR_FILE"
+    2> "$STDERR_FILE" )
 EXIT_CODE=$?
 set -e
 DURATION=$(( SECONDS - START ))
