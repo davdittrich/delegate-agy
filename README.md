@@ -4,11 +4,11 @@ A Claude Code plugin that routes tasks to [agy](https://github.com/google/agy) (
 
 Three things Claude Code alone can't do well.
 
-**Independent review.** A model reviewing its own output anchors on the reasoning it used to produce it. An independent model with no memory of the original prompt catches different things — not because Claude can't review code, but because it tends to miss what it already decided was right.
+**Independent review.** A model reviewing its own output anchors on the reasoning it used to produce it. An independent model — different company, different training — catches different things. Not because Claude can't review code, but because it tends to miss what it already decided was right.
 
 **Current information with sources.** Claude's training has a cutoff. When you need today's release notes, a pricing page, or a changelog with actual URLs, you need live web search — not a model's best guess.
 
-**Whole-codebase analysis.** Claude Code's file tools let it navigate large codebases incrementally, but passing an entire codebase to a single prompt requires a larger context window. Gemini 3.1 Pro handles up to 1M tokens, which covers most codebases in one shot without chunking.
+**A second model family.** Gemini and GPT-OSS 120B are architecturally independent of Claude. For security audits, statistical validation, or any task where you want a genuine second opinion, routing through a different model family is the point — not a workaround.
 
 ## How it works
 
