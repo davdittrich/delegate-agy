@@ -209,34 +209,25 @@ RESPONSE=$(cat "$STDOUT_FILE")
 if [[ "$OUTPUT_FORMAT" == "json" ]]; then
     # Wrap in a usageMetadata envelope compatible with extract_cost_gemini()
     # (metaswarm _common.sh reads .usageMetadata.promptTokenCount etc.)
-    PROMPT_LEN=$(wc -c < "$PROMPT_FILE" || echo 0)
-    RESP_LEN=${#RESPONSE}
-    INPUT_TOKENS=$(( PROMPT_LEN / 4 ))
-    OUTPUT_TOKENS=$(( RESP_LEN / 4 ))
-    TOTAL_TOKENS=$(( INPUT_TOKENS + OUTPUT_TOKENS ))
-
+    # Token counts are null — agy does not expose real token usage.
     if [[ "$_JQ_OK" -eq 1 ]]; then
         jq -n \
             --arg response "$RESPONSE" \
-            --argjson input_tokens "$INPUT_TOKENS" \
-            --argjson output_tokens "$OUTPUT_TOKENS" \
-            --argjson total_tokens "$TOTAL_TOKENS" \
             --argjson duration "$DURATION" \
             '{
                 "response": $response,
                 "usageMetadata": {
-                    "promptTokenCount": $input_tokens,
-                    "candidatesTokenCount": $output_tokens,
-                    "totalTokenCount": $total_tokens
+                    "promptTokenCount": null,
+                    "candidatesTokenCount": null,
+                    "totalTokenCount": null
                 },
                 "model": "agy",
                 "duration_seconds": $duration
             }'
     else
         # jq not available — emit minimal JSON manually
-        printf '{"response":%s,"usageMetadata":{"promptTokenCount":%d,"candidatesTokenCount":%d,"totalTokenCount":%d}}\n' \
-            "$(printf '%s' "$RESPONSE" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')" \
-            "$INPUT_TOKENS" "$OUTPUT_TOKENS" "$TOTAL_TOKENS"
+        printf '{"response":%s,"usageMetadata":{"promptTokenCount":null,"candidatesTokenCount":null,"totalTokenCount":null}}\n' \
+            "$(printf '%s' "$RESPONSE" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')"
     fi
 else
     printf '%s\n' "$RESPONSE"
