@@ -100,6 +100,7 @@ print(re.sub(r\"(alias gemini='.*) gemini'$\", r\"\1 $REAL_GEMINI'\", line))
         echo "  Set AGY_SETUP_PATCH_ALIASES=1 to apply."
         continue
       fi
+      echo "WARNING: auto-patching $RC — backup at $RC.bak-agy-*" >&2
       cp "$RC" "$RC.bak-agy-$(date +%Y%m%d%H%M%S)"
       python3 -c "
 import re, sys
