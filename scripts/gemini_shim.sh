@@ -131,31 +131,16 @@ trap 'rm -rf "$WORK_DIR"' EXIT HUP INT QUIT TERM
 # --yolo / --approval-mode yolo: full tool access (implement mode)
 # --sandbox: read-only tools only (review mode)
 # default: read + search (code analysis)
+_SHIM_POLICY_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)/../config/policies"
 if [[ "$YOLO" -eq 1 || "$APPROVAL_MODE" == "yolo" ]]; then
-    cat > "$WORK_DIR/GEMINI.md" <<'RESTRICTIONS'
-TOOL RESTRICTIONS (gemini-shim orchestrator):
-PERMITTED: read_file, view_file, grep_search, search_web, read_url,
-  write_file, write_to_file, replace_file_content, multi_replace_file_content
-FORBIDDEN: run_shell_command, run_command,
-  invoke_subagent, spawn_agent, define_subagent, manage_subagents, schedule
-RESTRICTIONS
+    _SHIM_POLICY="$_SHIM_POLICY_DIR/shim-yolo.md"
 elif [[ "$SANDBOX" -eq 1 ]]; then
-    cat > "$WORK_DIR/GEMINI.md" <<'RESTRICTIONS'
-TOOL RESTRICTIONS (gemini-shim orchestrator — sandbox/read-only):
-PERMITTED: read_file, view_file, grep_search, search_web, read_url
-FORBIDDEN: run_shell_command, run_command, write_file, write_to_file,
-  replace_file_content, multi_replace_file_content,
-  invoke_subagent, spawn_agent, define_subagent, manage_subagents, schedule
-RESTRICTIONS
+    _SHIM_POLICY="$_SHIM_POLICY_DIR/shim-sandbox.md"
 else
-    cat > "$WORK_DIR/GEMINI.md" <<'RESTRICTIONS'
-TOOL RESTRICTIONS (gemini-shim orchestrator):
-PERMITTED: read_file, view_file, grep_search, search_web, read_url
-FORBIDDEN: run_shell_command, run_command, write_file, write_to_file,
-  replace_file_content, multi_replace_file_content,
-  invoke_subagent, spawn_agent, define_subagent, manage_subagents, schedule
-RESTRICTIONS
+    _SHIM_POLICY="$_SHIM_POLICY_DIR/shim-default.md"
 fi
+cat "$_SHIM_POLICY" > "$WORK_DIR/GEMINI.md" \
+    || { echo "ERROR: policy file missing: $_SHIM_POLICY" >&2; exit 2; }
 
 # ── Read prompt ───────────────────────────────────────────────────────────────
 if [[ ${#PROMPT_ARGS[@]} -gt 0 ]]; then
