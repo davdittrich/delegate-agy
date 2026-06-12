@@ -70,6 +70,10 @@ If a shell alias wraps `gemini` with env vars but calls `gemini` recursively (e.
 agent aliases), it must be patched to call the real binary — otherwise the alias loops
 infinitely when invoked interactively while the shim intercepts non-interactive callers.
 
+By default this step is **dry-run only** — it shows what would change but does NOT write
+any file. To apply changes, set `AGY_SETUP_PATCH_ALIASES=1` before running. A timestamped
+`.bak-agy-*` backup is written beside each rc file before any modification.
+
 ```bash
 # Find real gemini binary (not ~/.local/bin shim)
 REAL_GEMINI=$(PATH=$(echo "$PATH" | tr ':' '\n' | grep -v "$HOME/.local/bin" | tr '\n' ':') command -v gemini 2>/dev/null || true)
@@ -82,7 +86,21 @@ else
     # Match alias lines that contain 'gemini' but call 'gemini' without a path
     # Pattern: alias gemini='...' where the value contains ' gemini' (recursive)
     if grep -qP "^alias gemini='.*[^/]gemini'" "$RC" 2>/dev/null; then
-      # Replace the bare 'gemini' at end of alias value with real path
+      old_line=$(grep "^alias gemini=" "$RC" || true)
+      new_line=$(echo "$old_line" | python3 -c "
+import sys
+line = sys.stdin.read().rstrip()
+import re
+print(re.sub(r\"(alias gemini='.*) gemini'$\", r\"\1 $REAL_GEMINI'\", line))
+")
+      echo "Would patch: $RC"
+      echo "  Old: $old_line"
+      echo "  New: $new_line"
+      if [[ "${AGY_SETUP_PATCH_ALIASES:-0}" != "1" ]]; then
+        echo "  Set AGY_SETUP_PATCH_ALIASES=1 to apply."
+        continue
+      fi
+      cp "$RC" "$RC.bak-agy-$(date +%Y%m%d%H%M%S)"
       python3 -c "
 import re, sys
 rc, real = sys.argv[1], sys.argv[2]
@@ -90,13 +108,13 @@ txt = open(rc).read()
 out = re.sub(r\"^(alias gemini='.*) gemini'$\", lambda m: m.group(1) + ' ' + real + \"'\", txt, flags=re.M)
 open(rc, 'w').write(out)
 " "$RC" "$REAL_GEMINI"
-      echo "Patched recursive gemini alias in $RC → $REAL_GEMINI"
+      echo "Patched $RC"
     fi
   done
 fi
 ```
 
-5. Verify `~/.local/bin` is in PATH AND precedes any real `gemini` installation:
+4. Verify `~/.local/bin` is in PATH AND precedes any real `gemini` installation:
 
 ```bash
 echo "$PATH" | grep -q "$HOME/.local/bin" && echo "PATH contains ~/.local/bin ✓" || \
@@ -105,7 +123,7 @@ echo "$PATH" | grep -q "$HOME/.local/bin" && echo "PATH contains ~/.local/bin �
 which gemini && gemini --version
 ```
 
-6. Test the bridge and shim:
+5. Test the bridge and shim:
 
 ```bash
 agy-bridge --types
