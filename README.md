@@ -147,10 +147,77 @@ JSON output:
 
 Don't pipe credentials, API keys, or PII through the bridge. Prompts use stdin to stay out of process listings. Per-type tool restrictions prevent agy from running shell commands in any mode. Model names are validated at startup against a list fetched from agy and cached for 60 minutes at `~/.cache/agy-bridge-models`.
 
+## Drop-in gemini CLI replacement
+
+`scripts/gemini_shim.sh` is a transparent `gemini` CLI shim backed by agy. Install it as
+`gemini` on your PATH so that frameworks that call `gemini` automatically use agy instead —
+no config changes in those frameworks required.
+
+### Frameworks supported
+
+| Framework | How it calls gemini | Shim handles |
+|-----------|---------------------|--------------|
+| [Claude Octopus](https://github.com/nyldn/claude-octopus) | `gemini -m <model> -o text --approval-mode yolo` via stdin | ✓ flag mapping, model mapping, plain text output |
+| [Metaswarm](https://github.com/dsifry/metaswarm) | `gemini --yolo --output-format json --model pro --include-directories <dir> <prompt>` | ✓ flag mapping, model mapping, JSON envelope with usageMetadata |
+
+### Flag translation
+
+| gemini flag | agy equivalent |
+|-------------|----------------|
+| `-m` / `--model <name>` | `--model <name>` (with name mapping) |
+| `-o text` / `--output-format text` | (default — no flag needed) |
+| `--output-format json` | wraps text output in `{"response":…,"usageMetadata":{…}}` envelope |
+| `--approval-mode yolo` | `--dangerously-skip-permissions` |
+| `--yolo` | `--dangerously-skip-permissions` |
+| `--sandbox` | (omitted — read-only is enforced via GEMINI.md tool restrictions) |
+| `--include-directories <dir>` | `--add-dir <dir>` |
+| `--version` | `agy --version` |
+
+### Model name mapping
+
+| gemini name | agy name |
+|-------------|----------|
+| `pro` (metaswarm default) | `Gemini 3.1 Pro (High)` |
+| `flash` | `Gemini 3.5 Flash (High)` |
+| `gemini-2.5-pro*` / `gemini-3.1-pro*` | `Gemini 3.1 Pro (High)` |
+| `gemini-2.5-flash*` / `gemini-3.5-flash*` | `Gemini 3.5 Flash (High)` |
+| already an agy model name | pass through |
+
+### Install as drop-in
+
+```bash
+# Symlink shim as 'gemini' in a directory that precedes the real gemini on PATH
+mkdir -p ~/.local/bin
+ln -sf /path/to/delegate-agy/scripts/gemini_shim.sh ~/.local/bin/gemini
+# Verify:
+gemini --version   # should print agy version
+```
+
+Or use `/agy-setup` (sets up both `agy-bridge` and `gemini` symlinks):
+
+```bash
+/agy-setup
+```
+
+### Octopus configuration
+
+No changes needed. Octopus detects `command -v gemini`; the shim satisfies that check.
+To override the model, set `OCTOPUS_GEMINI_MODEL` as usual:
+
+```bash
+export OCTOPUS_GEMINI_MODEL="gemini-2.5-flash"
+```
+
+### Metaswarm configuration
+
+No changes needed. Metaswarm's `gemini.sh` adapter calls `command -v gemini`; the shim
+satisfies the health check. `agy --version` output is returned as the version string.
+
 ## Files
 
 ```
-scripts/agy_bridge.sh          — bridge script (symlinked to ~/.local/bin/agy-bridge)
+scripts/agy_bridge.sh          — typed bridge (symlinked to ~/.local/bin/agy-bridge)
+scripts/gemini_shim.sh         — drop-in gemini CLI shim (symlinked to ~/.local/bin/gemini)
 skills/agy-delegate/SKILL.md   — skill definition
 config/provider.md             — provider details, auth, timeout guidance
 ```

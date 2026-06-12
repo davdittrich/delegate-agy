@@ -1,12 +1,13 @@
 ---
 command: agy-setup
-description: One-time setup for agy-delegate — creates agy-bridge symlink in ~/.local/bin
-version: 1.0.2
+description: One-time setup for agy-delegate — creates agy-bridge and gemini (shim) symlinks in ~/.local/bin
+version: 1.1.0
 category: ai-delegation
-tags: [agy, setup, install, bridge]
+tags: [agy, setup, install, bridge, gemini]
 ---
 
-Create the `agy-bridge` symlink so agy commands work from any directory.
+Create the `agy-bridge` and `gemini` symlinks so agy commands work from any directory, and
+so frameworks that call `gemini` (Claude Octopus, Metaswarm) automatically use agy instead.
 
 Run this ONCE after installing the plugin. Safe to re-run — skips if already correct.
 
@@ -35,30 +36,46 @@ fi
 echo "Plugin path: $PLUGIN_PATH"
 ```
 
-2. Create the symlink (idempotent — skips if already correct):
+2. Create symlinks (idempotent — skips if already correct):
 
 ```bash
-BRIDGE="$HOME/.local/bin/agy-bridge"
-SCRIPT="$PLUGIN_PATH/scripts/agy_bridge.sh"
 mkdir -p ~/.local/bin
-if [[ -L "$BRIDGE" && "$(readlink "$BRIDGE")" == "$SCRIPT" ]]; then
-  echo "agy-bridge already correct — nothing to do"
+
+# agy-bridge
+BRIDGE="$HOME/.local/bin/agy-bridge"
+BRIDGE_SCRIPT="$PLUGIN_PATH/scripts/agy_bridge.sh"
+if [[ -L "$BRIDGE" && "$(readlink "$BRIDGE")" == "$BRIDGE_SCRIPT" ]]; then
+  echo "agy-bridge already correct — skipping"
 else
-  ln -sf "$SCRIPT" "$BRIDGE"
-  chmod +x "$SCRIPT"
+  ln -sf "$BRIDGE_SCRIPT" "$BRIDGE"
+  chmod +x "$BRIDGE_SCRIPT"
   echo "agy-bridge → $(readlink "$BRIDGE")"
+fi
+
+# gemini shim — lets Octopus + Metaswarm use agy automatically
+GEMINI_SHIM="$HOME/.local/bin/gemini"
+SHIM_SCRIPT="$PLUGIN_PATH/scripts/gemini_shim.sh"
+if [[ -L "$GEMINI_SHIM" && "$(readlink "$GEMINI_SHIM")" == "$SHIM_SCRIPT" ]]; then
+  echo "gemini shim already correct — skipping"
+else
+  ln -sf "$SHIM_SCRIPT" "$GEMINI_SHIM"
+  chmod +x "$SHIM_SCRIPT"
+  echo "gemini (shim) → $(readlink "$GEMINI_SHIM")"
 fi
 ```
 
-3. Verify `~/.local/bin` is in PATH:
+3. Verify `~/.local/bin` is in PATH AND precedes any real `gemini` installation:
 
 ```bash
-echo "$PATH" | grep -q "$HOME/.local/bin" && echo "PATH OK" || \
+echo "$PATH" | grep -q "$HOME/.local/bin" && echo "PATH contains ~/.local/bin ✓" || \
   echo "Add 'export PATH=\"\$HOME/.local/bin:\$PATH\"' to your ~/.bashrc or ~/.zshrc"
+# Confirm shim is picked up before real gemini (if installed):
+which gemini && gemini --version
 ```
 
-4. Test the bridge:
+4. Test the bridge and shim:
 
 ```bash
 agy-bridge --types
+echo "Say only: shim ok" | gemini -m gemini-2.5-flash -o text --approval-mode yolo
 ```
