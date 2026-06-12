@@ -119,7 +119,8 @@ if [[ ! -s "$CACHE_FILE" ]] || [[ -n "$(find "$CACHE_FILE" -mmin +60 2>/dev/null
         echo "ERROR: failed to retrieve model list from agy" >&2; exit 2
     }
     mkdir -p "${CACHE_FILE%/*}" 2>/dev/null || true
-    printf '%s' "$_agy_models" > "$CACHE_FILE" || true
+    printf '%s' "$_agy_models" > "$CACHE_FILE.tmp.$$" \
+        && mv "$CACHE_FILE.tmp.$$" "$CACHE_FILE" || true
     chmod 600 "$CACHE_FILE" 2>/dev/null || true
 fi
 VALID_MODELS="${_agy_models:-}"
