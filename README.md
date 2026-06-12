@@ -6,6 +6,8 @@ A Claude Code plugin that routes tasks to [agy](https://github.com/google/agy) (
 
 **Current information with sources.** Claude's training has a cutoff. When you need today's release notes, a pricing page, or a changelog with actual URLs, you need live web search — not a model's best guess.
 
+**Drop-in for tools that expect `gemini`.** Frameworks like Claude Octopus and Metaswarm shell out to a `gemini` binary. The included shim answers to that name and routes the call through agy, so those tools run on your agy auth with no real Gemini install and no config changes.
+
 ## How it works
 
 The plugin has two parts.
