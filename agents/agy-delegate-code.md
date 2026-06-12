@@ -37,16 +37,16 @@ echo "Review scripts/agy_bridge.sh for security issues" | agy-bridge --type revi
 
 ```bash
 # Code/analysis with piped content
-{ echo "$TASK"; echo "---"; cat "$FILE_PATH"; } | agy-bridge --type code
+{ printf '%s\n' "$TASK"; echo "---"; cat "$FILE_PATH"; } | agy-bridge --type code
 
 # Adversarial review
 { echo "Critique this:"; cat "$FILE_PATH"; } | agy-bridge --type review
 
 # Custom model override
-{ echo "$TASK"; cat "$FILE_PATH"; } | agy-bridge --type code --model "Gemini 3.5 Flash (High)"
+{ printf '%s\n' "$TASK"; cat "$FILE_PATH"; } | agy-bridge --type code --model "Gemini 3.5 Flash (High)"
 
 # JSON envelope (machine-readable)
-{ echo "$TASK"; cat "$FILE_PATH"; } | agy-bridge --type analysis --json
+{ printf '%s\n' "$TASK"; cat "$FILE_PATH"; } | agy-bridge --type analysis --json
 ```
 
 ### 4. Apply results
