@@ -128,8 +128,7 @@ if [[ -n "$MODEL" ]]; then
 fi
 
 # ── Temp workspace (isolates session, avoids conversation bleed) ──────────────
-WORK_DIR=$(mktemp -d /dev/shm/gemini-shim.XXXXXX 2>/dev/null) \
-    || WORK_DIR=$(mktemp -d -t "gemini-shim.XXXXXX")
+WORK_DIR=$(mktemp -d -t "gemini-shim.XXXXXX")
 PROMPT_FILE="$WORK_DIR/prompt"
 STDOUT_FILE="$WORK_DIR/stdout"
 STDERR_FILE="$WORK_DIR/stderr"

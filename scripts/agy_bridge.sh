@@ -140,8 +140,8 @@ if [[ -z "$TIMEOUT" ]]; then
     esac
 fi
 
-# ── Temp files (prefer /dev/shm on Linux for reduced SIGKILL persistence) ─────
-WORK_DIR=$(mktemp -d /dev/shm/agy-bridge.XXXXXX 2>/dev/null) || WORK_DIR=$(mktemp -d -t "agy-bridge.XXXXXX")
+# ── Temp files ───────────────────────────────────────────────────────────────
+WORK_DIR=$(mktemp -d -t "agy-bridge.XXXXXX")
 PROMPT_FILE="$WORK_DIR/prompt"
 STDOUT_FILE="$WORK_DIR/stdout"
 STDERR_FILE="$WORK_DIR/stderr"
