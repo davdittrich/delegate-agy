@@ -30,24 +30,17 @@ fi
 
 # ── Model name mapping ────────────────────────────────────────────────────────
 # Maps gemini CLI model names/aliases → agy model names.
+# Mappings are in config/model-map.json — update there without touching scripts.
 # Run `agy models` to see current agy model list.
 map_model() {
     local m="$1"
-    case "$m" in
-        # Short aliases used by metaswarm (DEFAULT_MODEL="pro")
-        pro|gemini-pro)                        echo "Gemini 3.1 Pro (High)" ;;
-        flash|gemini-flash)                    echo "Gemini 3.5 Flash (High)" ;;
-        # gemini 2.5 / 3.x family
-        gemini-2.5-pro*|gemini-3.1-pro*|*pro-preview*)
-                                               echo "Gemini 3.1 Pro (High)" ;;
-        gemini-2.5-flash*|gemini-3*flash*|gemini-3.5-flash*)
-                                               echo "Gemini 3.5 Flash (High)" ;;
-        # Already an agy name — pass through
-        "Gemini 3.1 Pro"*|"Gemini 3.5 Flash"*|"Claude"*|"GPT-OSS"*)
-                                               echo "$m" ;;
-        # Unknown — pass through and let agy validate
-        *)                                     echo "$m" ;;
-    esac
+    local map_file
+    map_file="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)/../config/model-map.json"
+    python3 -c "
+import json, sys
+d = json.load(open(sys.argv[1]))
+print(d.get(sys.argv[2], sys.argv[2]))
+" "$map_file" "$m"
 }
 
 # ── Parse gemini flags ────────────────────────────────────────────────────────
