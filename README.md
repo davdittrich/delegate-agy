@@ -4,11 +4,11 @@ A Claude Code plugin that routes tasks to [agy](https://github.com/google/agy) (
 
 Three things Claude Code alone can't do well.
 
-**Independent review.** The same model that wrote the code can't audit it credibly. You need a second model with no memory of the original prompt.
+**Independent review.** A model reviewing its own output anchors on the reasoning it used to produce it. An independent model with no memory of the original prompt catches different things — not because Claude can't review code, but because it tends to miss what it already decided was right.
 
-**Current information with sources.** Training data has a cutoff. When you need today's release notes, a pricing page, or a changelog with actual URLs, you need live web search — not a model's best guess.
+**Current information with sources.** Claude's training has a cutoff. When you need today's release notes, a pricing page, or a changelog with actual URLs, you need live web search — not a model's best guess.
 
-**Large files.** When a codebase overflows Claude's context window, analysis stops. Gemini 3.1 Pro's extended context handles files that would otherwise require chunking and stitching.
+**Whole-codebase analysis.** Claude Code's file tools let it navigate large codebases incrementally, but passing an entire codebase to a single prompt requires a larger context window. Gemini 3.1 Pro handles up to 1M tokens, which covers most codebases in one shot without chunking.
 
 ## How it works
 
