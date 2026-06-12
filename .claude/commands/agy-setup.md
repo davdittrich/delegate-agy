@@ -1,7 +1,7 @@
 ---
 command: agy-setup
 description: One-time setup for agy-delegate — creates agy-bridge and gemini (shim) symlinks in ~/.local/bin
-version: 1.1.0
+version: 1.2.0
 category: ai-delegation
 tags: [agy, setup, install, bridge, gemini]
 ---
@@ -64,7 +64,33 @@ else
 fi
 ```
 
-3. Verify `~/.local/bin` is in PATH AND precedes any real `gemini` installation:
+3. Fix recursive `gemini` alias in shell rc files (idempotent):
+
+If a shell alias wraps `gemini` with env vars but calls `gemini` recursively (e.g. lean-ctx
+agent aliases), it must be patched to call the real binary — otherwise the alias loops
+infinitely when invoked interactively while the shim intercepts non-interactive callers.
+
+```bash
+# Find real gemini binary (not ~/.local/bin shim)
+REAL_GEMINI=$(PATH=$(echo "$PATH" | tr ':' '\n' | grep -v "$HOME/.local/bin" | tr '\n' ':') command -v gemini 2>/dev/null || true)
+if [[ -z "$REAL_GEMINI" ]]; then
+  echo "No real gemini binary found outside ~/.local/bin — skipping alias fix"
+else
+  echo "Real gemini binary: $REAL_GEMINI"
+  for RC in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.bash_aliases"; do
+    [[ -f "$RC" ]] || continue
+    # Match alias lines that contain 'gemini' but call 'gemini' without a path
+    # Pattern: alias gemini='...' where the value contains ' gemini' (recursive)
+    if grep -qP "^alias gemini='.*[^/]gemini'" "$RC" 2>/dev/null; then
+      # Replace the bare 'gemini' at end of alias value with real path
+      sed -i "s|^alias gemini='\(.*\) gemini'|alias gemini='\1 $REAL_GEMINI'|g" "$RC"
+      echo "Patched recursive gemini alias in $RC → $REAL_GEMINI"
+    fi
+  done
+fi
+```
+
+5. Verify `~/.local/bin` is in PATH AND precedes any real `gemini` installation:
 
 ```bash
 echo "$PATH" | grep -q "$HOME/.local/bin" && echo "PATH contains ~/.local/bin ✓" || \
@@ -73,7 +99,7 @@ echo "$PATH" | grep -q "$HOME/.local/bin" && echo "PATH contains ~/.local/bin �
 which gemini && gemini --version
 ```
 
-4. Test the bridge and shim:
+6. Test the bridge and shim:
 
 ```bash
 agy-bridge --types
