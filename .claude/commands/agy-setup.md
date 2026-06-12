@@ -85,7 +85,7 @@ else
     [[ -f "$RC" ]] || continue
     # Match alias lines that contain 'gemini' but call 'gemini' without a path
     # Pattern: alias gemini='...' where the value contains ' gemini' (recursive)
-    if grep -qP "^alias gemini='.*[^/]gemini'" "$RC" 2>/dev/null; then
+    if grep -qE "^alias gemini='[^']* gemini'$" "$RC" 2>/dev/null; then
       old_line=$(grep "^alias gemini=" "$RC" || true)
       new_line=$(echo "$old_line" | python3 -c "
 import sys
