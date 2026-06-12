@@ -19,11 +19,6 @@ elif command -v gtimeout &>/dev/null; then
 else
     echo "ERROR: timeout/gtimeout not found in PATH (install coreutils)" >&2; exit 2
 fi
-_require_jq() {
-    command -v jq &>/dev/null || {
-        echo "ERROR: jq not found in PATH (required for --json output)" >&2; exit 2
-    }
-}
 
 # ── Defaults ─────────────────────────────────────────────────────────────────
 TYPE="code"
@@ -213,20 +208,20 @@ DURATION=$(( SECONDS - START ))
 # ── Handle errors ─────────────────────────────────────────────────────────────
 if [[ "$EXIT_CODE" -eq 124 ]]; then
     if [[ "$JSON_OUTPUT" -eq 1 ]]; then
-        _require_jq
-        jq -n --arg m "$MODEL" --arg t "$TYPE" --argjson d "$DURATION" \
-            --arg e "Timeout after ${TIMEOUT}s" \
-            '{success:false,model_used:$m,type:$t,duration_seconds:$d,error:$e}'
+        python3 -c "
+import json, sys
+print(json.dumps({'success':False,'model_used':sys.argv[1],'type':sys.argv[2],'duration_seconds':int(sys.argv[3]),'error':sys.argv[4]}))
+" "$MODEL" "$TYPE" "$DURATION" "Timeout after ${TIMEOUT}s"
     else
         printf 'ERROR: agy timeout after %ds\n' "$TIMEOUT" >&2
     fi
     exit 124
 elif [[ "$EXIT_CODE" -ne 0 ]]; then
     if [[ "$JSON_OUTPUT" -eq 1 ]]; then
-        _require_jq
-        jq -n --arg m "$MODEL" --arg t "$TYPE" --argjson d "$DURATION" \
-            --rawfile e "$STDERR_FILE" \
-            '{success:false,model_used:$m,type:$t,duration_seconds:$d,error:$e}' || true
+        python3 -c "
+import json, sys
+print(json.dumps({'success':False,'model_used':sys.argv[1],'type':sys.argv[2],'duration_seconds':int(sys.argv[3]),'error':open(sys.argv[4]).read()}))
+" "$MODEL" "$TYPE" "$DURATION" "$STDERR_FILE" || true
     else
         printf 'ERROR: agy exit %d: %s\n' "$EXIT_CODE" "$(cat "$STDERR_FILE" 2>/dev/null || true)" >&2
     fi
@@ -235,10 +230,10 @@ fi
 
 # ── Output ────────────────────────────────────────────────────────────────────
 if [[ "$JSON_OUTPUT" -eq 1 ]]; then
-    _require_jq
-    jq -n --arg m "$MODEL" --arg t "$TYPE" --argjson d "$DURATION" \
-        --rawfile r "$STDOUT_FILE" \
-        '{success:true,model_used:$m,type:$t,duration_seconds:$d,response:$r}'
+    python3 -c "
+import json, sys
+print(json.dumps({'success':True,'model_used':sys.argv[1],'type':sys.argv[2],'duration_seconds':int(sys.argv[3]),'response':open(sys.argv[4]).read()}))
+" "$MODEL" "$TYPE" "$DURATION" "$STDOUT_FILE"
 else
     cat "$STDOUT_FILE"
 fi
