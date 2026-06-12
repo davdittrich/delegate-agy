@@ -137,7 +137,7 @@ JSON output:
 | Symptom | Fix |
 |---------|-----|
 | `agy-bridge: command not found` | Run `/agy-setup` to create the symlink |
-| `agy: command not found` | Add `~/.local/bin` to `$PATH` |
+| `agy: command not found` | Add `~/.local/bin` to `$PATH`: bash/zsh: `export PATH="$HOME/.local/bin:$PATH"` · fish: `fish_add_path ~/.local/bin` |
 | Response missing source URLs | Use `--type search` |
 | Model name rejected | Run `agy models`; exact string required |
 | Exit code 124 | Timeout — simplify query or pass `--timeout 600` |

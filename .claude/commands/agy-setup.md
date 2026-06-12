@@ -118,8 +118,12 @@ fi
 4. Verify `~/.local/bin` is in PATH AND precedes any real `gemini` installation:
 
 ```bash
-echo "$PATH" | grep -q "$HOME/.local/bin" && echo "PATH contains ~/.local/bin ✓" || \
-  echo "Add 'export PATH=\"\$HOME/.local/bin:\$PATH\"' to your ~/.bashrc or ~/.zshrc"
+echo "$PATH" | grep -q "$HOME/.local/bin" && echo "PATH contains ~/.local/bin ✓" || {
+  echo "~/.local/bin not in PATH. Add it for your shell:"
+  echo "  bash/zsh:  export PATH=\"\$HOME/.local/bin:\$PATH\"  (add to ~/.bashrc or ~/.zshrc)"
+  echo "  fish:      fish_add_path ~/.local/bin               (run once, persists)"
+  echo "  nushell:   \$env.PATH = (\$env.PATH | prepend (\$env.HOME | path join .local bin))"
+}
 # Confirm shim is picked up before real gemini (if installed):
 which gemini && gemini --version
 ```
