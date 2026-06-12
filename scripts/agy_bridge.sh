@@ -120,6 +120,7 @@ if [[ ! -s "$CACHE_FILE" ]] || [[ -n "$(find "$CACHE_FILE" -mmin +60 2>/dev/null
     }
     mkdir -p "${CACHE_FILE%/*}" 2>/dev/null || true
     printf '%s' "$_agy_models" > "$CACHE_FILE" || true
+    chmod 600 "$CACHE_FILE" 2>/dev/null || true
 fi
 VALID_MODELS="${_agy_models:-}"
 if [[ -z "$VALID_MODELS" ]]; then
@@ -152,7 +153,7 @@ trap 'rm -rf "$WORK_DIR"' EXIT HUP INT QUIT TERM
 case "$TYPE" in
     search)
         cat > "$WORK_DIR/GEMINI.md" <<'RESTRICTIONS'
-TOOL RESTRICTIONS (agy-bridge orchestrator — non-negotiable):
+TOOL RESTRICTIONS (agy-bridge orchestrator — prompt-level advisory, not API-enforced):
 PERMITTED: search_web, read_url, read_url_content
 FORBIDDEN: run_shell_command, run_command, write_file, write_to_file,
   replace_file_content, multi_replace_file_content, read_file, view_file,
@@ -163,7 +164,7 @@ RESTRICTIONS
         ;;
     review|analysis)
         cat > "$WORK_DIR/GEMINI.md" <<'RESTRICTIONS'
-TOOL RESTRICTIONS (agy-bridge orchestrator — non-negotiable):
+TOOL RESTRICTIONS (agy-bridge orchestrator — prompt-level advisory, not API-enforced):
 PERMITTED: read_file, view_file, grep_search, search_web, read_url, read_url_content
 FORBIDDEN: run_shell_command, run_command, write_file, write_to_file,
   replace_file_content, multi_replace_file_content,
@@ -173,7 +174,7 @@ RESTRICTIONS
         ;;
     code)
         cat > "$WORK_DIR/GEMINI.md" <<'RESTRICTIONS'
-TOOL RESTRICTIONS (agy-bridge orchestrator — non-negotiable):
+TOOL RESTRICTIONS (agy-bridge orchestrator — prompt-level advisory, not API-enforced):
 PERMITTED: read_file, view_file, grep_search, search_web, read_url, read_url_content
 FORBIDDEN: run_shell_command, run_command, write_file, write_to_file,
   replace_file_content, multi_replace_file_content,
@@ -184,7 +185,7 @@ RESTRICTIONS
         ;;
     implement)
         cat > "$WORK_DIR/GEMINI.md" <<'RESTRICTIONS'
-TOOL RESTRICTIONS (agy-bridge orchestrator — non-negotiable):
+TOOL RESTRICTIONS (agy-bridge orchestrator — prompt-level advisory, not API-enforced):
 PERMITTED: read_file, view_file, grep_search, search_web, read_url, read_url_content,
   write_file, write_to_file, replace_file_content, multi_replace_file_content
 FORBIDDEN: run_shell_command, run_command,
@@ -230,7 +231,10 @@ START=$SECONDS
 EXIT_CODE=0
 set +e
 AGY_FLAGS=(--print --sandbox --model "$MODEL" --add-dir "$WORK_DIR")
-[[ "${AGY_SKIP_PERMISSIONS:-0}" == "1" ]] && AGY_FLAGS+=(--dangerously-skip-permissions)
+if [[ "${AGY_SKIP_PERMISSIONS:-0}" == "1" ]]; then
+    echo "WARNING: AGY_SKIP_PERMISSIONS=1 — running with --dangerously-skip-permissions" >&2
+    AGY_FLAGS+=(--dangerously-skip-permissions)
+fi
 "$TIMEOUT_BIN" "$TIMEOUT" "$AGY_BIN" \
     "${AGY_FLAGS[@]}" \
     < "$PROMPT_FILE" \

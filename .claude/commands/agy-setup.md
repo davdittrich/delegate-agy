@@ -83,7 +83,13 @@ else
     # Pattern: alias gemini='...' where the value contains ' gemini' (recursive)
     if grep -qP "^alias gemini='.*[^/]gemini'" "$RC" 2>/dev/null; then
       # Replace the bare 'gemini' at end of alias value with real path
-      sed -i "s|^alias gemini='\(.*\) gemini'|alias gemini='\1 $REAL_GEMINI'|g" "$RC"
+      python3 -c "
+import re, sys
+rc, real = sys.argv[1], sys.argv[2]
+txt = open(rc).read()
+out = re.sub(r\"^(alias gemini='.*) gemini'$\", lambda m: m.group(1) + ' ' + real + \"'\", txt, flags=re.M)
+open(rc, 'w').write(out)
+" "$RC" "$REAL_GEMINI"
       echo "Patched recursive gemini alias in $RC → $REAL_GEMINI"
     fi
   done
