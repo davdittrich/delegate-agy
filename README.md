@@ -237,6 +237,8 @@ export OCTOPUS_GEMINI_MODEL="gemini-2.5-flash"
 
 No changes needed. Metaswarm's gemini adapter checks `command -v gemini`; the shim satisfies the health check. `agy --version` output is returned as the version string.
 
+> **Cost breakers do not gate agy usage.** Metaswarm's two USD circuit breakers — `per_task_usd` (default 2.00) and `per_session_usd` (default 20.00) — accumulate spend from the token counts that `extract_cost_gemini` reads out of `usageMetadata`. agy exposes no token usage, so the shim reports `promptTokenCount`/`candidatesTokenCount` as `null`, which metaswarm coerces to `0` (`// 0`). Every agy call therefore registers as $0 and neither breaker can trip, so runaway agy delegation is not cost-stopped. Bound agy usage another way — metaswarm's duration and attempt/iteration limits, or conservative task/subagent caps — and watch agy usage directly. Do not "fix" this by emitting fabricated token counts: that corrupts the metrics stream (see commit 73f931c).
+
 ## File layout
 
 ```
