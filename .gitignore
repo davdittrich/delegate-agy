@@ -6,6 +6,10 @@
 # Internal design specs / probe notes (not for publication)
 docs/superpowers/
 
+# Local agent-instruction files (not for publication)
+AGENTS.md
+CLAUDE.md
+
 # Local agent/dev tooling caches (not part of the plugin)
 .agents/
 .codex/
