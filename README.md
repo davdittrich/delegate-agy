@@ -116,6 +116,11 @@ agy-bridge --type search -- "latest numpy release"
 
 # JSON output envelope
 echo "query" | agy-bridge --type search --json
+
+# Digest-only reply — biggest cost lever for bulk work: agy returns a compressed
+# digest (findings + file:line) instead of a raw dump, keeping your context lean.
+# Warns on stderr if the reply comes back dump-sized (tune with --digest-warn-chars).
+echo "Map the auth flow end to end" | agy-bridge --type analysis --digest
 ```
 
 JSON output:
@@ -169,6 +174,7 @@ The plugin installs a `SubagentStart` hook (`hooks/agy-subagent-policy.sh`, wire
 | Response missing source URLs | Use `--type search` |
 | Model name rejected | Run `agy models`; exact string required |
 | Exit code 124 | Timeout — simplify the query or pass `--timeout 600` |
+| Exit code 3 (`agy returned empty output`) | agy exited 0 with no output — usually quota `RESOURCE_EXHAUSTED (429)`. The reason (full agy stderr) is surfaced; wait for quota reset or re-auth. Both `agy-bridge` and the `gemini` shim fail loud here rather than reporting empty success. |
 | `ERROR: timeout/gtimeout not found in PATH` | `brew install coreutils` (macOS) |
 
 ## Security
