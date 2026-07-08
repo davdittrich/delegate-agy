@@ -128,6 +128,36 @@ JSON output:
 }
 ```
 
+## Configuration
+
+### SubagentStart advisory hook
+
+The plugin installs a `SubagentStart` hook (`hooks/agy-subagent-policy.sh`, wired via `hooks/hooks.json`) that can inject a one-line advisory into a matched subagent's context, pointing it at `agy-bridge` for bulk/fan-out/web-search work. **It is OFF by default.** With no environment variables set, the hook exits 0 and produces no output — a default install is completely inert.
+
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `AGY_HOOKS_ENABLED` | Master toggle. Must be `1`, `true`, `on`, or `yes` (case-insensitive) to enable. Anything else, including unset, is disabled. | unset (disabled) |
+| `AGY_HOOKS_AGENT_TYPES` | CSV allowlist of `agent_type` values that receive the advisory. | `general-purpose,Explore,metaswarm:researcher-agent,metaswarm:coder-agent,metaswarm:code-review-agent` |
+| `AGY_HOOKS_DEBUG` | Set to `1` to log one line per skip/fire decision. | unset (off) |
+| `AGY_HOOKS_DEBUG_FILE` | Path to append debug lines to. If unset while `AGY_HOOKS_DEBUG=1`, lines go to stderr. | unset (stderr) |
+
+**Allowlist entry forms.** Each `AGY_HOOKS_AGENT_TYPES` entry is one of:
+
+- **Namespaced** (`plugin:name`, e.g. `metaswarm:coder-agent`) — matches only that exact agent type string.
+- **Bare** (`name`, e.g. `general-purpose`) — matches that exact agent type, AND wildcards the suffix after the last `:` of any namespaced type. A bare `coder-agent` entry would match `metaswarm:coder-agent`, `other:coder-agent`, and any other `*:coder-agent`.
+
+**Discovering agent_type strings.** Set `AGY_HOOKS_DEBUG=1` (optionally `AGY_HOOKS_DEBUG_FILE=/path/to/log`), spawn the subagents you want to target, then read the debug log — it records the exact `agent_type` string for every skip/fire decision (`disabled`, `not allowlisted: '<agent_type>'`, `fired`, etc.). Add the observed strings to `AGY_HOOKS_AGENT_TYPES`.
+
+**Preconditions** (all required before enabling):
+
+- Run `/agy-setup` first, so `agy-bridge` exists on `PATH`.
+- `python3` must be available — the hook uses it to parse the incoming payload and build its output; without it, the hook stays silent.
+- The hook's `PATH` must include the `agy-bridge` directory (`~/.local/bin`); if `agy-bridge` isn't found on `PATH`, the hook stays silent.
+
+**Warning.** Do not allowlist `*`, and do not indiscriminately allowlist built-in agent types. The advisory becomes system-prompt material for every subagent it matches — over-broad allowlisting can push agents toward a tool they don't need, or shouldn't use for a given task. Allowlist narrowly, to the specific agent types you've verified should see it.
+
+**Interaction with metaswarm.** The hook is advisory-only and default-off; it does not change metaswarm's routing logic. Disabled (the default), there is zero interaction. Enabled, it only adds a delegation hint as `additionalContext` to matched subagents — metaswarm's own routing and gates are unaffected.
+
 ## Troubleshooting
 
 | Error | Fix |
