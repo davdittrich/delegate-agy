@@ -2,3 +2,11 @@
 .claude-octopus/
 .metaswarm/
 *.tmp
+
+# Local agent/dev tooling caches (not part of the plugin)
+.agents/
+.codex/
+.headroom/
+.tokensave/
+.claude/settings.json
+.claude/settings.local.json
