@@ -19,20 +19,27 @@ _hook_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=./agy-hooks-lib.sh
 source "${_hook_dir}/agy-hooks-lib.sh"
 
-# Guard 1 (FIRST): python3 is required to safely parse the incoming JSON and
-# to safely construct the outgoing JSON. Without it we cannot proceed.
-if ! command -v python3 >/dev/null 2>&1; then
-  agy_hooks_debug "no python3 -> skip"
+# Read the entire hook-event payload from stdin. Safe even if stdin is empty
+# or already closed -- never blocks. This must run before any guard so stdin
+# is always drained regardless of which branch exits.
+input="$(cat)"
+
+# Guard 1 (FIRST guard that can exit): the hook must be explicitly enabled.
+# This is pure bash (agy_hooks_enabled has no python3 dependency), so the
+# default-OFF path never forks an interpreter.
+if ! agy_hooks_enabled; then
+  agy_hooks_debug "disabled -> skip"
   exit 0
 fi
 
-# Read the entire hook-event payload from stdin. Safe even if stdin is empty
-# or already closed -- never blocks.
-input="$(cat)"
-
-# Guard 2: the hook must be explicitly enabled.
-if ! agy_hooks_enabled; then
-  agy_hooks_debug "disabled -> skip"
+# Guard 2: python3 must actually be usable (not just present on PATH). A
+# present-but-broken python3 (e.g. invocation/import failure) is treated the
+# same as an absent one -- both are "no python3", never misreported as
+# malformed json by the later probe. Only reached when the hook is enabled,
+# so this never forks an interpreter on the default-OFF path. The probe body
+# must not read stdin.
+if ! python3 -c 'import json' >/dev/null 2>&1; then
+  agy_hooks_debug "no python3 -> skip"
   exit 0
 fi
 

@@ -187,6 +187,19 @@ exit 1
 EOF
 chmod +x "${WU3_NOPY_DIR}/python3"
 
+# Stub `python3` that touches a marker file when invoked, then fails. Used
+# only for the "disabled path never forks python3" case: if the hook ever
+# invokes python3 while disabled, the marker file will exist afterward.
+# Kept in its own dir so it never leaks into the other scenarios.
+WU3_TOUCHPY_DIR="$(mktemp -d)"
+WU3_TOUCHPY_MARKER="${WU3_TOUCHPY_DIR}/python3-invoked-marker"
+cat > "${WU3_TOUCHPY_DIR}/python3" <<EOF
+#!/usr/bin/env bash
+touch "${WU3_TOUCHPY_MARKER}"
+exit 1
+EOF
+chmod +x "${WU3_TOUCHPY_DIR}/python3"
+
 WU3_DEBUG_FILE="$(mktemp)"
 
 # Dedicated debug-reason capture files -- one per fail-safe branch so their
@@ -194,9 +207,10 @@ WU3_DEBUG_FILE="$(mktemp)"
 WU3_DBG_EMPTY="$(mktemp)"
 WU3_DBG_MALFORMED="$(mktemp)"
 WU3_DBG_NOTALLOWED="$(mktemp)"
+WU3_DBG_BROKEN_PY="$(mktemp)"
 
 # Clean up all WU-3 temp artifacts regardless of how this script exits.
-trap 'rm -rf "${WU3_STUB_DIR:-}" "${WU3_NOPY_DIR:-}"; rm -f "${WU3_DEBUG_FILE:-}" "${WU3_DBG_EMPTY:-}" "${WU3_DBG_MALFORMED:-}" "${WU3_DBG_NOTALLOWED:-}"' EXIT
+trap 'rm -rf "${WU3_STUB_DIR:-}" "${WU3_NOPY_DIR:-}" "${WU3_TOUCHPY_DIR:-}"; rm -f "${WU3_DEBUG_FILE:-}" "${WU3_DBG_EMPTY:-}" "${WU3_DBG_MALFORMED:-}" "${WU3_DBG_NOTALLOWED:-}" "${WU3_DBG_BROKEN_PY:-}"' EXIT
 
 # PATH with the agy-bridge stub present (bridge available), real PATH kept
 # behind it so bash/cat/python3 etc. still resolve normally.
@@ -205,6 +219,15 @@ WU3_BRIDGE_PATH="${WU3_STUB_DIR}:${PATH}"
 # PATH with the python3 stub shadowing any real python3 (python3 "present"
 # but unusable) -- exercises the "no crash" contract either way.
 WU3_NO_PYTHON_PATH="${WU3_NOPY_DIR}:${PATH}"
+
+# PATH with BOTH the broken-python3 stub and the agy-bridge stub present
+# (bridge available, python3 present-but-broken) -- used to prove the
+# broken-python3 case is reported distinctly from "malformed json".
+WU3_BROKEN_PY_BRIDGE_PATH="${WU3_NOPY_DIR}:${WU3_STUB_DIR}:${PATH}"
+
+# PATH with BOTH the touch-marking python3 stub and the agy-bridge stub
+# present -- used to prove the disabled path never forks python3.
+WU3_TOUCHPY_BRIDGE_PATH="${WU3_TOUCHPY_DIR}:${WU3_STUB_DIR}:${PATH}"
 
 # PATH with every directory that contains a real `agy-bridge` executable
 # stripped out (a real bridge may legitimately be installed on this
@@ -414,6 +437,41 @@ if [[ "$_wu3_reason_empty" != "$_wu3_reason_malformed" \
 else
   _wu3_manual_assert "wu3-13d-three-debug-reasons-mutually-distinct" 1 \
     "debug reasons collapsed: empty='${_wu3_reason_empty}' malformed='${_wu3_reason_malformed}' notallowed='${_wu3_reason_notallowed}'"
+fi
+
+# 14. Guard reordering regression: a present-but-broken python3 (enabled,
+#     allowlisted, bridge present) must be reported as "no python3" by the
+#     usability probe, and must NEVER fall through to be misreported as
+#     "malformed json" by the later json-validity probe.
+run_case "wu3-14a-broken-python3-silent-exit0" \
+  "AGY_HOOKS_ENABLED=1 AGY_HOOKS_AGENT_TYPES='general-purpose' AGY_HOOKS_DEBUG=1 AGY_HOOKS_DEBUG_FILE='${WU3_DBG_BROKEN_PY}' PATH='${WU3_BROKEN_PY_BRIDGE_PATH}' bash '${WU3_HOOK}'" \
+  '{"agent_type":"general-purpose"}' 0 empty
+if grep -q 'no python3' "${WU3_DBG_BROKEN_PY}"; then
+  _wu3_manual_assert "wu3-14b-broken-python3-debug-reason-no-python3" 0 ""
+else
+  _wu3_manual_assert "wu3-14b-broken-python3-debug-reason-no-python3" 1 \
+    "debug file did not contain 'no python3' (got: $(cat "${WU3_DBG_BROKEN_PY}"))"
+fi
+if grep -q 'malformed json' "${WU3_DBG_BROKEN_PY}"; then
+  _wu3_manual_assert "wu3-14c-broken-python3-not-misreported-as-malformed-json" 1 \
+    "debug file incorrectly contained 'malformed json' for a broken-python3 case (got: $(cat "${WU3_DBG_BROKEN_PY}"))"
+else
+  _wu3_manual_assert "wu3-14c-broken-python3-not-misreported-as-malformed-json" 0 ""
+fi
+
+# 15. Guard reordering regression: the disabled path must never fork python3
+#     at all. Uses a stub python3 that touches a marker file when invoked;
+#     the marker must NOT exist after running the hook disabled, proving the
+#     pure-bash enabled-check gates before any python3 invocation.
+rm -f "${WU3_TOUCHPY_MARKER}"
+run_case "wu3-15a-disabled-silent-exit0-with-touch-python3-stub" \
+  "AGY_HOOKS_ENABLED=0 AGY_HOOKS_AGENT_TYPES='general-purpose' PATH='${WU3_TOUCHPY_BRIDGE_PATH}' bash '${WU3_HOOK}'" \
+  '{"agent_type":"general-purpose"}' 0 empty
+if [[ -e "${WU3_TOUCHPY_MARKER}" ]]; then
+  _wu3_manual_assert "wu3-15b-disabled-path-never-forks-python3" 1 \
+    "marker file exists -- python3 stub was invoked on the disabled path (AGY_HOOKS_ENABLED=0)"
+else
+  _wu3_manual_assert "wu3-15b-disabled-path-never-forks-python3" 0 ""
 fi
 echo ""
 
