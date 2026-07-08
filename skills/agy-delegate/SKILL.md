@@ -83,6 +83,10 @@ Run `agy models` for current model names — values above match bridge defaults 
 | `agy-bridge: command not found` | Symlink not created — run `/agy-setup` once. Until fixed: WebSearch for search tasks; native tools for code/review. |
 | Calling `agy` directly | Use bridge — direct calls miss type routing and exit-code normalization |
 
+## Writing effective agy prompts
+
+Print mode is one-shot — agy can't ask a clarifying question, so the prompt is the whole brief. For how to write one (data-first, negative-constraints-last, the 5-part brief), see the [`gemini-3-prompting`](../gemini-3-prompting/SKILL.md) skill.
+
 ## Reference
 
 Provider details, auth, timeout guidance: `config/provider.md`
