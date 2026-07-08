@@ -226,6 +226,29 @@ print(json.dumps({'success':False,'model_used':sys.argv[1],'type':sys.argv[2],'d
         printf 'ERROR: agy exit %d: %s\n' "$EXIT_CODE" "$(cat "$STDERR_FILE" 2>/dev/null || true)" >&2
     fi
     exit "$EXIT_CODE"
+elif [[ ! -s "$STDOUT_FILE" ]]; then
+    # Hidden failure: agy exited 0 but produced NO output. Most commonly quota
+    # exhaustion — agy exits 0 with empty stdout on RESOURCE_EXHAUSTED / 429.
+    # Primary signal is empty-stdout itself (cause-independent: also catches silent
+    # backend/lock errors). Secondary: the FULL captured stderr becomes the reason;
+    # a token match only CLASSIFIES it (never replaces the message, so auth/backend
+    # errors aren't swallowed under a "quota" label).
+    _reason="$(cat "$STDERR_FILE" 2>/dev/null)"
+    [[ -n "$_reason" ]] || _reason="agy returned empty output (exit 0, no stdout)"
+    _class="empty_output"
+    case "$_reason" in
+        *RESOURCE_EXHAUSTED*|*429*|*[Qq]uota*)   _class="quota" ;;
+        *[Aa]uth*|*UNAUTHENTICATED*)             _class="auth" ;;
+    esac
+    if [[ "$JSON_OUTPUT" -eq 1 ]]; then
+        python3 -c "
+import json, sys
+print(json.dumps({'success':False,'model_used':sys.argv[1],'type':sys.argv[2],'duration_seconds':int(sys.argv[3]),'error':sys.argv[4],'error_class':sys.argv[5]}))
+" "$MODEL" "$TYPE" "$DURATION" "$_reason" "$_class"
+    else
+        printf 'ERROR: agy returned empty output [%s]: %s\n' "$_class" "$_reason" >&2
+    fi
+    exit 3
 fi
 
 # ── Output ────────────────────────────────────────────────────────────────────

@@ -22,12 +22,6 @@ if ! command -v agy &>/dev/null; then
 fi
 AGY_BIN=$(command -v agy)
 
-if ! command -v jq &>/dev/null; then
-    _JQ_OK=0
-else
-    _JQ_OK=1
-fi
-
 # ── Model name mapping ────────────────────────────────────────────────────────
 # Maps gemini CLI model names/aliases → agy model names.
 # Mappings are in config/model-map.json — update there without touching scripts.
@@ -188,32 +182,47 @@ if [[ "$EXIT_CODE" -ne 0 ]]; then
     exit "$EXIT_CODE"
 fi
 
+# Hidden failure: agy exited 0 but produced NO output. agy exits 0 with empty stdout
+# on quota RESOURCE_EXHAUSTED / 429 (and silent backend/lock errors). Metaswarm reads
+# this shim's exit code — fail loud so its gate trips instead of consuming an empty
+# "success" envelope and merging unchanged state. The failure payload is NEVER
+# success-shaped: on JSON we emit an {"error":...} envelope (no "response" key); on
+# text the reason goes to stderr with 0-byte stdout. Full stderr is the reason; a
+# token match only CLASSIFIES it (auth/backend errors are not swallowed as "quota").
+if [[ ! -s "$STDOUT_FILE" ]]; then
+    _reason="$(cat "$STDERR_FILE" 2>/dev/null)"
+    [[ -n "$_reason" ]] || _reason="agy returned empty output (exit 0, no stdout)"
+    _class="empty_output"
+    case "$_reason" in
+        *RESOURCE_EXHAUSTED*|*429*|*[Qq]uota*)   _class="quota" ;;
+        *[Aa]uth*|*UNAUTHENTICATED*)             _class="auth" ;;
+    esac
+    if [[ "$OUTPUT_FORMAT" == "json" ]]; then
+        python3 -c "
+import json, sys
+print(json.dumps({'error': {'message': sys.argv[1], 'class': sys.argv[2]}}))
+" "$_reason" "$_class"
+    fi
+    printf 'ERROR: agy returned empty output [%s]: %s\n' "$_class" "$_reason" >&2
+    exit 3
+fi
+
 RESPONSE=$(cat "$STDOUT_FILE")
 
 # ── Output ────────────────────────────────────────────────────────────────────
+# JSON envelope emitted via python3 (not jq): the bridge dropped jq in b4b7503, and a
+# limited `jq` shim on PATH (rejecting --arg) would otherwise break metaswarm's JSON.
 if [[ "$OUTPUT_FORMAT" == "json" ]]; then
-    # Wrap in a usageMetadata envelope compatible with extract_cost_gemini()
-    # (metaswarm _common.sh reads .usageMetadata.promptTokenCount etc.)
-    # Token counts are null — agy does not expose real token usage.
-    if [[ "$_JQ_OK" -eq 1 ]]; then
-        jq -n \
-            --arg response "$RESPONSE" \
-            --argjson duration "$DURATION" \
-            '{
-                "response": $response,
-                "usageMetadata": {
-                    "promptTokenCount": null,
-                    "candidatesTokenCount": null,
-                    "totalTokenCount": null
-                },
-                "model": "agy",
-                "duration_seconds": $duration
-            }'
-    else
-        # jq not available — emit minimal JSON manually
-        printf '{"response":%s,"usageMetadata":{"promptTokenCount":null,"candidatesTokenCount":null,"totalTokenCount":null}}\n' \
-            "$(printf '%s' "$RESPONSE" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')"
-    fi
+    # usageMetadata token counts are null — agy does not expose real usage (see 73f931c).
+    python3 -c "
+import json, sys
+print(json.dumps({
+    'response': sys.stdin.read(),
+    'usageMetadata': {'promptTokenCount': None, 'candidatesTokenCount': None, 'totalTokenCount': None},
+    'model': 'agy',
+    'duration_seconds': int(sys.argv[1]),
+}))
+" "$DURATION" < "$STDOUT_FILE"
 else
     printf '%s\n' "$RESPONSE"
 fi

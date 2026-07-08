@@ -137,6 +137,7 @@ JSON output:
 | Response missing source URLs | Use `--type search` |
 | Model name rejected | Run `agy models`; exact string required |
 | Exit code 124 | Timeout — simplify the query or pass `--timeout 600` |
+| Exit code 3 (`agy returned empty output`) | agy exited 0 with no output — usually quota `RESOURCE_EXHAUSTED (429)`. The reason (full agy stderr) is surfaced; wait for quota reset or re-auth. Both `agy-bridge` and the `gemini` shim fail loud here rather than reporting empty success. |
 | `ERROR: timeout/gtimeout not found in PATH` | `brew install coreutils` (macOS) |
 
 ## Security
