@@ -16,6 +16,8 @@ The plugin has two parts.
 
 **`agy-delegate`** is a Claude Code skill that tells Claude when to reach for the bridge. It triggers on phrases like "search for", "latest", "ask Gemini", "second opinion". Claude picks the right `--type`, constructs the prompt, and pipes it through.
 
+**A `SubagentStart` delegation hook** (opt-in, default off) injects a one-line advisory into allowlisted Task subagents so they know they can hand bulk, fan-out, or web-search work to `agy-bridge`. It is advisory-only and never changes routing; see [Configuration](#configuration) for the toggle, allowlist, and preconditions.
+
 ```bash
 # How Claude calls it internally (you can run these directly too)
 echo "dplyr 1.1.0 release notes" | agy-bridge --type search
