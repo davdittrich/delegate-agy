@@ -28,6 +28,8 @@ STDIN_TIMEOUT=30
 LOG_FILE=""
 JSON_OUTPUT=0
 VERBOSE=0
+DIGEST=0
+DIGEST_WARN_CHARS=2000
 PROMPT_ARGS=()
 
 # ── Parse args ────────────────────────────────────────────────────────────────
@@ -52,6 +54,11 @@ while [[ $# -gt 0 ]]; do
             LOG_FILE="$2"; shift 2 ;;
         --json)    JSON_OUTPUT=1; shift ;;
         --verbose) VERBOSE=1; shift ;;
+        --digest)  DIGEST=1; shift ;;
+        --digest-warn-chars)
+            [[ $# -lt 2 ]] && { echo "ERROR: --digest-warn-chars requires a value" >&2; exit 2; }
+            [[ "$2" =~ ^[1-9][0-9]*$ ]] || { echo "ERROR: --digest-warn-chars must be a positive integer" >&2; exit 2; }
+            DIGEST_WARN_CHARS="$2"; shift 2 ;;
         --types)
             printf '%-12s %-30s %s\n' 'type' 'model' 'timeout'
             printf '%-12s %-30s %s\n' 'search' 'Gemini 3.5 Flash (High)' '300s'
@@ -75,6 +82,10 @@ Options:
   --stdin-timeout N          seconds for stdin read (default: 30)
   --log-file PATH            write verbose metadata to file instead of stderr
   --json                     output JSON envelope
+  --digest                   append a digest-only output contract (compressed
+                             reply: key findings + file:line, no raw echoes)
+  --digest-warn-chars N      warn on stderr if a --digest reply exceeds N chars
+                             (default: 2000; never truncates)
   --verbose                  diagnostics to stderr (or --log-file)
   --types                    list type/model/timeout table
   --help                     show this message
@@ -175,6 +186,16 @@ if [[ "$TYPE" == "search" ]] && ! grep -q "search_web" "$PROMPT_FILE"; then
     mv "$WORK_DIR/prefix.tmp" "$PROMPT_FILE"
 fi
 
+# ── Digest output contract (appended LAST) ────────────────────────────────────
+# Placed after the prompt so the constraint lands at the end — Gemini can drop a
+# negative/format constraint that appears too early in a long prompt. The digest
+# instruction is the biggest cost lever for bulk delegation: it collapses the reply
+# to a compressed digest instead of a raw dump, keeping the caller's context lean.
+if [[ "$DIGEST" -eq 1 ]]; then
+    printf '\n\n---\nOUTPUT CONTRACT (digest): Return ONLY a compressed digest — key findings, decisions, and file:line references. Do NOT echo file contents or restate the input. Omit preamble and narration.\n' \
+        >> "$PROMPT_FILE"
+fi
+
 # ── Verbose metadata output (metadata only — no prompt content) ───────────────
 if [[ "$VERBOSE" -eq 1 ]]; then
     _verbose_msg=$(printf '[agy_bridge] type=%s model=%s timeout=%ss\n' "$TYPE" "$MODEL" "$TIMEOUT")
@@ -249,6 +270,17 @@ print(json.dumps({'success':False,'model_used':sys.argv[1],'type':sys.argv[2],'d
         printf 'ERROR: agy returned empty output [%s]: %s\n' "$_class" "$_reason" >&2
     fi
     exit 3
+fi
+
+# ── Digest dump-size warning (metadata only — never truncates) ────────────────
+# Only when --digest was requested: a dump-sized reply means the digest contract
+# was ignored and the cost lever was lost. Warn (don't alter the response).
+if [[ "$DIGEST" -eq 1 ]]; then
+    _resp_chars=$(wc -c < "$STDOUT_FILE" | tr -d '[:space:]')
+    if [[ "$_resp_chars" -gt "$DIGEST_WARN_CHARS" ]]; then
+        printf '[agy_bridge] WARNING: --digest reply is %s chars (> %s) — digest contract may have been ignored\n' \
+            "$_resp_chars" "$DIGEST_WARN_CHARS" >&2
+    fi
 fi
 
 # ── Output ────────────────────────────────────────────────────────────────────

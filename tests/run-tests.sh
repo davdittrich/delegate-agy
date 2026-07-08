@@ -89,6 +89,33 @@ ERRTXT="$(FAKE_AGY_EXIT=0 FAKE_AGY_STDOUT="" FAKE_AGY_STDERR="RESOURCE_EXHAUSTED
 if [[ "$RC" -ne 0 && "$ERRTXT" == *"RESOURCE_EXHAUSTED"* ]]; then ok "S5 429 stderr surfaced";
 else bad "S5 429 stderr surfaced" "rc=$RC err=$ERRTXT"; fi
 
+echo "== agy_bridge.sh --digest (ps3.2) =="
+
+# D1 --digest appends the digest contract at the END of the prompt sent to agy.
+OUT="$(FAKE_AGY_ECHO_PROMPT=1 bash "$BRIDGE" --type code --digest -- "analyze this")"; RC=$?
+if [[ "$RC" -eq 0 && "$OUT" == *"analyze this"* && "$OUT" == *"OUTPUT CONTRACT"* ]]; then
+    # contract must come AFTER the user prompt (constraints-last)
+    if [[ "${OUT##*analyze this}" == *"OUTPUT CONTRACT"* ]]; then ok "D1 --digest appends contract LAST";
+    else bad "D1 --digest appends contract LAST" "contract not after prompt: $OUT"; fi
+else bad "D1 --digest appends contract LAST" "rc=$RC out=$OUT"; fi
+
+# D2 --digest + oversized reply → stderr warning fires.
+WARN="$(FAKE_AGY_EXIT=0 FAKE_AGY_STDOUT="$(printf 'x%.0s' {1..5000})" \
+  bash "$BRIDGE" --type code --digest --digest-warn-chars 100 -- "p" 2>&1 1>/dev/null)"; RC=$?
+if [[ "$RC" -eq 0 && "$WARN" == *"digest"* ]]; then ok "D2 oversized + --digest → warning";
+else bad "D2 oversized + --digest → warning" "rc=$RC warn=$WARN"; fi
+
+# D3 oversized reply WITHOUT --digest → NO warning (byte-identical behavior).
+WARN="$(FAKE_AGY_EXIT=0 FAKE_AGY_STDOUT="$(printf 'x%.0s' {1..5000})" \
+  bash "$BRIDGE" --type code --digest-warn-chars 100 -- "p" 2>&1 1>/dev/null)"; RC=$?
+if [[ "$RC" -eq 0 && -z "$WARN" ]]; then ok "D3 oversized w/o --digest → no warning";
+else bad "D3 oversized w/o --digest → no warning" "rc=$RC warn=$WARN"; fi
+
+# D4 no --digest → prompt is NOT modified (no contract appended).
+OUT="$(FAKE_AGY_ECHO_PROMPT=1 bash "$BRIDGE" --type code -- "analyze this")"; RC=$?
+if [[ "$RC" -eq 0 && "$OUT" != *"OUTPUT CONTRACT"* ]]; then ok "D4 no --digest → prompt unchanged";
+else bad "D4 no --digest → prompt unchanged" "rc=$RC out=$OUT"; fi
+
 echo
 echo "== summary: $PASS passed, $FAIL failed =="
 [[ "$FAIL" -eq 0 ]]

@@ -16,7 +16,13 @@ case "${1:-}" in
         echo "agy 0.0.0-fake"; exit 0 ;;
 esac
 
-# Otherwise this is a real --print run: emit the controlled fixtures.
+# Otherwise this is a real --print run.
+# FAKE_AGY_ECHO_PROMPT=1 → echo the received prompt (stdin) to stdout, so a test can
+# assert what the wrapper actually sent to agy (e.g. an appended digest contract).
+if [[ "${FAKE_AGY_ECHO_PROMPT:-0}" == "1" ]]; then
+    cat
+    exit "${FAKE_AGY_EXIT:-0}"
+fi
 [[ -n "${FAKE_AGY_STDOUT:-}" ]] && printf '%s' "$FAKE_AGY_STDOUT"
 [[ -n "${FAKE_AGY_STDERR:-}" ]] && printf '%s' "$FAKE_AGY_STDERR" >&2
 exit "${FAKE_AGY_EXIT:-0}"

@@ -114,6 +114,11 @@ agy-bridge --type search -- "latest numpy release"
 
 # JSON output envelope
 echo "query" | agy-bridge --type search --json
+
+# Digest-only reply — biggest cost lever for bulk work: agy returns a compressed
+# digest (findings + file:line) instead of a raw dump, keeping your context lean.
+# Warns on stderr if the reply comes back dump-sized (tune with --digest-warn-chars).
+echo "Map the auth flow end to end" | agy-bridge --type analysis --digest
 ```
 
 JSON output:
