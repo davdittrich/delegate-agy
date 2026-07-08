@@ -159,7 +159,262 @@ fi
 
 echo ""
 echo "--- real test cases ---"
-echo "(none registered yet in this work unit; WU-3 adds SubagentStart hook cases here)"
+
+# --- WU-3: SubagentStart hook (hooks/agy-subagent-policy.sh) --------------
+#
+# Real hook under test, invoked exactly as Claude Code would invoke it: a
+# JSON payload piped to stdin, stdout/exit code asserted.
+
+_wu3_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_wu3_repo_root="$(cd "${_wu3_script_dir}/../.." && pwd)"
+WU3_HOOK="${_wu3_repo_root}/hooks/agy-subagent-policy.sh"
+
+# Stub `agy-bridge` on PATH so "bridge present" cases don't depend on the
+# real bridge being installed.
+WU3_STUB_DIR="$(mktemp -d)"
+cat > "${WU3_STUB_DIR}/agy-bridge" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+chmod +x "${WU3_STUB_DIR}/agy-bridge"
+
+# Stub `python3` that always fails, used only for the "python3 unusable"
+# case. Kept in its own dir so it never leaks into the other scenarios.
+WU3_NOPY_DIR="$(mktemp -d)"
+cat > "${WU3_NOPY_DIR}/python3" <<'EOF'
+#!/usr/bin/env bash
+exit 1
+EOF
+chmod +x "${WU3_NOPY_DIR}/python3"
+
+WU3_DEBUG_FILE="$(mktemp)"
+
+# Dedicated debug-reason capture files -- one per fail-safe branch so their
+# reasons can be asserted independently and compared for distinctness.
+WU3_DBG_EMPTY="$(mktemp)"
+WU3_DBG_MALFORMED="$(mktemp)"
+WU3_DBG_NOTALLOWED="$(mktemp)"
+
+# Clean up all WU-3 temp artifacts regardless of how this script exits.
+trap 'rm -rf "${WU3_STUB_DIR:-}" "${WU3_NOPY_DIR:-}"; rm -f "${WU3_DEBUG_FILE:-}" "${WU3_DBG_EMPTY:-}" "${WU3_DBG_MALFORMED:-}" "${WU3_DBG_NOTALLOWED:-}"' EXIT
+
+# PATH with the agy-bridge stub present (bridge available), real PATH kept
+# behind it so bash/cat/python3 etc. still resolve normally.
+WU3_BRIDGE_PATH="${WU3_STUB_DIR}:${PATH}"
+
+# PATH with the python3 stub shadowing any real python3 (python3 "present"
+# but unusable) -- exercises the "no crash" contract either way.
+WU3_NO_PYTHON_PATH="${WU3_NOPY_DIR}:${PATH}"
+
+# PATH with every directory that contains a real `agy-bridge` executable
+# stripped out (a real bridge may legitimately be installed on this
+# machine's PATH, e.g. ~/.local/bin/agy-bridge -- do not assume otherwise).
+WU3_NO_BRIDGE_PATH=""
+_wu3_old_ifs="$IFS"
+IFS=':'
+for _wu3_dir in $PATH; do
+  IFS="$_wu3_old_ifs"
+  if [[ -n "$_wu3_dir" && -x "${_wu3_dir}/agy-bridge" ]]; then
+    continue
+  fi
+  if [[ -z "$WU3_NO_BRIDGE_PATH" ]]; then
+    WU3_NO_BRIDGE_PATH="$_wu3_dir"
+  else
+    WU3_NO_BRIDGE_PATH="${WU3_NO_BRIDGE_PATH}:${_wu3_dir}"
+  fi
+  IFS=':'
+done
+IFS="$_wu3_old_ifs"
+
+# Manual assertion helper for checks the empty/contains matcher can't
+# express (e.g. "must NOT contain", or an exact-value comparison). Counts
+# toward the same PASS_COUNT/FAIL_COUNT totals as run_case so the suite
+# still exits non-zero on any mismatch.
+_wu3_manual_assert() {
+  local name="$1"
+  local ok="$2"
+  local reason="$3"
+  if [[ "$ok" -eq 0 ]]; then
+    echo "PASS: ${name}"
+    PASS_COUNT=$((PASS_COUNT + 1))
+  else
+    echo "FAIL: ${name} -- ${reason}"
+    FAIL_COUNT=$((FAIL_COUNT + 1))
+  fi
+}
+
+# 1. enabled + namespaced-allowlisted + bridge present -> emits the advisory.
+run_case "wu3-01a-namespaced-allowlisted-emits-bridge-mention" \
+  "AGY_HOOKS_ENABLED=1 AGY_HOOKS_AGENT_TYPES='metaswarm:researcher-agent' PATH='${WU3_BRIDGE_PATH}' bash '${WU3_HOOK}'" \
+  '{"agent_type":"metaswarm:researcher-agent"}' 0 "contains:agy-bridge"
+run_case "wu3-01b-namespaced-allowlisted-emits-hookSpecificOutput" \
+  "AGY_HOOKS_ENABLED=1 AGY_HOOKS_AGENT_TYPES='metaswarm:researcher-agent' PATH='${WU3_BRIDGE_PATH}' bash '${WU3_HOOK}'" \
+  '{"agent_type":"metaswarm:researcher-agent"}' 0 "contains:hookSpecificOutput"
+run_case "wu3-01c-namespaced-allowlisted-emits-SubagentStart" \
+  "AGY_HOOKS_ENABLED=1 AGY_HOOKS_AGENT_TYPES='metaswarm:researcher-agent' PATH='${WU3_BRIDGE_PATH}' bash '${WU3_HOOK}'" \
+  '{"agent_type":"metaswarm:researcher-agent"}' 0 "contains:SubagentStart"
+
+# 2. enabled + bare-allowlisted + bridge present -> emits.
+run_case "wu3-02-bare-allowlisted-emits" \
+  "AGY_HOOKS_ENABLED=1 AGY_HOOKS_AGENT_TYPES='general-purpose' PATH='${WU3_BRIDGE_PATH}' bash '${WU3_HOOK}'" \
+  '{"agent_type":"general-purpose"}' 0 "contains:agy-bridge"
+
+# 3. namespaced allowlist entry does not cross-match a different namespace.
+run_case "wu3-03-namespace-mismatch-silent" \
+  "AGY_HOOKS_ENABLED=1 AGY_HOOKS_AGENT_TYPES='metaswarm:researcher-agent' PATH='${WU3_BRIDGE_PATH}' bash '${WU3_HOOK}'" \
+  '{"agent_type":"metaswarm:coder-agent"}' 0 empty
+
+# 4. agent_type simply not in the allowlist -> silent.
+run_case "wu3-04-not-allowlisted-silent" \
+  "AGY_HOOKS_ENABLED=1 AGY_HOOKS_AGENT_TYPES='metaswarm:researcher-agent' PATH='${WU3_BRIDGE_PATH}' bash '${WU3_HOOK}'" \
+  '{"agent_type":"totally-unlisted-agent"}' 0 empty
+
+# 5. hook toggled off, otherwise valid -> silent.
+run_case "wu3-05-disabled-silent" \
+  "AGY_HOOKS_ENABLED=0 AGY_HOOKS_AGENT_TYPES='general-purpose' PATH='${WU3_BRIDGE_PATH}' bash '${WU3_HOOK}'" \
+  '{"agent_type":"general-purpose"}' 0 empty
+
+# 6. malformed JSON stdin -> silent, no crash.
+run_case "wu3-06-malformed-json-silent" \
+  "AGY_HOOKS_ENABLED=1 AGY_HOOKS_AGENT_TYPES='general-purpose' PATH='${WU3_BRIDGE_PATH}' bash '${WU3_HOOK}'" \
+  '{not valid json at all' 0 empty
+
+# 7. empty stdin -> silent, no hang.
+run_case "wu3-07-empty-stdin-silent-no-hang" \
+  "AGY_HOOKS_ENABLED=1 AGY_HOOKS_AGENT_TYPES='general-purpose' PATH='${WU3_BRIDGE_PATH}' bash '${WU3_HOOK}'" \
+  '' 0 empty
+
+# 8. python3 unusable -> silent, exit 0, no crash.
+run_case "wu3-08-python3-unusable-silent" \
+  "AGY_HOOKS_ENABLED=1 AGY_HOOKS_AGENT_TYPES='general-purpose' PATH='${WU3_NO_PYTHON_PATH}' bash '${WU3_HOOK}'" \
+  '{"agent_type":"general-purpose"}' 0 empty
+
+# 9. whitespace-padded allowlist entries are trimmed before matching.
+run_case "wu3-09-whitespace-padded-allowlist-emits" \
+  "AGY_HOOKS_ENABLED=1 AGY_HOOKS_AGENT_TYPES=' general-purpose , Explore ' PATH='${WU3_BRIDGE_PATH}' bash '${WU3_HOOK}'" \
+  '{"agent_type":"general-purpose"}' 0 "contains:agy-bridge"
+
+# 10. agy-bridge absent from PATH -> silent even though everything else
+#     would otherwise fire. Precondition-check that our filtered PATH truly
+#     has no real bridge on it, so this case can't silently pass for the
+#     wrong reason.
+if command -v agy-bridge >/dev/null 2>&1 && [[ "$(PATH="${WU3_NO_BRIDGE_PATH}" command -v agy-bridge 2>/dev/null)" != "" ]]; then
+  _wu3_manual_assert "wu3-10-precondition-no-real-bridge-on-filtered-path" 1 \
+    "agy-bridge is still resolvable on WU3_NO_BRIDGE_PATH; the 'bridge absent' case would be invalid"
+else
+  _wu3_manual_assert "wu3-10-precondition-no-real-bridge-on-filtered-path" 0 ""
+fi
+run_case "wu3-10-bridge-absent-silent" \
+  "AGY_HOOKS_ENABLED=1 AGY_HOOKS_AGENT_TYPES='general-purpose' PATH='${WU3_NO_BRIDGE_PATH}' bash '${WU3_HOOK}'" \
+  '{"agent_type":"general-purpose"}' 0 empty
+
+# 11. debug on -> still emits valid JSON containing the advisory, and the
+#     incoming prompt text is NEVER echoed to stdout (checked via a sentinel
+#     that the `contains`/`empty` matchers can't express as a negative).
+run_case "wu3-11a-debug-on-fired-emits-advisory-fragment" \
+  "AGY_HOOKS_ENABLED=1 AGY_HOOKS_AGENT_TYPES='general-purpose' AGY_HOOKS_DEBUG=1 AGY_HOOKS_DEBUG_FILE='${WU3_DEBUG_FILE}' PATH='${WU3_BRIDGE_PATH}' bash '${WU3_HOOK}'" \
+  '{"agent_type":"general-purpose","prompt":"PROMPTSENTINEL_ZZZ this is the user task"}' 0 "contains:agy-bridge"
+
+_wu3_sentinel_stdout=$(printf '%s' '{"agent_type":"general-purpose","prompt":"PROMPTSENTINEL_ZZZ this is the user task"}' \
+  | AGY_HOOKS_ENABLED=1 AGY_HOOKS_AGENT_TYPES='general-purpose' AGY_HOOKS_DEBUG=1 AGY_HOOKS_DEBUG_FILE="${WU3_DEBUG_FILE}" PATH="${WU3_BRIDGE_PATH}" bash "${WU3_HOOK}" 2>/dev/null)
+if [[ "$_wu3_sentinel_stdout" == *"PROMPTSENTINEL_ZZZ"* ]]; then
+  _wu3_manual_assert "wu3-11b-debug-on-prompt-never-leaked-to-stdout" 1 \
+    "stdout leaked the incoming prompt sentinel: ${_wu3_sentinel_stdout}"
+else
+  _wu3_manual_assert "wu3-11b-debug-on-prompt-never-leaked-to-stdout" 0 ""
+fi
+
+# 12. emitted JSON is valid AND additionalContext equals the advisory
+#     EXACTLY (verbatim, independently re-verified via python3 json.load).
+_wu3_exact_stdout=$(printf '%s' '{"agent_type":"general-purpose"}' \
+  | AGY_HOOKS_ENABLED=1 AGY_HOOKS_AGENT_TYPES='general-purpose' PATH="${WU3_BRIDGE_PATH}" bash "${WU3_HOOK}" 2>/dev/null)
+
+# NOTE: the captured stdout is passed via a temp file argument, NOT piped in
+# alongside a `python3 - <<HEREDOC` invocation -- a heredoc redirection on
+# the same command overrides a pipe for that command's stdin, which would
+# silently discard the piped JSON and make this check vacuously fail.
+_wu3_exact_stdout_file="$(mktemp)"
+printf '%s' "${_wu3_exact_stdout}" > "${_wu3_exact_stdout_file}"
+
+if python3 - "${_wu3_exact_stdout_file}" <<'PYEOF'
+import json
+import sys
+
+expected = """For bulk, fan-out, or web-search work you can delegate to agy via the `agy-bridge` command (run `agy-bridge --help`; e.g. `echo "<task>" | agy-bridge --type search`). It has grounded web search (with source URLs) and extended-context reading. The judgment stays with you: skip it for small or judgment-heavy tasks, and always verify agy's output."""
+
+with open(sys.argv[1]) as f:
+    data = f.read()
+
+try:
+    obj = json.loads(data)
+    got = obj["hookSpecificOutput"]["additionalContext"]
+except Exception:
+    sys.exit(1)
+
+sys.exit(0 if got == expected else 1)
+PYEOF
+then
+  _wu3_manual_assert "wu3-12-emitted-additionalContext-exact-match" 0 ""
+else
+  _wu3_manual_assert "wu3-12-emitted-additionalContext-exact-match" 1 \
+    "emitted additionalContext did not exactly equal the fixed advisory text (stdout: ${_wu3_exact_stdout})"
+fi
+rm -f "${_wu3_exact_stdout_file}"
+
+# 13. Fail-safe branches must emit DISTINCT debug reasons so operators using
+#     AGY_HOOKS_DEBUG can tell a broken payload from a not-allowlisted agent.
+#     Each branch writes to its own debug file; we assert the expected reason
+#     substring per branch, that the three reasons are mutually distinct, and
+#     (regression guard) that malformed/empty-stdin stay SILENT + exit 0.
+
+# 13a. empty stdin -> silent, exit 0, debug reason "empty stdin".
+run_case "wu3-13a-empty-stdin-silent-exit0" \
+  "AGY_HOOKS_ENABLED=1 AGY_HOOKS_AGENT_TYPES='general-purpose' AGY_HOOKS_DEBUG=1 AGY_HOOKS_DEBUG_FILE='${WU3_DBG_EMPTY}' PATH='${WU3_BRIDGE_PATH}' bash '${WU3_HOOK}'" \
+  '   ' 0 empty
+if grep -q 'empty stdin' "${WU3_DBG_EMPTY}"; then
+  _wu3_manual_assert "wu3-13a-empty-stdin-debug-reason" 0 ""
+else
+  _wu3_manual_assert "wu3-13a-empty-stdin-debug-reason" 1 \
+    "debug file did not contain 'empty stdin' (got: $(cat "${WU3_DBG_EMPTY}"))"
+fi
+
+# 13b. malformed json -> silent, exit 0, debug reason "malformed json".
+run_case "wu3-13b-malformed-json-silent-exit0" \
+  "AGY_HOOKS_ENABLED=1 AGY_HOOKS_AGENT_TYPES='general-purpose' AGY_HOOKS_DEBUG=1 AGY_HOOKS_DEBUG_FILE='${WU3_DBG_MALFORMED}' PATH='${WU3_BRIDGE_PATH}' bash '${WU3_HOOK}'" \
+  '{not valid json at all' 0 empty
+if grep -q 'malformed json' "${WU3_DBG_MALFORMED}"; then
+  _wu3_manual_assert "wu3-13b-malformed-json-debug-reason" 0 ""
+else
+  _wu3_manual_assert "wu3-13b-malformed-json-debug-reason" 1 \
+    "debug file did not contain 'malformed json' (got: $(cat "${WU3_DBG_MALFORMED}"))"
+fi
+
+# 13c. valid JSON, non-allowlisted type -> debug reason "not allowlisted".
+run_case "wu3-13c-not-allowlisted-silent-exit0" \
+  "AGY_HOOKS_ENABLED=1 AGY_HOOKS_AGENT_TYPES='general-purpose' AGY_HOOKS_DEBUG=1 AGY_HOOKS_DEBUG_FILE='${WU3_DBG_NOTALLOWED}' PATH='${WU3_BRIDGE_PATH}' bash '${WU3_HOOK}'" \
+  '{"agent_type":"totally-unlisted-agent"}' 0 empty
+if grep -q 'not allowlisted' "${WU3_DBG_NOTALLOWED}"; then
+  _wu3_manual_assert "wu3-13c-not-allowlisted-debug-reason" 0 ""
+else
+  _wu3_manual_assert "wu3-13c-not-allowlisted-debug-reason" 1 \
+    "debug file did not contain 'not allowlisted' (got: $(cat "${WU3_DBG_NOTALLOWED}"))"
+fi
+
+# 13d. the three debug reasons must be MUTUALLY DISTINCT (strip the leading
+#     timestamp, compare the reason text). This is the assertion that would
+#     have caught the original collapse of all three branches into the
+#     identical "not allowlisted: '' -> skip" line.
+_wu3_reason_empty="$(cat "${WU3_DBG_EMPTY}")";           _wu3_reason_empty="${_wu3_reason_empty##*agy-hooks: }"
+_wu3_reason_malformed="$(cat "${WU3_DBG_MALFORMED}")";   _wu3_reason_malformed="${_wu3_reason_malformed##*agy-hooks: }"
+_wu3_reason_notallowed="$(cat "${WU3_DBG_NOTALLOWED}")"; _wu3_reason_notallowed="${_wu3_reason_notallowed##*agy-hooks: }"
+if [[ "$_wu3_reason_empty" != "$_wu3_reason_malformed" \
+   && "$_wu3_reason_empty" != "$_wu3_reason_notallowed" \
+   && "$_wu3_reason_malformed" != "$_wu3_reason_notallowed" ]]; then
+  _wu3_manual_assert "wu3-13d-three-debug-reasons-mutually-distinct" 0 ""
+else
+  _wu3_manual_assert "wu3-13d-three-debug-reasons-mutually-distinct" 1 \
+    "debug reasons collapsed: empty='${_wu3_reason_empty}' malformed='${_wu3_reason_malformed}' notallowed='${_wu3_reason_notallowed}'"
+fi
 echo ""
 
 echo "--- summary ---"
