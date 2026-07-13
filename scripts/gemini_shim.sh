@@ -149,8 +149,16 @@ if [[ ! -s "$PROMPT_FILE" ]]; then
     echo "ERROR: empty prompt" >&2; exit 2
 fi
 
+# ── Embed the prompt into GEMINI.md (agy auto-loads it; no read_file tool,
+#    off argv/ps, no ARG_MAX cap) — mirrors scripts/agy_bridge.sh. ──
+{ printf '\n\n---\nTASK:\n' >> "$WORK_DIR/GEMINI.md" \
+    && cat "$PROMPT_FILE" >> "$WORK_DIR/GEMINI.md" \
+    && chmod 600 "$WORK_DIR/GEMINI.md"; } \
+    || { echo "ERROR: failed to embed prompt into GEMINI.md" >&2; exit 2; }
+AGY_POINTER='Complete the TASK described in your GEMINI.md context. Output only the result.'
+
 # ── Build agy command ─────────────────────────────────────────────────────────
-AGY_ARGS=(--print --add-dir "$WORK_DIR")
+AGY_ARGS=(--print "$AGY_POINTER" --add-dir "$WORK_DIR")
 
 [[ -n "$MODEL" ]] && AGY_ARGS+=(--model "$MODEL")
 
@@ -164,12 +172,12 @@ for dir in "${INCLUDE_DIRS[@]}"; do
     AGY_ARGS+=(--add-dir "$dir")
 done
 
-# ── Run agy (prompt via stdin, never in cmdline — avoids ARG_MAX and leaks) ──
+# ── Run agy (prompt embedded in the 0600 GEMINI.md; only the static pointer
+#    is passed as --print's value — avoids ARG_MAX and keeps ps/argv clean) ──
 START=$SECONDS
 EXIT_CODE=0
 set +e
 "$AGY_BIN" "${AGY_ARGS[@]}" \
-    < "$PROMPT_FILE" \
     > "$STDOUT_FILE" \
     2> "$STDERR_FILE"
 EXIT_CODE=$?
