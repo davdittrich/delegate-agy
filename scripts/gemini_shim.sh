@@ -160,6 +160,17 @@ AGY_POINTER='Complete the TASK described in your GEMINI.md context. Output only 
 # ── Build agy command ─────────────────────────────────────────────────────────
 AGY_ARGS=(--print "$AGY_POINTER" --add-dir "$WORK_DIR")
 
+# WU0(B): --sandbox is a real API-level FS floor (path-confinement to --add-dir).
+# Add it to the read-only shim modes (sandbox/default), granting the CWD so
+# workspace reads still work; yolo stays unrestricted (--dangerously-skip-permissions).
+# Read-only-ness itself remains prompt-side (the shim-* policies permit no write tool);
+# --sandbox blocks ESCAPE outside the granted dirs.
+# WORK_DIR is re-granted last so it stays the terminal --add-dir (where GEMINI.md
+# is auto-loaded), mirroring agy_bridge.sh's --sandbox …--add-dir "$WORK_DIR" order.
+if [[ "$YOLO" -ne 1 && "$APPROVAL_MODE" != "yolo" ]]; then
+    AGY_ARGS+=(--sandbox --add-dir "$PWD" --add-dir "$WORK_DIR")
+fi
+
 [[ -n "$MODEL" ]] && AGY_ARGS+=(--model "$MODEL")
 
 # --yolo or --approval-mode yolo → auto-approve all tool calls
