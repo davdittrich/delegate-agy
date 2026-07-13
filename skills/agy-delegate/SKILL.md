@@ -23,7 +23,7 @@ agy (Google Antigravity CLI) provides grounded web search with source citations 
 
 ## Usage
 
-Bridge: `agy-bridge` (symlink in `~/.local/bin/` — run `/agy-setup` once after plugin install). Wraps `agy` with shell-safe prompt delivery (stdin), type routing, and consistent exit-code handling. Set `AGY_SKIP_PERMISSIONS=1` to pass `--dangerously-skip-permissions` when required.
+Bridge: `agy-bridge` (symlink in `~/.local/bin/` — run `/agy-setup` once after plugin install). Wraps `agy` with shell-safe prompt delivery (embedded in a 0600 per-run GEMINI.md — off argv/ps), type routing, and consistent exit-code handling. Set `AGY_SKIP_PERMISSIONS=1` to pass `--dangerously-skip-permissions` when required.
 
 ### Web search
 

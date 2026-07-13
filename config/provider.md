@@ -5,7 +5,7 @@
 - **Name**: Google Antigravity CLI
 - **Command**: `agy`
 - **Binary**: `~/.local/bin/agy`
-- **Version**: 1.0.5 (Go-based, successor to Gemini CLI)
+- **Version**: requires agy >= 1.1.1 (Go-based, successor to Gemini CLI; `--print` takes the prompt as its value)
 - **Config dir**: `~/.gemini/antigravity-cli/`
 - **MCP config**: `~/.gemini/antigravity-cli/mcp_config.json`
 
@@ -25,6 +25,8 @@ agy --continue --print "follow-up"
 # Resume specific session
 agy --conversation <session-id> --print "follow-up"
 ```
+
+The agy-bridge / `gemini` shim do NOT pass the prompt as the `--print` value or via stdin — they write it into a per-run 0600 `GEMINI.md` (`--- TASK:` section) that agy auto-loads via `--add-dir`, and pass only a static `--print` pointer. This keeps large or sensitive prompts off `argv`/`ps`.
 
 ## Models (current)
 

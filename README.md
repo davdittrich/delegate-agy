@@ -12,7 +12,7 @@ A Claude Code plugin that routes tasks to [agy](https://github.com/google/agy) (
 
 The plugin has two parts.
 
-**`agy-bridge`** is a shell script that wraps `agy` with type routing, per-type tool restrictions, prompt sanitization, and consistent exit codes. Each `--type` gets its own `GEMINI.md` written to a temporary working directory; agy reads it via `--add-dir` and treats those restrictions as binding. A `search` call can only use web tools. A `review` call can only read files. An `implement` call can read and write files but can't run shell commands. Prompts travel through stdin rather than command-line arguments, so they don't appear in `ps` or `/proc/cmdline`.
+**`agy-bridge`** is a shell script that wraps `agy` with type routing, per-type tool restrictions, prompt sanitization, and consistent exit codes. Each `--type` gets its own `GEMINI.md` written to a temporary working directory; agy reads it via `--add-dir` and treats those restrictions as binding. A `search` call can only use web tools. A `review` call can only read files. An `implement` call can read and write files but can't run shell commands. The prompt itself is embedded in the per-run 0600 `GEMINI.md` (the same file that carries the tool restrictions, auto-loaded via `--add-dir`); only a short static pointer is passed as the `--print` value, so the prompt still doesn't appear in `ps` or `/proc/cmdline`.
 
 **`agy-delegate`** is a Claude Code skill that tells Claude when to reach for the bridge. It triggers on phrases like "search for", "latest", "ask Gemini", "second opinion". Claude picks the right `--type`, constructs the prompt, and pipes it through.
 
@@ -179,7 +179,7 @@ The plugin installs a `SubagentStart` hook (`hooks/agy-subagent-policy.sh`, wire
 
 ## Security
 
-Don't pipe credentials, API keys, or PII through the bridge. Prompts use stdin to stay out of process listings. Per-type tool restrictions prevent agy from running shell commands in any mode. Model names are validated at startup against a list fetched from agy and cached for 60 minutes at `~/.cache/agy-bridge-models`.
+Don't pipe credentials, API keys, or PII through the bridge. The prompt is written to a 0600 per-run `GEMINI.md` (not passed on the command line), so it stays out of process listings. Per-type tool restrictions prevent agy from running shell commands in any mode. Model names are validated at startup against a list fetched from agy and cached for 60 minutes at `~/.cache/agy-bridge-models`.
 
 ## Drop-in gemini CLI replacement
 
