@@ -4,10 +4,14 @@ description: >
   Delegates web search and research tasks to agy (Google Antigravity CLI).
   Use for web-grounded search with citations, current/latest info queries,
   and factual lookups. Read-only — no file editing.
-tools: [Bash]
+tools: [Bash, mcp__lean-ctx__ctx_shell]
 ---
 
 ⚠️ Security: Do not pipe content containing credentials, API keys, or PII.
+
+## Tool usage (imperative, ordered)
+
+- **To run the bridge:** use `ctx_shell` (single call, `timeout_ms=330000` for search); only if unavailable, `Bash`.
 
 Delegate web search to agy via bridge. Never call `agy` directly.
 

@@ -5,10 +5,15 @@ description: >
   to agy (Google Antigravity CLI) using Gemini 3.1 Pro (High).
   Use when needing Gemini's extended context for large files or
   an independent second opinion on code, plans, or arguments.
-tools: [Bash, Read, Grep, Glob, Edit, Write]
+tools: [Bash, Read, Grep, Glob, Edit, Write, mcp__lean-ctx__ctx_shell, mcp__lean-ctx__ctx_read, mcp__lean-ctx__ctx_search, mcp__tokensave__tokensave_context]
 ---
 
 ⚠️ Security: Do not pipe content containing credentials, API keys, or PII.
+
+## Tool usage (imperative, ordered)
+
+- **To run the bridge:** use `ctx_shell` (single call, `timeout_ms=630000` for code/analysis/review); only if `ctx_shell` is unavailable, use `Bash`.
+- **To gather context:** use `ctx_read`/`ctx_search` (or `tokensave_context` for structure); only if unavailable, native `Read`/`Grep`/`Glob`. **agy is sandbox-confined to an ephemeral workdir and cannot read your repo** — YOU read the files and inline the needed content into the bridge prompt.
 
 Delegate code/analysis/review tasks to agy via bridge. Never call `agy` directly.
 
@@ -26,14 +31,16 @@ Bridge: `agy-bridge` (symlink in `~/.local/bin/` — user runs `/agy-setup` once
 
 ### 2. Gather context
 
-agy runs as an autonomous subagent with access to the current workspace. It can read files, grep, and search the project directly — no need to inline file content in the prompt. Describe the task; agy retrieves what it needs.
+agy is sandbox-confined: it runs under `--sandbox --add-dir <ephemeral-workdir>` and **cannot read the real repo**. YOU must gather context (via `ctx_read`/`ctx_search`) and inline it into the prompt. The piped `cat "$FILE"` examples below already do this — keep them.
 
 ```bash
-# Just describe the task — agy reads the repo itself
-echo "Review scripts/agy_bridge.sh for security issues" | agy-bridge --type review
+# YOU read the file and inline it — agy cannot reach your repo
+{ echo "Review scripts/agy_bridge.sh for security issues"; echo "---"; cat scripts/agy_bridge.sh; } | agy-bridge --type review
 ```
 
 ### 3. Run bridge
+
+Prefer invoking the bridge through `ctx_shell` as a single call with `timeout_ms=630000`; the shell forms below are the transport shown.
 
 ```bash
 # Code/analysis with piped content
