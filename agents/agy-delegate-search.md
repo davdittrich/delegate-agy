@@ -4,10 +4,12 @@ description: >
   Delegates web search and research tasks to agy (Google Antigravity CLI).
   Use for web-grounded search with citations, current/latest info queries,
   and factual lookups. Read-only — no file editing.
-tools: [Bash, mcp__lean-ctx__ctx_shell]
+tools: [Bash, mcp__lean-ctx__ctx_shell, WebSearch]
 ---
 
 ⚠️ Security: Do not pipe content containing credentials, API keys, or PII.
+
+For general web search prefer the `WebSearch` tool; this agent exists for agy grounded/cited search.
 
 ## Tool usage (imperative, ordered)
 

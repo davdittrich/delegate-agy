@@ -1,17 +1,17 @@
 ---
 name: agy-delegate
-description: Use when doing web searches, looking up current or latest info, researching online, or delegating analysis/review tasks to agy (Google Antigravity CLI). Prefer agy over native WebSearch for any factual or time-sensitive query. Triggers on: agy, antigravity, search for, look up, find online, current info, latest, news, research, second opinion from Gemini or GPT.
+description: Use when doing web searches, looking up current or latest info, researching online, or delegating analysis/review tasks to agy (Google Antigravity CLI). Prefer the WebSearch tool for general web search; use agy for grounded source-cited, current, or second-opinion queries. Triggers on: agy, antigravity, search for, look up, find online, current info, latest, news, research, second opinion from Gemini or GPT.
 ---
 
 # AGY Delegate
 
-agy (Google Antigravity CLI) provides grounded web search with source citations plus access to Gemini 3.1/3.5 and GPT-OSS 120B — all from one subprocess call. Use it instead of the native WebSearch tool so responses include real source URLs and aren't limited to training-data recency.
+agy (Google Antigravity CLI) provides grounded web search with source citations plus access to Gemini 3.1/3.5 and GPT-OSS 120B — all from one subprocess call. For general web search prefer the `WebSearch` tool; reach for agy when you need real source URLs / a second model / info past Claude's cutoff.
 
 ⚠️ Security: Do not pipe content containing credentials, API keys, or PII.
 
 ## When to Use
 
-**Web search (prefer over native WebSearch):**
+**Web search — use agy for grounded/cited results (general search: prefer `WebSearch`):**
 - "What is the current...", "latest version of...", "search for..."
 - Factual claims that need source citations
 - Pricing, changelogs, release notes, documentation
@@ -33,7 +33,7 @@ echo "Claude API pricing June 2026" | agy-bridge --type search
 
 ### Code / task delegation
 
-agy runs as an autonomous subagent with full workspace read access — describe the task, agy reads files itself:
+agy is sandbox-confined — it runs in an ephemeral workdir and cannot read the repo. Inline the needed file content into the piped prompt (as the `echo "$QUESTION" | agy-bridge` example shows):
 
 ```bash
 echo "$QUESTION" | agy-bridge --type code

@@ -84,7 +84,7 @@ fi
 python3 <<'PYEOF'
 import json
 
-advisory = """For bulk, fan-out, or web-search work you can delegate to agy via the `agy-bridge` command (run `agy-bridge --help`; e.g. `echo "<task>" | agy-bridge --type search`). It has grounded web search (with source URLs) and extended-context reading. The judgment stays with you: skip it for small or judgment-heavy tasks, and always verify agy's output."""
+advisory = """For general web search, prefer your `WebSearch` tool. For grounded/source-cited search, extended-context reading, or a second opinion you can delegate to agy via the `agy-bridge` command — invoke it through `ctx_shell` (fall back to `Bash` only if `ctx_shell` is unavailable); run `agy-bridge --help`. The judgment stays with you: skip it for small or judgment-heavy tasks, and always verify agy's output."""
 
 output = {
     "hookSpecificOutput": {

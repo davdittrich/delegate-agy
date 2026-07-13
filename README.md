@@ -1,4 +1,4 @@
-A Claude Code plugin that routes tasks to [agy](https://github.com/google/agy) (Google Antigravity CLI), giving your Claude sessions access to Gemini 3.1/3.5, GPT-OSS 120B, and grounded web search with source citations.
+A Claude Code plugin that routes tasks to [agy](https://github.com/google/agy) (Google Antigravity CLI), giving your Claude sessions access to Gemini 3.1/3.5, GPT-OSS 120B, and grounded web search with source citations. For general web search prefer your `WebSearch` tool; reach for agy when you need cited sources or a second model.
 
 ## Why
 
