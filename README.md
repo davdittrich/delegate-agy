@@ -12,7 +12,7 @@ A Claude Code plugin that routes tasks to [agy](https://github.com/google/agy) (
 
 The plugin has two parts.
 
-**`agy-bridge`** is a shell script that wraps `agy` with type routing, per-type tool restrictions, prompt sanitization, and consistent exit codes. Each `--type` gets its own `GEMINI.md` written to a temporary working directory; agy reads it via `--add-dir` and treats those restrictions as binding. A `search` call can only use web tools. A `review` call can only read files. An `implement` call can read and write files but can't run shell commands. The prompt itself is embedded in the per-run 0600 `GEMINI.md` (the same file that carries the tool restrictions, auto-loaded via `--add-dir`); only a short static pointer is passed as the `--print` value, so the prompt still doesn't appear in `ps` or `/proc/cmdline`.
+**`agy-bridge`** is a shell script that wraps `agy` with type routing, per-type tool restrictions, prompt sanitization, and consistent exit codes. Each `--type` gets its own `GEMINI.md` written to a temporary working directory; agy reads it via `--add-dir`; the GEMINI.md tool restrictions are prompt-advisory, while `--sandbox` is the API-level filesystem floor that confines agy to the granted directories. A `search` call can only use web tools. A `review` call can only read files. An `implement` call can read and write files but can't run shell commands. The prompt itself is embedded in the per-run 0600 `GEMINI.md` (the same file that carries the tool restrictions, auto-loaded via `--add-dir`); only a short static pointer is passed as the `--print` value, so the prompt still doesn't appear in `ps` or `/proc/cmdline`.
 
 **`agy-delegate`** is a Claude Code skill that tells Claude when to reach for the bridge. It triggers on phrases like "search for", "latest", "ask Gemini", "second opinion". Claude picks the right `--type`, constructs the prompt, and pipes it through.
 
@@ -201,7 +201,7 @@ Don't pipe credentials, API keys, or PII through the bridge. The prompt is writt
 | `--output-format json` | wraps output in `{"response":…,"usageMetadata":{…}}` envelope; token counts are `null` (agy does not expose usage) |
 | `--approval-mode yolo` | `--dangerously-skip-permissions` |
 | `--yolo` | `--dangerously-skip-permissions` |
-| `--sandbox` | (omitted — read-only enforced via GEMINI.md tool restrictions) |
+| `--sandbox` | `--sandbox --add-dir "$PWD"` — API-level filesystem floor; read-only-ness is prompt-side via the shim policy |
 | `--include-directories <dir>` | `--add-dir <dir>` |
 | `--version` | `agy --version` |
 

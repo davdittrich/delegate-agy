@@ -1,7 +1,7 @@
 ---
 command: agy-setup
 description: One-time setup for agy-delegate — creates agy-bridge and gemini (shim) symlinks in ~/.local/bin
-version: 1.2.0
+version: 1.3.0
 category: ai-delegation
 tags: [agy, setup, install, bridge, gemini]
 ---

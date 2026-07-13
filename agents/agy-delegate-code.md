@@ -78,4 +78,5 @@ Run `agy models` for current model name list.
 | 0 | OK | Return output |
 | 124 | Timeout | Report; retry with `--timeout 900` or simpler prompt |
 | 127 | bridge not installed | Run `/agy-setup` to create symlink. Until fixed: proceed with native `Read`/`Grep`/`Bash` analysis rather than stopping. |
-| other | agy error | Report stderr verbatim; check model name with `agy models` |
+| 3 | agy returned empty output (hidden failure) | Check the JSON envelope's error_class: quota (RESOURCE_EXHAUSTED/429) → retry later; auth (UNAUTHENTICATED) → re-auth agy; empty_output → inspect stderr |
+| other (non-3) | agy error | Report stderr verbatim; check model name with `agy models` |
