@@ -206,20 +206,30 @@ if [[ "$VERBOSE" -eq 1 ]]; then
     fi
 fi
 
+# ── Embed the assembled prompt into GEMINI.md (agy auto-loads it; no read_file
+#    tool needed, so this works even under search.md's read_file restriction).
+#    Keeps the prompt OFF argv/ps and lifts the ARG_MAX single-arg cap. ──
+{ printf '\n\n---\nTASK:\n' >> "$WORK_DIR/GEMINI.md" \
+    && cat "$PROMPT_FILE" >> "$WORK_DIR/GEMINI.md" \
+    && chmod 600 "$WORK_DIR/GEMINI.md"; } \
+    || { echo "ERROR: failed to embed prompt into GEMINI.md" >&2; exit 2; }
+AGY_POINTER='Complete the TASK described in your GEMINI.md context. Output only the result.'
+
 # ── Run agy ──────────────────────────────────────────────────────────────────
 # Run from WORK_DIR so agy reads the type-specific GEMINI.md tool restrictions.
-# Prompt delivered via stdin redirect — never appears in ps/proc/cmdline.
+# Prompt is embedded in the 0600 GEMINI.md; only the static pointer is passed as
+# the --print value, so it still never appears in ps/proc/cmdline, and there is
+# no ARG_MAX single-arg cap on prompt size.
 START=$SECONDS
 EXIT_CODE=0
 set +e
-AGY_FLAGS=(--print --sandbox --model "$MODEL" --add-dir "$WORK_DIR")
+AGY_FLAGS=(--print "$AGY_POINTER" --sandbox --model "$MODEL" --add-dir "$WORK_DIR")
 if [[ "${AGY_SKIP_PERMISSIONS:-0}" == "1" ]]; then
     echo "WARNING: AGY_SKIP_PERMISSIONS=1 — running with --dangerously-skip-permissions" >&2
     AGY_FLAGS+=(--dangerously-skip-permissions)
 fi
 ( cd "$WORK_DIR" && "$TIMEOUT_BIN" "$TIMEOUT" "$AGY_BIN" \
     "${AGY_FLAGS[@]}" \
-    < "$PROMPT_FILE" \
     > "$STDOUT_FILE" \
     2> "$STDERR_FILE" )
 EXIT_CODE=$?
