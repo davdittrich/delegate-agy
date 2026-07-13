@@ -76,7 +76,7 @@ Usage:
   agy_bridge.sh [OPTIONS] -- "prompt text"
 
 Options:
-  --type search|code|review|analysis
+  --type search|code|review|analysis|implement
   --model "model name"       (see: agy models)
   --timeout N                seconds (default: 300 search, 600 other)
   --stdin-timeout N          seconds for stdin read (default: 30)
@@ -90,6 +90,9 @@ Options:
   --types                    list type/model/timeout table
   --help                     show this message
   --                         treat remaining args as prompt text
+
+  Optional: ~/.config/agy-delegate/config.json {"lean_ctx":bool,"tokensave":bool}
+  (written by /agy-setup) hints MCP availability; live-probed if absent.
 
 HELP
             exit 0 ;;
@@ -213,6 +216,38 @@ fi
     && cat "$PROMPT_FILE" >> "$WORK_DIR/GEMINI.md" \
     && chmod 600 "$WORK_DIR/GEMINI.md"; } \
     || { echo "ERROR: failed to embed prompt into GEMINI.md" >&2; exit 2; }
+
+# ── MCP-server autodetect (cached 60-min, config-hint fast-path, live fallback) ─
+# Bias agy toward lean-ctx/tokensave reads ONLY for MCP-permitted types. The
+# stanza is advisory GEMINI.md text — it does NOT relax --sandbox/--add-dir.
+_MCP_LEANCTX=0; _MCP_TOKENSAVE=0
+if command -v jq >/dev/null 2>&1; then
+    _MCP_CACHE="$HOME/.cache/agy-bridge-mcp"
+    if [[ -s "$_MCP_CACHE" ]] && [[ -z "$(find "$_MCP_CACHE" -mmin +60 2>/dev/null)" ]]; then
+        _MCP_LEANCTX=$(sed -n '1p' "$_MCP_CACHE" 2>/dev/null)
+        _MCP_TOKENSAVE=$(sed -n '2p' "$_MCP_CACHE" 2>/dev/null)
+    else
+        _HINT="$HOME/.config/agy-delegate/config.json"
+        _AGY_MCP_CFG="$HOME/.gemini/antigravity-cli/mcp_config.json"
+        if [[ -s "$_HINT" ]] && jq -e . "$_HINT" >/dev/null 2>&1; then
+            jq -e '.lean_ctx == true'  "$_HINT" >/dev/null 2>&1 && _MCP_LEANCTX=1
+            jq -e '.tokensave == true' "$_HINT" >/dev/null 2>&1 && _MCP_TOKENSAVE=1
+        elif [[ -s "$_AGY_MCP_CFG" ]]; then
+            jq -e '.mcpServers."lean-ctx"' "$_AGY_MCP_CFG" >/dev/null 2>&1 && _MCP_LEANCTX=1
+            jq -e '.mcpServers.tokensave'  "$_AGY_MCP_CFG" >/dev/null 2>&1 && _MCP_TOKENSAVE=1
+        fi
+        mkdir -p "${_MCP_CACHE%/*}" 2>/dev/null || true
+        printf '%s\n%s\n' "$_MCP_LEANCTX" "$_MCP_TOKENSAVE" > "$_MCP_CACHE.tmp.$$" \
+            && mv "$_MCP_CACHE.tmp.$$" "$_MCP_CACHE" 2>/dev/null || true
+        chmod 600 "$_MCP_CACHE" 2>/dev/null || true
+    fi
+fi
+# MCP-permitted types = the SAME $TYPE the policy case uses; search + shim excluded.
+if [[ "$TYPE" =~ ^(code|review|analysis|implement)$ ]] \
+   && { [[ "$_MCP_LEANCTX" == "1" ]] || [[ "$_MCP_TOKENSAVE" == "1" ]]; }; then
+    printf '\n---\nTOOL PREFERENCE: when reading files or inspecting code structure, prefer the lean-ctx tools (ctx_read/ctx_search) and tokensave_context over raw full-file dumps — they are token-efficient. Standard file tools remain available within your sandbox.\n' \
+        >> "$WORK_DIR/GEMINI.md"
+fi
 AGY_POINTER='Complete the TASK described in your GEMINI.md context. Output only the result.'
 
 # ── Run agy ──────────────────────────────────────────────────────────────────
