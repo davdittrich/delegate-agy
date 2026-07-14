@@ -75,13 +75,41 @@ git clone https://github.com/davdittrich/delegate-agy
 claude plugin install ./delegate-agy
 ```
 
-**4. Create the symlinks.**
+**4. Run the installer.**
 
-Run once after install — creates `~/.local/bin/agy-bridge` and `~/.local/bin/gemini` (the drop-in shim):
+Run `/agy-setup` inside Claude Code. It does NOT install anything for you — it
+prints the shadow notice plus one **validated, self-resolving** command you run
+in your own terminal. That command resolves this plugin's `scripts/install.sh`
+from `claude plugin list --json`, checks the resolved path matches
+`*/agy-delegate/*/scripts/install.sh` and is a real file, then runs it.
 
 ```
 /agy-setup
 ```
+
+`scripts/install.sh` writes two hardened launcher wrappers to `~/.local/bin`:
+
+- `agy-bridge` → execs `scripts/agy_bridge.sh`
+- `gemini` → execs `scripts/gemini_shim.sh` (drop-in shim)
+
+Each wrapper execs a **pinned absolute path recorded at install time** — it does
+not glob the plugin cache and does not call `claude plugin list` per invocation
+(both are attack/latency surfaces). If the plugin is later **updated or moved**,
+the pinned path disappears and the wrapper **fails loud** with a "re-run the
+install" message. **Re-run `/agy-setup`'s install command after any plugin
+update** to repin the wrappers.
+
+> **Shadow blast radius.** `~/.local/bin/gemini` shadows the real `gemini`
+> command for every caller whose `PATH` has `~/.local/bin` first — your shell,
+> Claude Octopus, Metaswarm. The installer prints this notice, backs up any
+> pre-existing non-agy `gemini`/`agy-bridge` (to `<name>.bak-agy-<timestamp>`),
+> and scans the full `$PATH` to warn which real `gemini` it shadows. Reverse
+> everything with `scripts/uninstall.sh` (see below).
+
+Opt-in flags (default off): `AGY_SETUP_REGISTER_TOKENSAVE=1` registers tokensave
+as an agy MCP server; `AGY_SETUP_PATCH_ALIASES=1` applies the recursive-`gemini`
+shell-rc alias patch (otherwise a dry-run advisory). `/agy-setup` prints the
+exact variant commands.
 
 **5. Verify.**
 
@@ -99,6 +127,14 @@ analysis     Gemini 3.1 Pro (High)          600s
 review       Gemini 3.1 Pro (High)          600s
 implement    Gemini 3.1 Pro (High)          600s
 ```
+
+**6. Uninstall.**
+
+`scripts/uninstall.sh` removes the two wrappers only if they carry our signature
+marker (restoring any shadowed original from its backup), and — with
+`AGY_UNINSTALL_TOKENSAVE=1` — de-registers tokensave and removes the availability
+hint. It is idempotent and refuses to run as root. `/agy-setup` prints the exact
+command.
 
 ## Usage
 
@@ -169,7 +205,8 @@ The plugin installs a `SubagentStart` hook (`hooks/agy-subagent-policy.sh`, wire
 
 | Error | Fix |
 |-------|-----|
-| `agy-bridge: command not found` | Run `/agy-setup` to create the symlink |
+| `agy-bridge: command not found` | Run `/agy-setup` and its printed install command to create the wrapper |
+| `agy-delegate moved or was updated` (wrapper fails loud) | The plugin was updated/moved — re-run `/agy-setup`'s install command to repin the wrappers |
 | `agy: command not found` | Add `~/.local/bin` to `$PATH`: bash/zsh: `export PATH="$HOME/.local/bin:$PATH"` · fish: `fish_add_path ~/.local/bin` |
 | Response missing source URLs | Use `--type search` |
 | Model name rejected | Run `agy models`; exact string required |
@@ -181,9 +218,11 @@ The plugin installs a `SubagentStart` hook (`hooks/agy-subagent-policy.sh`, wire
 
 Don't pipe credentials, API keys, or PII through the bridge. The prompt is written to a 0600 per-run `GEMINI.md` (not passed on the command line), so it stays out of process listings. Per-type tool restrictions prevent agy from running shell commands in any mode. Model names are validated at startup against a list fetched from agy and cached for 60 minutes at `~/.cache/agy-bridge-models`.
 
+The installer (`scripts/install.sh`) and uninstaller run with `set -euo pipefail`, refuse to run as root, write only under `~/.local/bin`, `~` (rc backups), `~/.config/agy-delegate`, and `~/.gemini`, and never touch the repo. The generated launcher wrappers exec a **pinned absolute path** (no user-writable cache glob, no per-invocation `claude plugin list`) and fail loud if that path is missing.
+
 ## Drop-in gemini CLI replacement
 
-`scripts/gemini_shim.sh` is a transparent `gemini` CLI shim backed by agy. Install it as `gemini` on your PATH so that frameworks that call `gemini` automatically use agy instead — no configuration changes in those frameworks required.
+`scripts/gemini_shim.sh` is a transparent `gemini` CLI shim backed by agy. `scripts/install.sh` installs it as a `gemini` wrapper on your PATH so that frameworks that call `gemini` automatically use agy instead — no configuration changes in those frameworks required.
 
 ### Frameworks supported
 
@@ -223,15 +262,19 @@ Mappings are in `config/model-map.json` — add aliases there without touching s
 
 ### Manual installation
 
+Prefer the installer (`/agy-setup`) — it writes a hardened, pinned wrapper with
+non-clobber backup and a full-`$PATH` shadow scan. For a minimal manual setup:
+
 ```bash
-# Symlink shim as 'gemini' in a directory that precedes the real gemini on PATH
+# Symlink the shim as 'gemini' in a directory that precedes the real gemini on PATH
 mkdir -p ~/.local/bin
 ln -sf /path/to/delegate-agy/scripts/gemini_shim.sh ~/.local/bin/gemini
 # Verify:
 gemini --version   # should print agy version
 ```
 
-Or use `/agy-setup`, which sets up both `agy-bridge` and `gemini` in one step.
+A raw symlink has none of the installer's guards (no pinned-path fail-loud, no
+backup, no shadow scan) — use `scripts/install.sh` for the hardened path.
 
 ### Octopus configuration
 
@@ -250,8 +293,10 @@ No changes needed. Metaswarm's gemini adapter checks `command -v gemini`; the sh
 ## File layout
 
 ```
-scripts/agy_bridge.sh          — typed bridge (symlinked to ~/.local/bin/agy-bridge)
-scripts/gemini_shim.sh         — drop-in gemini CLI shim (symlinked to ~/.local/bin/gemini)
+scripts/install.sh             — hardened installer (pinned wrappers, non-clobber, shadow scan)
+scripts/uninstall.sh           — reverses install (signature-checked, idempotent)
+scripts/agy_bridge.sh          — typed bridge (execed by the ~/.local/bin/agy-bridge wrapper)
+scripts/gemini_shim.sh         — drop-in gemini CLI shim (execed by the ~/.local/bin/gemini wrapper)
 skills/agy-delegate/SKILL.md   — skill definition
 config/provider.md             — provider details, auth, timeout guidance
 config/model-map.json          — gemini alias → agy model name mapping table

@@ -14,19 +14,25 @@
 #    scripts/gemini_shim.sh now honor it (T1-T3 delivery tests below).
 #  - vfn (T1-T6): fail-closed allowlist policies, MCP tool-preference stanza
 #    gating (server-on/off, search/shim excluded), the shim --sandbox read-only
-#    floor, exit-3 docs, and the 1.3.0 version bump. The T7 assertions below
-#    lock in that shipped behavior.
+#    floor, exit-3 docs, and the version bump. The T7 assertions below lock in
+#    that shipped behavior.
+#  - vfn.11 (I*): the self-contained installer/uninstaller — pinned-path
+#    launcher wrappers (fail-loud-on-break, NO cache glob), non-clobber +
+#    full-$PATH shadow scan, refuse-root, idempotency, consent-gated rc patch,
+#    atomic tokensave register (exit 3/4/5, leaves original on failure),
+#    python3-guard fail-open, decline-hint, the /agy-setup one-liner path
+#    validation, uninstall reversal, and repo-untouched.
 #
-#    SUITE STATE: fully GREEN. The wrapper prompt-delivery fix (T1/T2/T3) and the
-#    vfn contract (T4/T5/T6, exercised by the ST*/M*/SH* cases below) have all
-#    landed, so every case here passes against the current committed code. New
-#    cases must keep the suite green; no assertion may be weakened to pass early.
+#    SUITE STATE: fully GREEN. New cases must keep the suite green; no assertion
+#    may be weakened to pass early.
 set -u
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
 BRIDGE="$ROOT/scripts/agy_bridge.sh"
 SHIM="$ROOT/scripts/gemini_shim.sh"
+INSTALL="$ROOT/scripts/install.sh"
+UNINSTALL="$ROOT/scripts/uninstall.sh"
 
 SANDBOX="$(mktemp -d -t agy-tests.XXXXXX)"
 cleanup() { rm -rf "$SANDBOX"; }
@@ -156,8 +162,6 @@ fi
 # D2: --digest + oversized reply -> stderr warning mentioning "digest"
 BIGREPLY="$(printf 'x%.0s' $(seq 1 20000))"
 FAKE_AGY_STDOUT="$BIGREPLY" _run OUT RC bash "$BRIDGE" --type code --digest --digest-warn-chars 100 -- "analyze this"
-# RC-gate + match the SPECIFIC warning phrase, not a bare "digest" substring
-# (bridge arg-parse errors also contain "digest", e.g. --digest-warn-chars errors).
 if [[ "$RC" -eq 0 && "$OUT" == *"--digest reply is"* ]]; then
     ok "D2 --digest oversized reply -> warning mentions digest"
 else
@@ -183,14 +187,7 @@ fi
 
 echo "== agy_bridge.sh prompt-delivery contract (2dc.4) =="
 
-# T1 no-stdin + argv-no-leak (combined): wrap fake-agy.sh with a recorder that
-# captures the real argv/stdin agy would see, then confirm the prompt (a
-# distinctive token) reaches agy via the GEMINI.md TASK section -- never via
-# argv (ps/proc leak) and never via stdin (agy's real prompt-delivery contract
-# does not read stdin) -- while the static --add-dir pointer (proof of
-# directory-based GEMINI.md delivery) IS present in argv.
-# The recorder lives in its own PATH-prepended dir, scoped to a subshell so the
-# plain fake-agy on PATH is untouched for the rest of the suite.
+# T1 no-stdin + argv-no-leak (combined).
 (
     RECDIR="$SANDBOX/recorder"
     mkdir -p "$RECDIR"
@@ -225,11 +222,7 @@ else
     bad "T1 prompt delivered via GEMINI.md TASK, absent from argv AND stdin" "$T1_LINE"
 fi
 
-# T2 large-prompt (no ARG_MAX): a prompt well over 131072 bytes, with sentinels
-# at both ends, must survive delivery intact -- no "Argument list too long"
-# and both sentinels present in the echoed TASK text. Proves the wrapper
-# writes the prompt into a file (GEMINI.md) rather than passing it as a
-# size-capped argv string to agy (or to any intermediate exec).
+# T2 large-prompt (no ARG_MAX).
 FILLER="$(printf 'a%.0s' $(seq 1 131200))"
 BIGPROMPT="HEADSENTINEL${FILLER}TAILSENTINEL"
 OUT="$(printf '%s' "$BIGPROMPT" | FAKE_AGY_ECHO_PROMPT=1 bash "$BRIDGE" --type code 2>&1)"; RC=$?
@@ -239,8 +232,7 @@ else
     bad "T2 large (>131072B) prompt delivered intact, no ARG_MAX error" "rc=$RC out_len=${#OUT} out=${OUT:0:200}..."
 fi
 
-# T3 empty-prompt: an empty prompt must not silently succeed -- either the
-# wrapper or agy (fail-closed on an empty TASK section) must reject it.
+# T3 empty-prompt.
 _run OUT RC bash "$BRIDGE" --type code -- ""
 if [[ "$RC" -ne 0 ]]; then
     ok "T3 empty prompt -> non-zero exit (no silent success)"
@@ -250,8 +242,7 @@ fi
 
 echo "== policy files: fail-closed allowlist (vfn T1) =="
 
-# ST1: the FORBIDDEN (allowlist catch-all) line is byte-identical across the
-# search + all three shim policies -- one canonical catch-all, no per-file drift.
+# ST1
 CATCHALL_UNIQ="$(grep -h 'allowlist catch-all' \
     "$ROOT/config/policies/search.md" \
     "$ROOT/config/policies/shim-sandbox.md" \
@@ -263,8 +254,7 @@ else
     bad "ST1 catch-all line byte-identical across search+shim policies" "distinct=$CATCHALL_UNIQ"
 fi
 
-# ST2: the catch-all names the three MCP leak vectors it must close --
-# ctx_call (the invoke-anything gateway), tokensave_, and mcp__.
+# ST2
 CATCHALL="$(grep -h 'allowlist catch-all' "$ROOT/config/policies/search.md" | head -1)"
 if [[ "$CATCHALL" == *"ctx_call"* && "$CATCHALL" == *"tokensave_"* && "$CATCHALL" == *"mcp__"* ]]; then
     ok "ST2 catch-all covers ctx_call + tokensave_ + mcp__ leak vectors"
@@ -272,15 +262,12 @@ else
     bad "ST2 catch-all covers ctx_call + tokensave_ + mcp__ leak vectors" "$CATCHALL"
 fi
 
-# ST3: the MCP-permitted policies (code/review-analysis/implement) each PERMIT
-# the read-only lean-ctx/tokensave tools...
+# ST3
 ST3_PERMIT_OK=1
 for f in code review-analysis implement; do
     grep -q 'ctx_read, ctx_search, tokensave_context' "$ROOT/config/policies/$f.md" \
         || ST3_PERMIT_OK=0
 done
-# ...and no PERMITTED line anywhere grants an exec/edit tool (ctx_shell/ctx_call/
-# ctx_edit/ctx_execute) -- the allowlist stays read-only.
 ST3_EXEC_LEAK="$(grep -h '^PERMITTED:' "$ROOT"/config/policies/*.md \
     | grep -Ec 'ctx_shell|ctx_call|ctx_edit|ctx_execute')"
 if [[ "$ST3_PERMIT_OK" -eq 1 && "$ST3_EXEC_LEAK" -eq 0 ]]; then
@@ -291,9 +278,7 @@ fi
 
 echo "== agent + skill docs: exit-3, WebSearch, version (vfn T5/T6) =="
 
-# ST4: both delegate agents document a `| 3 |` error row that classifies the
-# exit-3 hidden failure into the REAL error classes (empty_output/quota/auth)
-# and does NOT invent a phantom "backend" class.
+# ST4
 ST4_OK=1
 for f in agents/agy-delegate-code.md agents/agy-delegate-search.md; do
     row="$(grep '| 3 |' "$ROOT/$f")"
@@ -301,7 +286,6 @@ for f in agents/agy-delegate-code.md agents/agy-delegate-search.md; do
     [[ "$row" == *"empty_output"* && "$row" == *"quota"* && "$row" == *"auth"* ]] || ST4_OK=0
     [[ "$row" == *"backend"* ]] && ST4_OK=0
 done
-# SKILL Common Mistakes carries an exit-3 symptom row too.
 grep -qi 'exit 3' "$ROOT/skills/agy-delegate/SKILL.md" || ST4_OK=0
 if [[ "$ST4_OK" -eq 1 ]]; then
     ok "ST4 exit-3 rows classify empty_output/quota/auth (no invented backend class)"
@@ -309,10 +293,7 @@ else
     bad "ST4 exit-3 rows classify empty_output/quota/auth (no invented backend class)" "ok=$ST4_OK"
 fi
 
-# ST5: the search agent surfaces WebSearch (in its tools: line), the SKILL has a
-# WebSearch-preference Common Mistakes row, and there is ZERO residual agy-first
-# framing ("prefer agy over websearch" / "do not use the native websearch")
-# across the skill, search agent, /agy-search command, policy hook, and README.
+# ST5
 ST5_OK=1
 grep -q 'WebSearch' "$ROOT/agents/agy-delegate-search.md" || ST5_OK=0
 grep -qi 'websearch' "$ROOT/skills/agy-delegate/SKILL.md" || ST5_OK=0
@@ -328,36 +309,30 @@ else
     bad "ST5 WebSearch surfaced, zero residual agy-first framing" "ok=$ST5_OK residual=$ST5_RESIDUAL"
 fi
 
-# ST6: the version bumped to 1.3.0 in both the plugin manifest and the setup
-# command, and NO stale 1.2.0/1.2.1 lingers in tracked json/md (excluding the
-# beads DB export and the historical spec archive).
+# ST6: version bumped to 1.4.0 in manifest+setup; no stale 1.2.x/1.3.x in
+# tracked json/md (excluding beads export, spec archive, and the legacy
+# agy-uninstall.md command doc which keeps its own version line).
 ST6_OK=1
-grep -q '1.3.0' "$ROOT/.claude-plugin/plugin.json" || ST6_OK=0
-grep -q '1.3.0' "$ROOT/.claude/commands/agy-setup.md" || ST6_OK=0
-ST6_STALE="$(cd "$ROOT" && grep -rn '1\.2\.[01]' --include='*.json' --include='*.md' . \
-    | grep -v '/.beads/' | grep -v 'docs/superpowers/specs' | wc -l)"
+grep -q '1.4.0' "$ROOT/.claude-plugin/plugin.json" || ST6_OK=0
+grep -q '1.4.0' "$ROOT/.claude/commands/agy-setup.md" || ST6_OK=0
+ST6_STALE="$(cd "$ROOT" && grep -rn '1\.[23]\.[0-9]' --include='*.json' --include='*.md' . \
+    | grep -v '/.beads/' | grep -v 'docs/superpowers/specs' \
+    | grep -v 'agy-uninstall.md' | wc -l)"
 if [[ "$ST6_OK" -eq 1 && "$ST6_STALE" -eq 0 ]]; then
-    ok "ST6 version 1.3.0 in manifest+setup, no stale 1.2.x"
+    ok "ST6 version 1.4.0 in manifest+setup, no stale 1.2.x/1.3.x"
 else
-    bad "ST6 version 1.3.0 in manifest+setup, no stale 1.2.x" "ok=$ST6_OK stale=$ST6_STALE"
+    bad "ST6 version 1.4.0 in manifest+setup, no stale 1.2.x/1.3.x" "ok=$ST6_OK stale=$ST6_STALE"
 fi
 
 echo "== MCP tool-preference stanza gating (vfn T5) =="
 
-# The bridge's stanza probe reads a fresh cache (~/.cache/agy-bridge-mcp), then
-# the hint (~/.config/agy-delegate/config.json {"lean_ctx":bool,"tokensave":bool}),
-# then the live agy mcp_config. We control it deterministically by writing the
-# hint + clearing the cache. SAVE/RESTORE the (sandbox-HOME) hint+cache via an
-# EXIT trap so a re-run never leaves stale probe state behind.
 _T7_HINT="$HOME/.config/agy-delegate/config.json"; _T7_CACHE="$HOME/.cache/agy-bridge-mcp"
 _t7_save(){ [[ -f "$_T7_HINT" ]] && cp "$_T7_HINT" "$_T7_HINT.t7bak"; [[ -f "$_T7_CACHE" ]] && cp "$_T7_CACHE" "$_T7_CACHE.t7bak"; }
 _t7_restore(){ if [[ -f "$_T7_HINT.t7bak" ]]; then mv "$_T7_HINT.t7bak" "$_T7_HINT"; else rm -f "$_T7_HINT"; fi; if [[ -f "$_T7_CACHE.t7bak" ]]; then mv "$_T7_CACHE.t7bak" "$_T7_CACHE"; else rm -f "$_T7_CACHE"; fi; }
-# Chain onto the existing cleanup trap so the temp sandbox is still removed.
 trap '_t7_restore; cleanup' EXIT
 _t7_save; mkdir -p "$(dirname "$_T7_HINT")"
 
-# M1: hint says an MCP server is ON (lean_ctx=true) -> code delegation appends
-# the TOOL PREFERENCE stanza into the echoed prompt.
+# M1
 printf '%s\n' '{"lean_ctx":true,"tokensave":false}' > "$_T7_HINT"; rm -f "$_T7_CACHE"
 FAKE_AGY_ECHO_PROMPT=1 _run OUT RC bash "$BRIDGE" --type code -- "x"
 if [[ "$OUT" == *"TOOL PREFERENCE"* ]]; then
@@ -366,8 +341,7 @@ else
     bad "M1 stanza present when an MCP server is on (code)" "rc=$RC out=${OUT:0:300}"
 fi
 
-# M2: hint says all MCP servers OFF -> no stanza appended (advisory text only
-# fires when a server is actually available).
+# M2
 printf '%s\n' '{"lean_ctx":false,"tokensave":false}' > "$_T7_HINT"; rm -f "$_T7_CACHE"
 FAKE_AGY_ECHO_PROMPT=1 _run OUT RC bash "$BRIDGE" --type code -- "x"
 if [[ "$OUT" != *"TOOL PREFERENCE"* ]]; then
@@ -376,9 +350,7 @@ else
     bad "M2 stanza absent when all MCP servers off (code)" "rc=$RC out=${OUT:0:300}"
 fi
 
-# M3: search delegation is excluded from the stanza even when a server is on --
-# the search policy forbids every ctx_*/tokensave tool, so biasing toward them
-# would be self-contradictory.
+# M3
 printf '%s\n' '{"lean_ctx":true}' > "$_T7_HINT"; rm -f "$_T7_CACHE"
 FAKE_AGY_ECHO_PROMPT=1 _run OUT RC bash "$BRIDGE" --type search -- "x"
 if [[ "$OUT" != *"TOOL PREFERENCE"* ]]; then
@@ -389,8 +361,7 @@ fi
 
 echo "== gemini_shim.sh: no stanza + --sandbox floor (vfn T4/T5) =="
 
-# SH1: the shim NEVER appends the TOOL PREFERENCE stanza (stanza is a bridge-only
-# concern; the shim serves metaswarm/octopus with their own policies).
+# SH1
 printf '%s\n' '{"lean_ctx":true,"tokensave":true}' > "$_T7_HINT"; rm -f "$_T7_CACHE"
 FAKE_AGY_ECHO_PROMPT=1 _run OUT RC bash "$SHIM" -p "x"
 SH1_OK=1
@@ -405,43 +376,346 @@ else
     bad "SH1 shim never appends TOOL PREFERENCE stanza (default/--sandbox/--yolo)" "out=${OUT:0:300}"
 fi
 
-# SH2: --sandbox read-only floor. Use the fake-agy argv-dump mode (env-gated,
-# additive) to see the real argv agy is invoked with:
-#   - default shim  -> --sandbox present (T4 non-yolo FS floor)
-#   - --sandbox     -> --sandbox present
-#   - yolo modes    -> --sandbox ABSENT (deliberately unrestricted)
+# SH2
 SH2_DUMP="$SANDBOX/shim_argv.log"
-
 : > "$SH2_DUMP"
 FAKE_AGY_DUMP_ARGV="$SH2_DUMP" _run OUT RC bash "$SHIM" -p "x"
 grep -qx -- '--sandbox' "$SH2_DUMP"; SH2_DEFAULT=$?
-
 : > "$SH2_DUMP"
 FAKE_AGY_DUMP_ARGV="$SH2_DUMP" _run OUT RC bash "$SHIM" --sandbox -p "x"
 grep -qx -- '--sandbox' "$SH2_DUMP"; SH2_SANDBOX=$?
-
 : > "$SH2_DUMP"
 FAKE_AGY_DUMP_ARGV="$SH2_DUMP" _run OUT RC bash "$SHIM" --yolo -p "x"
 grep -qx -- '--sandbox' "$SH2_DUMP"; SH2_YOLO=$?
-
 : > "$SH2_DUMP"
 FAKE_AGY_DUMP_ARGV="$SH2_DUMP" _run OUT RC bash "$SHIM" --approval-mode yolo -p "x"
 grep -qx -- '--sandbox' "$SH2_DUMP"; SH2_APPROVAL_YOLO=$?
-
-# rc 0 = --sandbox found; rc non-0 = absent.
 if [[ "$SH2_DEFAULT" -eq 0 && "$SH2_SANDBOX" -eq 0 && "$SH2_YOLO" -ne 0 && "$SH2_APPROVAL_YOLO" -ne 0 ]]; then
     ok "SH2 --sandbox present on read-only shim modes, absent on yolo"
 else
     bad "SH2 --sandbox present on read-only shim modes, absent on yolo" "default=$SH2_DEFAULT sandbox=$SH2_SANDBOX yolo=$SH2_YOLO approval_yolo=$SH2_APPROVAL_YOLO"
 fi
 
-# SH3: T4 regression -- the shim's --version passthrough still exits 0 and prints
-# a version string (fake-agy answers --version deterministically).
+# SH3
 _run OUT RC bash "$SHIM" --version
 if [[ "$RC" -eq 0 && "$OUT" == *"agy "* ]]; then
     ok "SH3 shim --version still exits 0 + prints version"
 else
     bad "SH3 shim --version still exits 0 + prints version" "rc=$RC out=$OUT"
+fi
+
+echo "== install.sh / uninstall.sh (vfn.11) =="
+
+_MARKER='# agy-delegate-wrapper'
+
+# _fresh_home -> prints a new temp HOME dir with bin/agy (fake) + bin on PATH.
+_fresh_home() {
+    local h; h="$(mktemp -d "$SANDBOX/ihome.XXXXXX")"
+    mkdir -p "$h/.local/bin" "$h/bin"
+    cp "$HERE/fake-agy.sh" "$h/bin/agy"
+    chmod +x "$h/bin/agy"
+    printf '%s' "$h"
+}
+
+# _install_in HOMEDIR EXTRA_ENV... -> run install.sh in a clean, isolated env.
+_install_in() {
+    local h="$1"; shift
+    env -i HOME="$h" PATH="$h/bin:$h/.local/bin:/usr/bin:/bin" \
+        AGY_PLUGIN_DIR="$ROOT" "$@" \
+        bash "$INSTALL" > "$SANDBOX/last-install.log" 2>&1
+}
+
+# I1: pinned wrapper carries marker, records the abs path, and execs it (no glob).
+IH="$(_fresh_home)"
+if _install_in "$IH"; then I1_RC=0; else I1_RC=$?; fi
+I1_OK=1
+[[ "$I1_RC" -eq 0 ]] || I1_OK=0
+[[ -f "$IH/.local/bin/agy-bridge" ]] || I1_OK=0
+grep -qF "$_MARKER" "$IH/.local/bin/agy-bridge" 2>/dev/null || I1_OK=0
+grep -qF "$ROOT/scripts/agy_bridge.sh" "$IH/.local/bin/agy-bridge" 2>/dev/null || I1_OK=0
+grep -q 'plugins/cache' "$IH/.local/bin/agy-bridge" 2>/dev/null && I1_OK=0
+grep -q 'claude plugin list' "$IH/.local/bin/agy-bridge" 2>/dev/null && I1_OK=0
+WOUT="$(env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" \
+    bash "$IH/.local/bin/agy-bridge" --types 2>&1)"; WRC=$?
+[[ "$WRC" -eq 0 && "$WOUT" == *"model"* ]] || I1_OK=0
+if [[ "$I1_OK" -eq 1 ]]; then
+    ok "I1 pinned wrapper carries marker, records abs path, execs it (no glob/list)"
+else
+    bad "I1 pinned wrapper carries marker, records abs path, execs it (no glob/list)" "rc=$I1_RC wrc=$WRC log=$(tail -3 "$SANDBOX/last-install.log")"
+fi
+
+# I2: FAIL LOUD on broken pin.
+IH="$(_fresh_home)"
+_install_in "$IH" >/dev/null 2>&1
+BW="$IH/.local/bin/agy-bridge"
+sed -i "s#_AGY_TARGET='.*'#_AGY_TARGET='$IH/nonexistent/agy_bridge.sh'#" "$BW"
+WOUT="$(env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" \
+    bash "$BW" --types 2>&1)"; WRC=$?
+if [[ "$WRC" -ne 0 && ( "$WOUT" == *"moved"* || "$WOUT" == *"re-run"* ) && "$WOUT" != *"model"* ]]; then
+    ok "I2 wrapper FAILS LOUD (nonzero + re-run msg) on missing pinned path"
+else
+    bad "I2 wrapper FAILS LOUD (nonzero + re-run msg) on missing pinned path" "wrc=$WRC out=${WOUT:0:200}"
+fi
+
+# I3: non-clobber backs up a NON-agy target.
+IH="$(_fresh_home)"
+printf '#!/bin/sh\necho i am not agy\n' > "$IH/.local/bin/gemini"
+chmod +x "$IH/.local/bin/gemini"
+_install_in "$IH" >/dev/null 2>&1
+I3_OK=1
+grep -qF "$_MARKER" "$IH/.local/bin/gemini" 2>/dev/null || I3_OK=0
+ls "$IH/.local/bin/gemini".bak-agy-* >/dev/null 2>&1 || I3_OK=0
+grep -qi 'not an agy-delegate wrapper' "$SANDBOX/last-install.log" || I3_OK=0
+_bak="$(ls "$IH/.local/bin/gemini".bak-agy-* 2>/dev/null | head -1)"
+grep -q 'i am not agy' "$_bak" 2>/dev/null || I3_OK=0
+if [[ "$I3_OK" -eq 1 ]]; then
+    ok "I3 non-clobber backs up a non-agy target before overwriting"
+else
+    bad "I3 non-clobber backs up a non-agy target before overwriting" "log=$(tail -5 "$SANDBOX/last-install.log")"
+fi
+
+# I4: full-$PATH shadow scan warns which real gemini is shadowed.
+IH="$(_fresh_home)"
+mkdir -p "$IH/otherbin"
+printf '#!/bin/sh\necho real gemini\n' > "$IH/otherbin/gemini"
+chmod +x "$IH/otherbin/gemini"
+env -i HOME="$IH" PATH="$IH/bin:$IH/otherbin:$IH/.local/bin:/usr/bin:/bin" \
+    AGY_PLUGIN_DIR="$ROOT" bash "$INSTALL" > "$SANDBOX/last-install.log" 2>&1
+if grep -qF "$IH/otherbin/gemini" "$SANDBOX/last-install.log" \
+   && grep -qi 'shadow' "$SANDBOX/last-install.log"; then
+    ok "I4 full-\$PATH shadow scan warns which real gemini is shadowed"
+else
+    bad "I4 full-\$PATH shadow scan warns which real gemini is shadowed" "log=$(grep -i gemini "$SANDBOX/last-install.log" | head -3)"
+fi
+
+# I5: disclosure notice names the shadow blast radius.
+IH="$(_fresh_home)"
+_install_in "$IH" >/dev/null 2>&1
+if grep -qi 'shadow' "$SANDBOX/last-install.log" \
+   && grep -qi 'blast radius' "$SANDBOX/last-install.log"; then
+    ok "I5 disclosure notice states the gemini shadow blast radius"
+else
+    bad "I5 disclosure notice states the gemini shadow blast radius" "log=$(tail -8 "$SANDBOX/last-install.log")"
+fi
+
+# I6: refuse-root via SUDO_USER.
+IH="$(_fresh_home)"
+env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" \
+    AGY_PLUGIN_DIR="$ROOT" SUDO_USER="someone" \
+    bash "$INSTALL" > "$SANDBOX/last-install.log" 2>&1; I6_RC=$?
+if [[ "$I6_RC" -ne 0 ]] && grep -qi 'root' "$SANDBOX/last-install.log" \
+   && [[ ! -e "$IH/.local/bin/agy-bridge" ]]; then
+    ok "I6 refuse-root (SUDO_USER set) aborts without installing"
+else
+    bad "I6 refuse-root (SUDO_USER set) aborts without installing" "rc=$I6_RC log=$(tail -2 "$SANDBOX/last-install.log")"
+fi
+
+# I6b: uninstall.sh also refuses root.
+IH="$(_fresh_home)"
+env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" SUDO_USER="someone" \
+    bash "$UNINSTALL" > "$SANDBOX/last-uninstall.log" 2>&1; I6B_RC=$?
+if [[ "$I6B_RC" -ne 0 ]] && grep -qi 'root' "$SANDBOX/last-uninstall.log"; then
+    ok "I6b uninstall.sh refuses root"
+else
+    bad "I6b uninstall.sh refuses root" "rc=$I6B_RC log=$(tail -2 "$SANDBOX/last-uninstall.log")"
+fi
+
+# I7: idempotent re-run: no duplicate/backup of our own wrapper.
+IH="$(_fresh_home)"
+_install_in "$IH" >/dev/null 2>&1
+_install_in "$IH" >/dev/null 2>&1
+NBRIDGE_BAK="$(ls "$IH/.local/bin/agy-bridge".bak-agy-* 2>/dev/null | wc -l)"
+NGEMINI_BAK="$(ls "$IH/.local/bin/gemini".bak-agy-* 2>/dev/null | wc -l)"
+if [[ -f "$IH/.local/bin/agy-bridge" && -f "$IH/.local/bin/gemini" \
+      && "$NBRIDGE_BAK" -eq 0 && "$NGEMINI_BAK" -eq 0 ]]; then
+    ok "I7 idempotent re-run: no duplicate/backup of our own wrapper"
+else
+    bad "I7 idempotent re-run: no duplicate/backup of our own wrapper" "bridge_bak=$NBRIDGE_BAK gemini_bak=$NGEMINI_BAK"
+fi
+
+# I8: rc-alias patch writes NOTHING without AGY_SETUP_PATCH_ALIASES=1.
+IH="$(_fresh_home)"
+mkdir -p "$IH/otherbin"
+printf '#!/bin/sh\necho real\n' > "$IH/otherbin/gemini"; chmod +x "$IH/otherbin/gemini"
+printf "%s\n" "alias gemini='GEMINI_API_KEY=x gemini'" > "$IH/.bashrc"
+_RCHASH_BEFORE="$(cksum "$IH/.bashrc")"
+env -i HOME="$IH" PATH="$IH/bin:$IH/otherbin:$IH/.local/bin:/usr/bin:/bin" \
+    AGY_PLUGIN_DIR="$ROOT" bash "$INSTALL" > "$SANDBOX/last-install.log" 2>&1
+_RCHASH_AFTER="$(cksum "$IH/.bashrc")"
+NRC_BAK="$(ls "$IH/.bashrc".bak-agy-* 2>/dev/null | wc -l)"
+if [[ "$_RCHASH_BEFORE" == "$_RCHASH_AFTER" && "$NRC_BAK" -eq 0 ]]; then
+    ok "I8 rc-alias patch is dry-run without AGY_SETUP_PATCH_ALIASES=1"
+else
+    bad "I8 rc-alias patch is dry-run without AGY_SETUP_PATCH_ALIASES=1" "changed=$([[ "$_RCHASH_BEFORE" != "$_RCHASH_AFTER" ]] && echo yes) baks=$NRC_BAK"
+fi
+
+# I8b: with the flag set, the rc alias IS rewritten + a .bak is written.
+IH="$(_fresh_home)"
+mkdir -p "$IH/otherbin"
+printf '#!/bin/sh\necho real\n' > "$IH/otherbin/gemini"; chmod +x "$IH/otherbin/gemini"
+printf "%s\n" "alias gemini='GEMINI_API_KEY=x gemini'" > "$IH/.bashrc"
+env -i HOME="$IH" PATH="$IH/bin:$IH/otherbin:$IH/.local/bin:/usr/bin:/bin" \
+    AGY_PLUGIN_DIR="$ROOT" AGY_SETUP_PATCH_ALIASES=1 \
+    bash "$INSTALL" > "$SANDBOX/last-install.log" 2>&1
+NRC_BAK="$(ls "$IH/.bashrc".bak-agy-* 2>/dev/null | wc -l)"
+if grep -qF "$IH/otherbin/gemini'" "$IH/.bashrc" \
+   && ! grep -qE "^alias gemini='[^']* gemini'\$" "$IH/.bashrc" \
+   && [[ "$NRC_BAK" -ge 1 ]]; then
+    ok "I8b rc-alias patch rewrites recursion + backs up (flag set)"
+else
+    bad "I8b rc-alias patch rewrites recursion + backs up (flag set)" "bashrc=$(cat "$IH/.bashrc") baks=$NRC_BAK"
+fi
+
+# I9: register on invalid JSON -> original untouched, temp cleaned, exit-3 msg.
+IH="$(_fresh_home)"
+mkdir -p "$IH/.gemini/antigravity-cli"
+printf '%s' 'NOT VALID JSON {{{' > "$IH/.gemini/antigravity-cli/mcp_config.json"
+_ORIG="$(cat "$IH/.gemini/antigravity-cli/mcp_config.json")"
+printf '#!/bin/sh\nexit 0\n' > "$IH/bin/tokensave"; chmod +x "$IH/bin/tokensave"
+env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" \
+    AGY_PLUGIN_DIR="$ROOT" AGY_SETUP_REGISTER_TOKENSAVE=1 \
+    bash "$INSTALL" > "$SANDBOX/last-install.log" 2>&1
+_NOW="$(cat "$IH/.gemini/antigravity-cli/mcp_config.json")"
+NTMP="$(ls "$IH/.gemini/antigravity-cli/".mcp_config.* 2>/dev/null | wc -l)"
+if [[ "$_ORIG" == "$_NOW" ]] && grep -qi 'not valid JSON\|refusing to overwrite' "$SANDBOX/last-install.log" \
+   && [[ "$NTMP" -eq 0 ]]; then
+    ok "I9 register on invalid JSON: original untouched, temp cleaned, error surfaced"
+else
+    bad "I9 register on invalid JSON: original untouched, temp cleaned, error surfaced" "same=$([[ "$_ORIG" == "$_NOW" ]] && echo yes) ntmp=$NTMP log=$(grep -i json "$SANDBOX/last-install.log" | head -2)"
+fi
+
+# I9b: register happy-path.
+IH="$(_fresh_home)"
+mkdir -p "$IH/.gemini/antigravity-cli"
+printf '%s\n' '{"mcpServers":{"lean-ctx":{"command":"lean-ctx"}}}' > "$IH/.gemini/antigravity-cli/mcp_config.json"
+printf '#!/bin/sh\nexit 0\n' > "$IH/bin/tokensave"; chmod +x "$IH/bin/tokensave"
+env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" \
+    AGY_PLUGIN_DIR="$ROOT" AGY_SETUP_REGISTER_TOKENSAVE=1 \
+    bash "$INSTALL" > "$SANDBOX/last-install.log" 2>&1
+NCFG_BAK="$(ls "$IH/.gemini/antigravity-cli/mcp_config.json".bak-agy-* 2>/dev/null | wc -l)"
+if grep -q '"tokensave"' "$IH/.gemini/antigravity-cli/mcp_config.json" \
+   && grep -q '"lean-ctx"' "$IH/.gemini/antigravity-cli/mcp_config.json" \
+   && [[ "$NCFG_BAK" -ge 1 ]]; then
+    ok "I9b register happy-path: tokensave added, lean-ctx preserved, backup made"
+else
+    bad "I9b register happy-path: tokensave added, lean-ctx preserved, backup made" "cfg=$(cat "$IH/.gemini/antigravity-cli/mcp_config.json") baks=$NCFG_BAK"
+fi
+
+# I10: python3-absent register fails open (skips, install completes).
+IH="$(_fresh_home)"
+mkdir -p "$IH/.gemini/antigravity-cli" "$IH/nopy"
+for b in bash cat grep sed date mktemp mkdir rm mv cp chmod ls readlink id printf command env; do
+    _src="$(command -v "$b" 2>/dev/null)"; [[ -n "$_src" ]] && ln -sf "$_src" "$IH/nopy/$b" 2>/dev/null || true
+done
+cp "$HERE/fake-agy.sh" "$IH/nopy/agy"; chmod +x "$IH/nopy/agy"
+printf '#!/bin/sh\nexit 0\n' > "$IH/nopy/tokensave"; chmod +x "$IH/nopy/tokensave"
+printf '%s\n' '{"mcpServers":{}}' > "$IH/.gemini/antigravity-cli/mcp_config.json"
+env -i HOME="$IH" PATH="$IH/nopy" AGY_PLUGIN_DIR="$ROOT" \
+    AGY_SETUP_REGISTER_TOKENSAVE=1 \
+    bash "$INSTALL" > "$SANDBOX/last-install.log" 2>&1; I10_RC=$?
+if [[ "$I10_RC" -eq 0 && -f "$IH/.local/bin/agy-bridge" ]] \
+   && ! grep -q '"tokensave"' "$IH/.gemini/antigravity-cli/mcp_config.json" \
+   && grep -qi 'python3 not found' "$SANDBOX/last-install.log"; then
+    ok "I10 python3-absent register fails open (skips, install completes)"
+else
+    bad "I10 python3-absent register fails open (skips, install completes)" "rc=$I10_RC log=$(tail -4 "$SANDBOX/last-install.log")"
+fi
+
+# I11: decline -> availability hint records tokensave:false.
+IH="$(_fresh_home)"
+_install_in "$IH" >/dev/null 2>&1
+HINT="$IH/.config/agy-delegate/config.json"
+if [[ -f "$HINT" ]] && grep -q '"tokensave": false' "$HINT"; then
+    ok "I11 decline -> availability hint has tokensave:false"
+else
+    bad "I11 decline -> availability hint has tokensave:false" "hint=$(cat "$HINT" 2>/dev/null)"
+fi
+
+# I12: /agy-setup one-liner rejects non-matching/nonexistent resolved path.
+SETUP_MD="$ROOT/.claude/commands/agy-setup.md"
+_validate() {
+    local RESOLVED="$1"
+    case "$RESOLVED" in
+        */agy-delegate/*/scripts/install.sh) ;;
+        *) return 1 ;;
+    esac
+    [[ -f "$RESOLVED" ]] || return 1
+    return 0
+}
+I12_OK=1
+_validate "/tmp/evil/install.sh" && I12_OK=0
+_validate "/x/agy-delegate/1.0/scripts/install.sh" && I12_OK=0
+_realpath="$SANDBOX/agy-delegate/1.4.0/scripts"
+mkdir -p "$_realpath"; : > "$_realpath/install.sh"
+_validate "$_realpath/install.sh" || I12_OK=0
+grep -q 'agy-delegate/\*/scripts/install.sh' "$SETUP_MD" || I12_OK=0
+grep -qE '\-f ' "$SETUP_MD" || I12_OK=0
+if [[ "$I12_OK" -eq 1 ]]; then
+    ok "I12 one-liner rejects non-matching/nonexistent resolved path"
+else
+    bad "I12 one-liner rejects non-matching/nonexistent resolved path" "ok=$I12_OK"
+fi
+
+# I13: uninstall reverses install (wrappers gone, shadowed original restored).
+IH="$(_fresh_home)"
+printf '#!/bin/sh\necho original gemini\n' > "$IH/.local/bin/gemini"; chmod +x "$IH/.local/bin/gemini"
+_install_in "$IH" >/dev/null 2>&1
+env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" \
+    bash "$UNINSTALL" > "$SANDBOX/last-uninstall.log" 2>&1; I13_RC=$?
+I13_OK=1
+[[ "$I13_RC" -eq 0 ]] || I13_OK=0
+[[ -e "$IH/.local/bin/agy-bridge" ]] && I13_OK=0
+grep -qF "$_MARKER" "$IH/.local/bin/gemini" 2>/dev/null && I13_OK=0
+grep -q 'original gemini' "$IH/.local/bin/gemini" 2>/dev/null || I13_OK=0
+if [[ "$I13_OK" -eq 1 ]]; then
+    ok "I13 uninstall reverses install (wrappers gone, shadowed original restored)"
+else
+    bad "I13 uninstall reverses install (wrappers gone, shadowed original restored)" "rc=$I13_RC log=$(tail -4 "$SANDBOX/last-uninstall.log")"
+fi
+
+# I13b: uninstall de-registers tokensave + removes hint (flag set).
+IH="$(_fresh_home)"
+mkdir -p "$IH/.gemini/antigravity-cli"
+printf '%s\n' '{"mcpServers":{}}' > "$IH/.gemini/antigravity-cli/mcp_config.json"
+printf '#!/bin/sh\nexit 0\n' > "$IH/bin/tokensave"; chmod +x "$IH/bin/tokensave"
+env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" \
+    AGY_PLUGIN_DIR="$ROOT" AGY_SETUP_REGISTER_TOKENSAVE=1 \
+    bash "$INSTALL" > "$SANDBOX/last-install.log" 2>&1
+env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" \
+    AGY_UNINSTALL_TOKENSAVE=1 \
+    bash "$UNINSTALL" > "$SANDBOX/last-uninstall.log" 2>&1
+if ! grep -q '"tokensave"' "$IH/.gemini/antigravity-cli/mcp_config.json" \
+   && [[ ! -f "$IH/.config/agy-delegate/config.json" ]]; then
+    ok "I13b uninstall de-registers tokensave + removes hint (flag set)"
+else
+    bad "I13b uninstall de-registers tokensave + removes hint (flag set)" "cfg=$(cat "$IH/.gemini/antigravity-cli/mcp_config.json") hint=$([[ -f "$IH/.config/agy-delegate/config.json" ]] && echo present)"
+fi
+
+# I14: uninstall is idempotent (second run exits 0).
+IH="$(_fresh_home)"
+_install_in "$IH" >/dev/null 2>&1
+env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" bash "$UNINSTALL" >/dev/null 2>&1
+env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" bash "$UNINSTALL" > "$SANDBOX/last-uninstall.log" 2>&1; I14_RC=$?
+if [[ "$I14_RC" -eq 0 ]]; then
+    ok "I14 uninstall is idempotent (second run exits 0)"
+else
+    bad "I14 uninstall is idempotent (second run exits 0)" "rc=$I14_RC log=$(tail -3 "$SANDBOX/last-uninstall.log")"
+fi
+
+# I15: install+uninstall touch NO repo file (git status unchanged).
+if command -v git >/dev/null 2>&1 && git -C "$ROOT" rev-parse >/dev/null 2>&1; then
+    _GIT_BEFORE="$(cd "$ROOT" && git status --porcelain)"
+    IH="$(_fresh_home)"
+    _install_in "$IH" >/dev/null 2>&1
+    env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" bash "$UNINSTALL" >/dev/null 2>&1
+    _GIT_AFTER="$(cd "$ROOT" && git status --porcelain)"
+    if [[ "$_GIT_BEFORE" == "$_GIT_AFTER" ]]; then
+        ok "I15 install+uninstall touch no repo file (git status unchanged)"
+    else
+        bad "I15 install+uninstall touch no repo file (git status unchanged)" "git status changed"
+    fi
+else
+    ok "I15 (skipped: no git repo) install/uninstall repo-untouched"
 fi
 
 echo

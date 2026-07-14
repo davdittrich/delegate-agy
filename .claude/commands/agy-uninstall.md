@@ -1,77 +1,47 @@
 ---
 command: agy-uninstall
-description: Remove agy-delegate plugin artifacts — only removes agy-bridge symlink if it points to this plugin's script
-version: 1.0.2
+description: Print the one validated command to remove agy-delegate's launcher wrappers (agy-bridge + gemini shim) and optionally de-register tokensave
+version: 1.4.0
 category: ai-delegation
 tags: [agy, uninstall, cleanup]
 ---
 
-Remove agy-delegate plugin artifacts safely.
+agy-delegate ships a self-contained uninstaller that YOU run in your own
+terminal (`scripts/uninstall.sh`). This command does NOT run it for you — it
+prints the exact, validated one-line command to copy-paste.
 
-$ARGUMENTS
+The uninstaller reverses `scripts/install.sh`: it removes **only** our
+signature-marked wrappers `~/.local/bin/agy-bridge` and `~/.local/bin/gemini`
+(restoring any original binary that was shadowed and backed up at install
+time), and — with `AGY_UNINSTALL_TOKENSAVE=1` — de-registers the `tokensave`
+MCP server and removes the availability hint. It is idempotent and refuses to
+run as root.
 
-## Steps
+## Uninstall (copy-paste this)
 
-1. Check if `agy-bridge` symlink exists and verify it points into the plugin before touching anything:
-
-```bash
-BRIDGE="$HOME/.local/bin/agy-bridge"
-if [[ ! -L "$BRIDGE" ]]; then
-  echo "agy-bridge not found at $BRIDGE — nothing to remove"
-  exit 0
-fi
-TARGET=$(readlink "$BRIDGE")
-echo "agy-bridge → $TARGET"
-if [[ "$TARGET" == *"/agy_bridge.sh" ]]; then
-  rm "$BRIDGE"
-  echo "Removed $BRIDGE"
-else
-  echo "SKIP: $BRIDGE points to '$TARGET' (not agy_bridge.sh) — not removing"
-fi
-```
-
-2. Reverse shell rc alias patches applied by agy-setup step 3 (idempotent — skips if not patched).
-Set AGY_UNINSTALL_PATCH_ALIASES=1 to apply. Shows diff by default (dry-run).
+The command resolves the plugin's own `scripts/uninstall.sh` from
+`claude plugin list --json`, **validates** the resolved string matches
+`*/agy-delegate/*/scripts/uninstall.sh` AND is a regular file, and only then
+runs it — no blind `bash`-ing of an attacker-controlled path.
 
 ```bash
-# Reverse shell rc alias patches made by agy-setup step 3
-command -v python3 &>/dev/null || { echo "python3 not found — skipping alias reversal"; exit 0; }
-
-for RC in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.bash_aliases"; do
-  [[ -f "$RC" ]] || continue
-  if grep -qE "^alias gemini='[^']*/gemini'$" "$RC" 2>/dev/null; then
-    old_line=$(grep "^alias gemini=" "$RC" || true)
-    new_line=$(echo "$old_line" | sed "s| /[^']*/gemini'$| gemini'|")
-    echo "Would restore: $RC"
-    echo "  Old: $old_line"
-    echo "  New: $new_line"
-    if [[ "${AGY_UNINSTALL_PATCH_ALIASES:-0}" != "1" ]]; then
-      echo "  Set AGY_UNINSTALL_PATCH_ALIASES=1 to apply."
-      continue
-    fi
-    echo "WARNING: auto-patching $RC — backup at $RC.bak-agy-*" >&2
-    cp "$RC" "$RC.bak-agy-$(date +%Y%m%d%H%M%S)"
-    python3 -c "
-import re, sys
-rc = sys.argv[1]
-txt = open(rc).read()
-out = re.sub(r\"^(alias gemini='.*) /[^']+/gemini'$\", r\"\1 gemini'\", txt, flags=re.M)
-open(rc, 'w').write(out)
-" "$RC"
-    echo "Restored $RC"
-  fi
-done
+RESOLVED="$(claude plugin list --json 2>/dev/null \
+  | python3 -c 'import sys,json;[print(x.get("installPath","")) for x in json.load(sys.stdin) if x.get("id","").startswith("agy-delegate@")]' \
+  | head -1)/scripts/uninstall.sh"; \
+case "$RESOLVED" in \
+  */agy-delegate/*/scripts/uninstall.sh) [[ -f "$RESOLVED" ]] \
+    && bash "$RESOLVED" \
+    || echo "ERROR: resolved uninstaller '$RESOLVED' is not a regular file — is agy-delegate installed?" >&2 ;; \
+  *) echo "ERROR: refusing to run '$RESOLVED' — does not match */agy-delegate/*/scripts/uninstall.sh" >&2 ;; \
+esac
 ```
 
-3. Uninstall the plugin via Claude Code:
+## Also de-register tokensave + remove the availability hint
+
+Prepend `AGY_UNINSTALL_TOKENSAVE=1`:
 
 ```bash
-claude plugin uninstall agy-delegate
+AGY_UNINSTALL_TOKENSAVE=1 bash "$RESOLVED"
 ```
 
-4. Verify clean:
-
-```bash
-ls ~/.local/bin/agy-bridge 2>/dev/null && echo "WARNING: symlink still present" || echo "Clean"
-claude plugin list | grep agy || echo "Plugin removed"
-```
+(`"$RESOLVED"` is the validated uninstaller path from the command above.)
