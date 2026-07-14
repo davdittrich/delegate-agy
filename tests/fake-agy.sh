@@ -18,10 +18,23 @@
 #                         instead of the STDOUT/STDERR/EXIT triple above. Lets a
 #                         test assert what the wrapper actually embedded (incl.
 #                         any appended digest contract).
+#   FAKE_AGY_DUMP_ARGV    if set to a path, write the full argv agy was invoked
+#                         with (one arg per line) to that path BEFORE any normal
+#                         behavior. Purely additive/observational — does not
+#                         alter parsing, output, or exit code. Lets a test assert
+#                         the exact flags the wrapper passed to agy (e.g. the
+#                         --sandbox read-only floor).
 #
 # The `models` and `--version` subcommands are answered deterministically so the
 # bridge's model-allowlist check and the shim's --version path work under test.
 set -u
+
+# Observational argv dump (env-gated, additive). Runs first so it captures the
+# real argv for every invocation kind (models/--version/--print) without
+# changing any downstream behavior.
+if [[ -n "${FAKE_AGY_DUMP_ARGV:-}" ]]; then
+    printf '%s\n' "$@" > "$FAKE_AGY_DUMP_ARGV"
+fi
 
 case "${1:-}" in
     models)
