@@ -221,21 +221,33 @@ fi
 # Bias agy toward lean-ctx/tokensave reads ONLY for MCP-permitted types. The
 # stanza is advisory GEMINI.md text — it does NOT relax --sandbox/--add-dir.
 _MCP_LEANCTX=0; _MCP_TOKENSAVE=0
-if command -v jq >/dev/null 2>&1; then
+if command -v python3 >/dev/null 2>&1; then
     _MCP_CACHE="$HOME/.cache/agy-bridge-mcp"
     if [[ -s "$_MCP_CACHE" ]] && [[ -z "$(find "$_MCP_CACHE" -mmin +60 2>/dev/null)" ]]; then
         _MCP_LEANCTX=$(sed -n '1p' "$_MCP_CACHE" 2>/dev/null)
         _MCP_TOKENSAVE=$(sed -n '2p' "$_MCP_CACHE" 2>/dev/null)
     else
-        _HINT="$HOME/.config/agy-delegate/config.json"
-        _AGY_MCP_CFG="$HOME/.gemini/antigravity-cli/mcp_config.json"
-        if [[ -s "$_HINT" ]] && jq -e . "$_HINT" >/dev/null 2>&1; then
-            jq -e '.lean_ctx == true'  "$_HINT" >/dev/null 2>&1 && _MCP_LEANCTX=1
-            jq -e '.tokensave == true' "$_HINT" >/dev/null 2>&1 && _MCP_TOKENSAVE=1
-        elif [[ -s "$_AGY_MCP_CFG" ]]; then
-            jq -e '.mcpServers."lean-ctx"' "$_AGY_MCP_CFG" >/dev/null 2>&1 && _MCP_LEANCTX=1
-            jq -e '.mcpServers.tokensave'  "$_AGY_MCP_CFG" >/dev/null 2>&1 && _MCP_TOKENSAVE=1
-        fi
+        read _MCP_LEANCTX _MCP_TOKENSAVE < <(python3 - \
+            "$HOME/.config/agy-delegate/config.json" \
+            "$HOME/.gemini/antigravity-cli/mcp_config.json" <<'PY'
+import sys, json, os
+hint, live = sys.argv[1], sys.argv[2]
+lc = ts = False
+def rd(p):
+    try: return json.load(open(p))
+    except Exception: return None
+d = rd(hint) if os.path.exists(hint) else None
+if isinstance(d, dict):
+    lc = d.get('lean_ctx') is True; ts = d.get('tokensave') is True
+else:
+    d = rd(live) if os.path.exists(live) else None
+    if isinstance(d, dict):
+        s = d.get('mcpServers', {}) or {}
+        lc = 'lean-ctx' in s; ts = 'tokensave' in s
+print(f"{int(lc)} {int(ts)}")
+PY
+)
+        _MCP_LEANCTX="${_MCP_LEANCTX:-0}"; _MCP_TOKENSAVE="${_MCP_TOKENSAVE:-0}"
         mkdir -p "${_MCP_CACHE%/*}" 2>/dev/null || true
         printf '%s\n%s\n' "$_MCP_LEANCTX" "$_MCP_TOKENSAVE" > "$_MCP_CACHE.tmp.$$" \
             && mv "$_MCP_CACHE.tmp.$$" "$_MCP_CACHE" 2>/dev/null || true
