@@ -61,7 +61,7 @@ while [[ $# -gt 0 ]]; do
             DIGEST_WARN_CHARS="$2"; shift 2 ;;
         --types)
             printf '%-12s %-30s %s\n' 'type' 'model' 'timeout'
-            printf '%-12s %-30s %s\n' 'search' 'Gemini 3.5 Flash (High)' '300s'
+            printf '%-12s %-30s %s\n' 'search' 'Gemini 3.6 Flash (High)' '300s'
             printf '%-12s %-30s %s\n' 'code' 'Gemini 3.1 Pro (High)' '600s'
             printf '%-12s %-30s %s\n' 'analysis' 'Gemini 3.1 Pro (High)' '600s'
             printf '%-12s %-30s %s\n' 'review' 'Gemini 3.1 Pro (High)' '600s'
@@ -112,7 +112,7 @@ esac
 # ── Model auto-selection ──────────────────────────────────────────────────────
 if [[ -z "$MODEL" ]]; then
     case "$TYPE" in
-        search)   MODEL="Gemini 3.5 Flash (High)" ;;
+        search)   MODEL="Gemini 3.6 Flash (High)" ;;
         review)   MODEL="Gemini 3.1 Pro (High)" ;;
         analysis) MODEL="Gemini 3.1 Pro (High)" ;;
         code)      MODEL="Gemini 3.1 Pro (High)" ;;

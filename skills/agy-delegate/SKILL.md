@@ -62,7 +62,7 @@ echo "query" | agy-bridge --type search --json
 
 | `--type` | Auto-selected model | Why |
 |----------|--------------------|----|
-| `search` | Gemini 3.5 Flash (High) | Fast, web-grounded |
+| `search` | Gemini 3.6 Flash (High) | Fast, web-grounded |
 | `code` | Gemini 3.1 Pro (High) | Extended context |
 | `analysis` | Gemini 3.1 Pro (High) | Large file analysis |
 | `review` | Gemini 3.1 Pro (High) | Second-pass critique, adversarial prompt framing |

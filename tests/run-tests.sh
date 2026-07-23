@@ -148,6 +148,15 @@ else
     bad "S5 RESOURCE_EXHAUSTED stderr surfaced" "rc=$RC out=$OUT"
 fi
 
+# S6: model-map mappings (flash -> Gemini 3.6 Flash (High), sonnet -> Claude Sonnet 4.6 (Thinking))
+S6_FLASH="$(python3 -c 'import json; d=json.load(open("config/model-map.json")); print(d.get("flash"))')"
+S6_SONNET="$(python3 -c 'import json; d=json.load(open("config/model-map.json")); print(d.get("sonnet"))')"
+if [[ "$S6_FLASH" == "Gemini 3.6 Flash (High)" && "$S6_SONNET" == "Claude Sonnet 4.6 (Thinking)" ]]; then
+    ok "S6 model-map resolves flash and sonnet aliases correctly"
+else
+    bad "S6 model-map resolves flash and sonnet aliases correctly" "flash=$S6_FLASH sonnet=$S6_SONNET"
+fi
+
 echo "== agy_bridge.sh --digest (ps3.2) =="
 
 # D1: --digest appends OUTPUT CONTRACT AFTER the user prompt
@@ -309,19 +318,19 @@ else
     bad "ST5 WebSearch surfaced, zero residual agy-first framing" "ok=$ST5_OK residual=$ST5_RESIDUAL"
 fi
 
-# ST6: version bumped to 1.4.0 in manifest+setup; no stale 1.2.x/1.3.x in
+# ST6: version bumped to 1.5.0 in manifest+setup; no stale 1.2.x/1.3.x/1.4.x in
 # tracked json/md (excluding beads export, spec archive, and the legacy
 # agy-uninstall.md command doc which keeps its own version line).
 ST6_OK=1
-grep -q '1.4.0' "$ROOT/.claude-plugin/plugin.json" || ST6_OK=0
-grep -q '1.4.0' "$ROOT/.claude/commands/agy-setup.md" || ST6_OK=0
-ST6_STALE="$(cd "$ROOT" && grep -rn '1\.[23]\.[0-9]' --include='*.json' --include='*.md' . \
+grep -q '1.5.0' "$ROOT/.claude-plugin/plugin.json" || ST6_OK=0
+grep -q '1.5.0' "$ROOT/.claude/commands/agy-setup.md" || ST6_OK=0
+ST6_STALE="$(cd "$ROOT" && grep -rn '1\.[234]\.[0-9]' --include='*.json' --include='*.md' . \
     | grep -v '/.beads/' | grep -v 'docs/superpowers/specs' \
     | grep -v 'agy-uninstall.md' | wc -l)"
 if [[ "$ST6_OK" -eq 1 && "$ST6_STALE" -eq 0 ]]; then
-    ok "ST6 version 1.4.0 in manifest+setup, no stale 1.2.x/1.3.x"
+    ok "ST6 version 1.5.0 in manifest+setup, no stale 1.2.x/1.3.x/1.4.x"
 else
-    bad "ST6 version 1.4.0 in manifest+setup, no stale 1.2.x/1.3.x" "ok=$ST6_OK stale=$ST6_STALE"
+    bad "ST6 version 1.5.0 in manifest+setup, no stale 1.2.x/1.3.x/1.4.x" "ok=$ST6_OK stale=$ST6_STALE"
 fi
 
 echo "== MCP tool-preference stanza gating (vfn T5) =="
@@ -645,7 +654,7 @@ _validate() {
 I12_OK=1
 _validate "/tmp/evil/install.sh" && I12_OK=0
 _validate "/x/agy-delegate/1.0/scripts/install.sh" && I12_OK=0
-_realpath="$SANDBOX/agy-delegate/1.4.0/scripts"
+_realpath="$SANDBOX/agy-delegate/1.5.0/scripts"
 mkdir -p "$_realpath"; : > "$_realpath/install.sh"
 _validate "$_realpath/install.sh" || I12_OK=0
 grep -q 'agy-delegate/\*/scripts/install.sh' "$SETUP_MD" || I12_OK=0

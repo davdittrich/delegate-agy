@@ -249,13 +249,19 @@ The installer (`scripts/install.sh`) and uninstaller run with `set -euo pipefail
 | gemini name | agy model |
 |-------------|-----------|
 | `pro` (Metaswarm default) | `Gemini 3.1 Pro (High)` |
-| `gemini-pro` | `Gemini 3.1 Pro (High)` |
-| `gemini-2.5-pro` / `gemini-3.1-pro` | `Gemini 3.1 Pro (High)` |
-| `gemini-2.5-pro-preview-06-05` | `Gemini 3.1 Pro (High)` |
-| `flash` | `Gemini 3.5 Flash (High)` |
-| `gemini-flash` | `Gemini 3.5 Flash (High)` |
-| `gemini-2.5-flash` / `gemini-3.5-flash` | `Gemini 3.5 Flash (High)` |
-| `gemini-2.5-flash-preview-04-17` | `Gemini 3.5 Flash (High)` |
+| `gemini-pro` / `gemini-3.1-pro` / `gemini-3.1-pro-high` | `Gemini 3.1 Pro (High)` |
+| `gemini-3.1-pro-low` | `Gemini 3.1 Pro (Low)` |
+| `flash` / `gemini-flash` | `Gemini 3.6 Flash (High)` |
+| `gemini-3.6-flash` / `gemini-3.6-flash-high` | `Gemini 3.6 Flash (High)` |
+| `gemini-3.6-flash-medium` | `Gemini 3.6 Flash (Medium)` |
+| `gemini-3.6-flash-low` | `Gemini 3.6 Flash (Low)` |
+| `gemini-3.5-flash` / `gemini-3.5-flash-high` | `Gemini 3.5 Flash (High)` |
+| `gemini-3.5-flash-medium` | `Gemini 3.5 Flash (Medium)` |
+| `gemini-3.5-flash-low` | `Gemini 3.5 Flash (Low)` |
+| `claude-sonnet-4-6` / `sonnet` | `Claude Sonnet 4.6 (Thinking)` |
+| `claude-opus-4-6-thinking` / `opus` | `Claude Opus 4.6 (Thinking)` |
+| `gpt-oss-120b-medium` / `gpt-oss` | `GPT-OSS 120B (Medium)` |
+| `gemini-2.5-pro` / `gemini-2.5-flash` (legacy) | `Gemini 3.1 Pro (High)` / `Gemini 3.5 Flash (High)` |
 | any other string | pass through unchanged |
 
 Mappings are in `config/model-map.json` — add aliases there without touching scripts.
