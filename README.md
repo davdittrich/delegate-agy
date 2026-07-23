@@ -1,4 +1,4 @@
-A Claude Code plugin that routes tasks to [agy](https://github.com/google/agy) (Google Antigravity CLI), giving your Claude sessions access to Gemini 3.1/3.5, GPT-OSS 120B, and grounded web search with source citations. For general web search prefer your `WebSearch` tool; reach for agy when you need cited sources or a second model.
+A Claude Code plugin that routes tasks to [agy](https://github.com/google/agy) (Google Antigravity CLI), giving your Claude sessions access to Gemini 3.1/3.6, Claude 4.6, GPT-OSS 120B, and grounded web search with source citations. For general web search prefer your `WebSearch` tool; reach for agy when you need cited sources or a second model.
 
 ## Why
 
@@ -28,13 +28,13 @@ echo "Review /path/to/api.py for correctness" | agy-bridge --type review
 
 | `--type` | Model | What it can do |
 |----------|-------|----------------|
-| `search` | Gemini 3.5 Flash (High) | Web search only; prepends `search_web` instruction automatically |
+| `search` | Gemini 3.6 Flash (High) | Web search only; prepends `search_web` instruction automatically |
 | `code` | Gemini 3.1 Pro (High) | Read files; returns generated code as text, no writes |
 | `analysis` | Gemini 3.1 Pro (High) | Read files; handles large codebases |
 | `review` | Gemini 3.1 Pro (High) | Read files; adversarial framing |
 | `implement` | Gemini 3.1 Pro (High) | Read and write files; no shell execution |
 
-Omit `--type` to default to `code`. Override the model with `--model "Gemini 3.5 Flash (Low)"`. Run `agy models` for current names — the table above may lag agy releases.
+Omit `--type` to default to `code`. Override the model with `--model "Gemini 3.6 Flash (Low)"`. Run `agy models` for current names — the table above may lag agy releases.
 
 ## Requirements
 
@@ -121,7 +121,7 @@ Expected output:
 
 ```
 type         model                          timeout
-search       Gemini 3.5 Flash (High)        300s
+search       Gemini 3.6 Flash (High)        300s
 code         Gemini 3.1 Pro (High)          600s
 analysis     Gemini 3.1 Pro (High)          600s
 review       Gemini 3.1 Pro (High)          600s
@@ -164,7 +164,7 @@ JSON output:
 ```json
 {
   "success": true,
-  "model_used": "Gemini 3.5 Flash (High)",
+  "model_used": "Gemini 3.6 Flash (High)",
   "type": "search",
   "duration_seconds": 9,
   "response": "..."
@@ -261,7 +261,7 @@ The installer (`scripts/install.sh`) and uninstaller run with `set -euo pipefail
 | `claude-sonnet-4-6` / `sonnet` | `Claude Sonnet 4.6 (Thinking)` |
 | `claude-opus-4-6-thinking` / `opus` | `Claude Opus 4.6 (Thinking)` |
 | `gpt-oss-120b-medium` / `gpt-oss` | `GPT-OSS 120B (Medium)` |
-| `gemini-2.5-pro` / `gemini-2.5-flash` (legacy) | `Gemini 3.1 Pro (High)` / `Gemini 3.5 Flash (High)` |
+| `gemini-2.5-pro` / `gemini-2.5-flash` (legacy) | `Gemini 3.1 Pro (High)` / `Gemini 3.6 Flash (High)` |
 | any other string | pass through unchanged |
 
 Mappings are in `config/model-map.json` — add aliases there without touching scripts.
@@ -287,7 +287,7 @@ backup, no shadow scan) — use `scripts/install.sh` for the hardened path.
 No changes needed. Octopus checks `command -v gemini`; the shim satisfies that check. To override the model:
 
 ```bash
-export OCTOPUS_GEMINI_MODEL="gemini-2.5-flash"
+export OCTOPUS_GEMINI_MODEL="gemini-3.6-flash"
 ```
 
 ### Metaswarm configuration
