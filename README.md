@@ -34,7 +34,7 @@ echo "Review /path/to/api.py for correctness" | agy-bridge --type review
 | `review` | gemini-*-pro-high (latest) | Read files; adversarial framing |
 | `implement` | gemini-*-pro-high (latest) | Read and write files; no shell execution |
 
-Omit `--type` to default to `code`. Override the model with `--model <id>` — run `agy models` for current CLI ids.
+Omit `--type` to default to `code`. Override the model with `--model MODEL_ID` — run `agy models` for current CLI ids.
 
 ## Requirements
 

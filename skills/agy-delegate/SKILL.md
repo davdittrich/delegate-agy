@@ -1,6 +1,6 @@
 ---
 name: agy-delegate
-description: Use when doing web searches, looking up current or latest info, researching online, or delegating analysis/review tasks to agy (Google Antigravity CLI). Prefer the WebSearch tool for general web search; use agy for grounded source-cited, current, or second-opinion queries. Triggers on: agy, antigravity, search for, look up, find online, current info, latest, news, research, second opinion from Gemini or GPT.
+description: Use when doing web searches, looking up current or latest info, researching online, or delegating analysis/review tasks to agy (Google Antigravity CLI). Prefer the WebSearch tool for general web search; use agy for grounded source-cited, current, or second-opinion queries. Triggers on: agy, antigravity, search for, look up, find online, current info, latest, news, research, second opinion from Gemini.
 ---
 
 # AGY Delegate
@@ -19,7 +19,7 @@ agy (Google Antigravity CLI) provides grounded web search with source citations 
 **On request:**
 - Adversarial review of code or plans from an independent model (`--type review`)
 - Large-file analysis via Gemini's extended context (`--type analysis`)
-- "Use agy to...", "Ask Gemini...", "Check with GPT..."
+- "Use agy to...", "Ask Gemini..."
 
 ## Usage
 
@@ -68,7 +68,7 @@ echo "query" | agy-bridge --type search --json
 | `review` | gemini-*-pro-high (latest) | Second-pass critique, adversarial prompt framing |
 | `implement` | gemini-*-pro-high (latest) | File read+write, no shell exec — use when agy must write output files |
 
-Omitting `--type` defaults to `code`. Override with `--model <id>` — run `agy models` for current CLI ids.
+Omitting `--type` defaults to `code`. Override with `--model MODEL_ID` — run `agy models` for current CLI ids.
 
 Run `agy models` for current model names — values above match bridge defaults and may lag agy updates.
 

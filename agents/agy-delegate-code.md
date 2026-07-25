@@ -50,7 +50,7 @@ Prefer invoking the bridge through `ctx_shell` as a single call with `timeout_ms
 { echo "Critique this:"; cat "$FILE_PATH"; } | agy-bridge --type review
 
 # Custom model override
-{ printf '%s\n' "$TASK"; cat "$FILE_PATH"; } | agy-bridge --type code --model <id>  # run `agy models` for current CLI ids
+{ printf '%s\n' "$TASK"; cat "$FILE_PATH"; } | agy-bridge --type code --model MODEL_ID  # see: agy models
 
 # JSON envelope (machine-readable)
 { printf '%s\n' "$TASK"; cat "$FILE_PATH"; } | agy-bridge --type analysis --json
