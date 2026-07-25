@@ -148,13 +148,65 @@ else
     bad "S5 RESOURCE_EXHAUSTED stderr surfaced" "rc=$RC out=$OUT"
 fi
 
-# S6: model-map mappings (flash -> Gemini 3.6 Flash (High), sonnet -> Claude Sonnet 4.6 (Thinking))
+# S6: model-map mappings (flash -> Gemini 3.6 Flash (High); sonnet key purged)
 S6_FLASH="$(python3 -c 'import json; d=json.load(open("config/model-map.json")); print(d.get("flash"))')"
-S6_SONNET="$(python3 -c 'import json; d=json.load(open("config/model-map.json")); print(d.get("sonnet"))')"
-if [[ "$S6_FLASH" == "Gemini 3.6 Flash (High)" && "$S6_SONNET" == "Claude Sonnet 4.6 (Thinking)" ]]; then
-    ok "S6 model-map resolves flash and sonnet aliases correctly"
+if [[ "$S6_FLASH" == "Gemini 3.6 Flash (High)" ]]; then
+    ok "S6 model-map resolves flash alias correctly"
 else
-    bad "S6 model-map resolves flash and sonnet aliases correctly" "flash=$S6_FLASH sonnet=$S6_SONNET"
+    bad "S6 model-map resolves flash alias correctly" "flash=$S6_FLASH"
+fi
+
+echo "== dynamic bridge model resolution (delegate-agy-xpx.4) =="
+
+# R1: bridge reaches agy for all 5 delegation types (model resolves, agy accepts it)
+R1_OK=1
+R1_DETAIL=""
+for t in search code review analysis implement; do
+    FAKE_AGY_STDOUT="ok" _run OUT RC bash "$BRIDGE" --type "$t" -- "hello $t"
+    if [[ "$RC" -eq 2 || "$OUT" == *"unknown --model"* || "$OUT" == *"no gemini model"* ]]; then
+        R1_OK=0
+        R1_DETAIL="type=$t rc=$RC out=$OUT"
+    fi
+done
+if [[ "$R1_OK" -eq 1 ]]; then
+    ok "R1 bridge reaches agy for all 5 delegation types (no unknown-model/no-gemini-model, exit!=2)"
+else
+    bad "R1 bridge reaches agy for all 5 delegation types (no unknown-model/no-gemini-model, exit!=2)" "$R1_DETAIL"
+fi
+
+# R2: search delegation resolves the LATEST gemini-*-flash-high (3.6, not 3.5) via sort -V
+FAKE_AGY_STDOUT="ok" _run OUT RC bash "$BRIDGE" --type search --verbose -- "latest check"
+if [[ "$OUT" == *"model=gemini-3.6-flash-high"* ]]; then
+    ok "R2 --type search --verbose resolves latest flash-high (3.6, not 3.5)"
+else
+    bad "R2 --type search --verbose resolves latest flash-high (3.6, not 3.5)" "rc=$RC out=$OUT"
+fi
+
+# R3: pro-only bridge cache (fresh mtime) -> --type search fails loud with
+# "no gemini model" (exit 2), proving auto-select does not silently fall back.
+# Reset the cache immediately after so later bridge tests (D1-D4/T1-T3/M1-M3)
+# still see the full model list.
+_R3_CACHE="$HOME/.cache/agy-bridge-models"
+mkdir -p "$(dirname "$_R3_CACHE")"
+printf '%s\n' "gemini-3.1-pro-high" > "$_R3_CACHE"
+FAKE_AGY_STDOUT="ok" _run OUT RC bash "$BRIDGE" --type search
+if [[ "$RC" -eq 2 && "$OUT" == *"no gemini model"* ]]; then
+    ok "R3 pro-only cache -> --type search exits 2 with 'no gemini model'"
+else
+    bad "R3 pro-only cache -> --type search exits 2 with 'no gemini model'" "rc=$RC out=$OUT"
+fi
+rm -f "$_R3_CACHE"
+
+# R4: gemini_shim.sh -m flash still maps to "Gemini 3.6 Flash (High)" post map-purge
+# (reuses the SH2 FAKE_AGY_DUMP_ARGV harness, L391-400).
+R4_DUMP="$SANDBOX/purge_argv.log"
+: > "$R4_DUMP"
+FAKE_AGY_DUMP_ARGV="$R4_DUMP" _run OUT RC bash "$SHIM" -m flash -p x
+R4_MODEL_VAL="$(awk '/^--model$/{getline; print; exit}' "$R4_DUMP")"
+if [[ "$R4_MODEL_VAL" == "Gemini 3.6 Flash (High)" ]]; then
+    ok "R4 gemini_shim.sh -m flash still maps to Gemini 3.6 Flash (High) (purge-guard)"
+else
+    bad "R4 gemini_shim.sh -m flash still maps to Gemini 3.6 Flash (High) (purge-guard)" "argv=$(cat "$R4_DUMP")"
 fi
 
 echo "== agy_bridge.sh --digest (ps3.2) =="
