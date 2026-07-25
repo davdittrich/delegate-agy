@@ -158,20 +158,22 @@ fi
 
 echo "== dynamic bridge model resolution (delegate-agy-xpx.4) =="
 
-# R1: bridge reaches agy for all 5 delegation types (model resolves, agy accepts it)
+# R1: bridge reaches agy for all 5 delegation types AND returns fake-agy's
+# actual --print success output (rc=0 + FAKE_AGY_STDOUT marker), not merely
+# the absence of an allowlist-rejection error.
 R1_OK=1
 R1_DETAIL=""
 for t in search code review analysis implement; do
     FAKE_AGY_STDOUT="ok" _run OUT RC bash "$BRIDGE" --type "$t" -- "hello $t"
-    if [[ "$RC" -eq 2 || "$OUT" == *"unknown --model"* || "$OUT" == *"no gemini model"* ]]; then
+    if [[ "$RC" -ne 0 || "$OUT" != *"ok"* ]]; then
         R1_OK=0
-        R1_DETAIL="type=$t rc=$RC out=$OUT"
+        R1_DETAIL="${R1_DETAIL}type=$t rc=$RC out=$OUT; "
     fi
 done
 if [[ "$R1_OK" -eq 1 ]]; then
-    ok "R1 bridge reaches agy for all 5 delegation types (no unknown-model/no-gemini-model, exit!=2)"
+    ok "R1 bridge reaches agy for all 5 delegation types (rc=0 + fake-agy success marker)"
 else
-    bad "R1 bridge reaches agy for all 5 delegation types (no unknown-model/no-gemini-model, exit!=2)" "$R1_DETAIL"
+    bad "R1 bridge reaches agy for all 5 delegation types (rc=0 + fake-agy success marker)" "$R1_DETAIL"
 fi
 
 # R2: search delegation resolves the LATEST gemini-*-flash-high (3.6, not 3.5) via sort -V
@@ -198,7 +200,8 @@ fi
 rm -f "$_R3_CACHE"
 
 # R4: gemini_shim.sh -m flash still maps to "Gemini 3.6 Flash (High)" post map-purge
-# (reuses the SH2 FAKE_AGY_DUMP_ARGV harness, L391-400).
+# (reuses the SH2 FAKE_AGY_DUMP_ARGV harness defined below, in the
+# "gemini_shim.sh: no stanza + --sandbox floor" section).
 R4_DUMP="$SANDBOX/purge_argv.log"
 : > "$R4_DUMP"
 FAKE_AGY_DUMP_ARGV="$R4_DUMP" _run OUT RC bash "$SHIM" -m flash -p x
