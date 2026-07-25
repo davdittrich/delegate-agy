@@ -37,15 +37,13 @@ The agy-bridge / `gemini` shim do NOT pass the prompt as the `--print` value or 
 | Gemini 3.5 Flash (High) | Web search, grounded tasks | Standard |
 | Gemini 3.1 Pro (Low) | Code analysis | Pro |
 | Gemini 3.1 Pro (High) | Complex reasoning, large context | Pro |
-| Claude Sonnet 4.6 (Thinking) | Balanced reasoning | Premium |
-| GPT-OSS 120B (Medium) | Alternative perspective | Premium |
 
 ## Strengths
 
 1. **Web Search with Citations** — Native `search_web` tool with URL sources
 2. **Extended Context** — Gemini 3.1 Pro handles large codebases
 3. **MCP Integration** — lean-ctx MCP tools (`ctx_read`/`ctx_search`/… — autodetected) are available inside agy sessions; tokensave can be added opt-in via `/agy-setup` (code-graph READ **plus local-project MUTATE** — its edit/session tools declare `readOnlyHint=false`)
-4. **Multi-model Access** — Gemini, Claude, GPT-OSS in one CLI
+4. **Multi-model Access** — Gemini in one CLI
 5. **File Operations** — agy’s file operations run under `--sandbox`, confined to the `--add-dir` granted directories (the per-run workdir on the bridge)
 
 

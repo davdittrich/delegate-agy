@@ -5,7 +5,7 @@ description: Use when doing web searches, looking up current or latest info, res
 
 # AGY Delegate
 
-agy (Google Antigravity CLI) provides grounded web search with source citations plus access to Gemini 3.1/3.5 and GPT-OSS 120B — all from one subprocess call. For general web search prefer the `WebSearch` tool; reach for agy when you need real source URLs / a second model / info past Claude's cutoff.
+agy (Google Antigravity CLI) provides grounded web search with source citations plus access to Gemini — all from one subprocess call. For general web search prefer the `WebSearch` tool; reach for agy when you need real source URLs / a second model / info past Claude's cutoff.
 
 ⚠️ Security: Do not pipe content containing credentials, API keys, or PII.
 
@@ -62,13 +62,13 @@ echo "query" | agy-bridge --type search --json
 
 | `--type` | Auto-selected model | Why |
 |----------|--------------------|----|
-| `search` | Gemini 3.6 Flash (High) | Fast, web-grounded |
-| `code` | Gemini 3.1 Pro (High) | Extended context |
-| `analysis` | Gemini 3.1 Pro (High) | Large file analysis |
-| `review` | Gemini 3.1 Pro (High) | Second-pass critique, adversarial prompt framing |
-| `implement` | Gemini 3.1 Pro (High) | File read+write, no shell exec — use when agy must write output files |
+| `search` | gemini-*-flash-high (latest) | Fast, web-grounded |
+| `code` | gemini-*-pro-high (latest) | Extended context |
+| `analysis` | gemini-*-pro-high (latest) | Large file analysis |
+| `review` | gemini-*-pro-high (latest) | Second-pass critique, adversarial prompt framing |
+| `implement` | gemini-*-pro-high (latest) | File read+write, no shell exec — use when agy must write output files |
 
-Omitting `--type` defaults to `code`. Override: `--model "Gemini 3.5 Flash (Low)"`.
+Omitting `--type` defaults to `code`. Override with `--model <id>` — run `agy models` for current CLI ids.
 
 Run `agy models` for current model names — values above match bridge defaults and may lag agy updates.
 

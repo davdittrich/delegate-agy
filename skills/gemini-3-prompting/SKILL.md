@@ -1,11 +1,11 @@
 ---
 name: gemini-3-prompting
-description: How to write effective prompts when delegating to or reviewing with agy (Gemini 3.1/3.5 via the Antigravity CLI). Use when constructing an agy-bridge prompt for --type search/code/analysis/review/implement, when a delegated result comes back off-target, or when writing an adversarial review brief for Gemini. Triggers on: delegate to agy, ask Gemini, agy prompt, second opinion, review with Gemini.
+description: How to write effective prompts when delegating to or reviewing with agy (Gemini via the Antigravity CLI). Use when constructing an agy-bridge prompt for --type search/code/analysis/review/implement, when a delegated result comes back off-target, or when writing an adversarial review brief for Gemini. Triggers on: delegate to agy, ask Gemini, agy prompt, second opinion, review with Gemini.
 ---
 
 # Prompting Gemini 3 through agy
 
-You drive `agy` (Antigravity, Gemini 3.1/3.5) in **print mode** through `agy-bridge`. Print mode is headless: one prompt in, one result out. The agent **cannot stop to ask a clarifying question**, so the prompt you send is the entire brief. Write it like a work order for a fast, literal junior engineer.
+You drive `agy` (Antigravity, Gemini) in **print mode** through `agy-bridge`. Print mode is headless: one prompt in, one result out. The agent **cannot stop to ask a clarifying question**, so the prompt you send is the entire brief. Write it like a work order for a fast, literal junior engineer.
 
 The prompt travels via **stdin**; agy reads files itself from its workspace (`--type code/analysis/review/implement` grant read access). So describe *what to do*, point at *where to look*, and let agy read.
 
@@ -18,7 +18,7 @@ The prompt travels via **stdin**; agy reads files itself from its workspace (`--
 5. **Negative constraints go LAST.** "Do NOT touch the public API", "do NOT reformat unrelated files" — Gemini 3 can drop a negative constraint that appears too early in a long prompt. Put the *don'ts* at the very end. (This is why `--digest` appends its contract last.)
 6. **One markup style.** Markdown headings or simple labels are enough. Don't mix XML tags and Markdown in the same prompt.
 
-Model selection is a **flag, not a sentence.** agy exposes `--model`; the bridge auto-selects per `--type` (search→Flash, everything else→Pro). Never write "use Gemini 3.1 Pro" inside the prompt — pass `--model "<exact name>"` instead (`agy models` for names).
+Model selection is a **flag, not a sentence.** agy exposes `--model`; the bridge auto-selects per `--type` (search→Flash, everything else→Pro). Never write "use Gemini Pro" inside the prompt — pass `--model "<exact name>"` instead (`agy models` for names).
 
 ## A solid delegate prompt has five parts
 

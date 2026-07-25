@@ -42,7 +42,7 @@ Return search output verbatim. Preserve source URLs — never paraphrase citatio
 
 | `--type` | Model | Timeout |
 |----------|-------|---------|
-| `search` | Gemini 3.6 Flash (High) | 300s |
+| `search` | gemini-*-flash-high (latest) | 300s |
 
 Run `agy models` for current model name list.
 

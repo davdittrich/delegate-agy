@@ -2,7 +2,7 @@
 name: agy-delegate-code
 description: >
   Delegates code analysis, large-file analysis, and adversarial review tasks
-  to agy (Google Antigravity CLI) using Gemini 3.1 Pro (High).
+  to agy (Google Antigravity CLI) using Gemini Pro.
   Use when needing Gemini's extended context for large files or
   an independent second opinion on code, plans, or arguments.
 tools: [Bash, Read, Grep, Glob, Edit, Write, mcp__lean-ctx__ctx_shell, mcp__lean-ctx__ctx_read, mcp__lean-ctx__ctx_search, mcp__tokensave__tokensave_context]
@@ -50,7 +50,7 @@ Prefer invoking the bridge through `ctx_shell` as a single call with `timeout_ms
 { echo "Critique this:"; cat "$FILE_PATH"; } | agy-bridge --type review
 
 # Custom model override
-{ printf '%s\n' "$TASK"; cat "$FILE_PATH"; } | agy-bridge --type code --model "Gemini 3.5 Flash (High)"
+{ printf '%s\n' "$TASK"; cat "$FILE_PATH"; } | agy-bridge --type code --model <id>  # run `agy models` for current CLI ids
 
 # JSON envelope (machine-readable)
 { printf '%s\n' "$TASK"; cat "$FILE_PATH"; } | agy-bridge --type analysis --json
@@ -65,9 +65,9 @@ Prefer invoking the bridge through `ctx_shell` as a single call with `timeout_ms
 
 | `--type` | Model | Timeout |
 |----------|-------|---------|
-| `code` | Gemini 3.1 Pro (High) | 600s |
-| `analysis` | Gemini 3.1 Pro (High) | 600s |
-| `review` | Gemini 3.1 Pro (High) | 600s |
+| `code` | gemini-*-pro-high (latest) | 600s |
+| `analysis` | gemini-*-pro-high (latest) | 600s |
+| `review` | gemini-*-pro-high (latest) | 600s |
 
 Run `agy models` for current model name list.
 

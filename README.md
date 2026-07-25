@@ -1,8 +1,8 @@
-A Claude Code plugin that routes tasks to [agy](https://github.com/google/agy) (Google Antigravity CLI), giving your Claude sessions access to Gemini 3.1/3.6, Claude 4.6, GPT-OSS 120B, and grounded web search with source citations. For general web search prefer your `WebSearch` tool; reach for agy when you need cited sources or a second model.
+A Claude Code plugin that routes tasks to [agy](https://github.com/google/agy) (Google Antigravity CLI), giving your Claude sessions access to Gemini and grounded web search with source citations. For general web search prefer your `WebSearch` tool; reach for agy when you need cited sources or a second model.
 
 ## Why
 
-**Independent review.** A model reviewing its own output anchors on the reasoning it used to produce it. Gemini and GPT-OSS 120B — different companies, different training — catch different things. Not because Claude can't review code, but because it tends to miss what it already decided was right.
+**Independent review.** A model reviewing its own output anchors on the reasoning it used to produce it. Gemini — a different company, different training — catches different things. Not because Claude can't review code, but because it tends to miss what it already decided was right.
 
 **Current information with sources.** Claude's training has a cutoff. When you need today's release notes, a pricing page, or a changelog with actual URLs, you need live web search — not a model's best guess.
 
@@ -28,13 +28,13 @@ echo "Review /path/to/api.py for correctness" | agy-bridge --type review
 
 | `--type` | Model | What it can do |
 |----------|-------|----------------|
-| `search` | Gemini 3.6 Flash (High) | Web search only; prepends `search_web` instruction automatically |
-| `code` | Gemini 3.1 Pro (High) | Read files; returns generated code as text, no writes |
-| `analysis` | Gemini 3.1 Pro (High) | Read files; handles large codebases |
-| `review` | Gemini 3.1 Pro (High) | Read files; adversarial framing |
-| `implement` | Gemini 3.1 Pro (High) | Read and write files; no shell execution |
+| `search` | gemini-*-flash-high (latest) | Web search only; prepends `search_web` instruction automatically |
+| `code` | gemini-*-pro-high (latest) | Read files; returns generated code as text, no writes |
+| `analysis` | gemini-*-pro-high (latest) | Read files; handles large codebases |
+| `review` | gemini-*-pro-high (latest) | Read files; adversarial framing |
+| `implement` | gemini-*-pro-high (latest) | Read and write files; no shell execution |
 
-Omit `--type` to default to `code`. Override the model with `--model "Gemini 3.6 Flash (Low)"`. Run `agy models` for current names — the table above may lag agy releases.
+Omit `--type` to default to `code`. Override the model with `--model <id>` — run `agy models` for current CLI ids.
 
 ## Requirements
 
@@ -121,11 +121,11 @@ Expected output:
 
 ```
 type         model                          timeout
-search       Gemini 3.6 Flash (High)        300s
-code         Gemini 3.1 Pro (High)          600s
-analysis     Gemini 3.1 Pro (High)          600s
-review       Gemini 3.1 Pro (High)          600s
-implement    Gemini 3.1 Pro (High)          600s
+search       gemini-*-flash-high (latest)   300s
+code         gemini-*-pro-high (latest)     600s
+analysis     gemini-*-pro-high (latest)     600s
+review       gemini-*-pro-high (latest)     600s
+implement    gemini-*-pro-high (latest)     600s
 ```
 
 **6. Uninstall.**
@@ -164,7 +164,7 @@ JSON output:
 ```json
 {
   "success": true,
-  "model_used": "Gemini 3.6 Flash (High)",
+  "model_used": "gemini-3.6-flash-high",
   "type": "search",
   "duration_seconds": 9,
   "response": "..."
@@ -258,9 +258,6 @@ The installer (`scripts/install.sh`) and uninstaller run with `set -euo pipefail
 | `gemini-3.5-flash` / `gemini-3.5-flash-high` | `Gemini 3.5 Flash (High)` |
 | `gemini-3.5-flash-medium` | `Gemini 3.5 Flash (Medium)` |
 | `gemini-3.5-flash-low` | `Gemini 3.5 Flash (Low)` |
-| `claude-sonnet-4-6` / `sonnet` | `Claude Sonnet 4.6 (Thinking)` |
-| `claude-opus-4-6-thinking` / `opus` | `Claude Opus 4.6 (Thinking)` |
-| `gpt-oss-120b-medium` / `gpt-oss` | `GPT-OSS 120B (Medium)` |
 | `gemini-2.5-pro` / `gemini-2.5-flash` (legacy) | `Gemini 3.1 Pro (High)` / `Gemini 3.6 Flash (High)` |
 | any other string | pass through unchanged |
 
