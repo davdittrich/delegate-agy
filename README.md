@@ -34,7 +34,7 @@ echo "Review /path/to/api.py for correctness" | agy-bridge --type review
 | `review` | gemini-*-pro-high (latest) | Read files; adversarial framing |
 | `implement` | gemini-*-pro-high (latest) | Read and write files; no shell execution |
 
-Omit `--type` to default to `code`. Override the model with `--model MODEL_ID` — run `agy models` for current CLI ids.
+The Model column is a rule, not a pin: the bridge resolves each `--type` to the **latest** matching Gemini id from your live `agy models` list at runtime, so it tracks agy version bumps with no plugin update. Omit `--type` to default to `code`. Override the model with `--model MODEL_ID` — run `agy models` for current CLI ids.
 
 ## Requirements
 
@@ -312,3 +312,11 @@ config/policies/               — GEMINI.md tool restriction policies (one file
   shim-sandbox.md              — gemini shim --sandbox (read only)
   shim-default.md              — gemini shim default (read only)
 ```
+
+## Changelog
+
+### 1.5.1
+
+- Bridge resolves each `--type` to the **latest** matching Gemini id from the live `agy models` list at runtime, replacing a pinned model name that drifted from agy's output. Fixes `agy-bridge --type search` (and all types) failing with `unknown --model` on agy 1.5.0.
+- Empty resolution (no matching Gemini id in `agy models`) now exits 2 with a clear message.
+- Gemini-only: dropped non-Gemini (Claude/GPT-OSS) entries from the model map, docs, and plugin manifests.
