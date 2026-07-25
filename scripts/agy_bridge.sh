@@ -61,11 +61,11 @@ while [[ $# -gt 0 ]]; do
             DIGEST_WARN_CHARS="$2"; shift 2 ;;
         --types)
             printf '%-12s %-30s %s\n' 'type' 'model' 'timeout'
-            printf '%-12s %-30s %s\n' 'search' 'Gemini 3.6 Flash (High)' '300s'
-            printf '%-12s %-30s %s\n' 'code' 'Gemini 3.1 Pro (High)' '600s'
-            printf '%-12s %-30s %s\n' 'analysis' 'Gemini 3.1 Pro (High)' '600s'
-            printf '%-12s %-30s %s\n' 'review' 'Gemini 3.1 Pro (High)' '600s'
-            printf '%-12s %-30s %s\n' 'implement' 'Gemini 3.1 Pro (High)' '600s'
+            printf '%-12s %-30s %s\n' 'search' 'gemini-*-flash-high (latest)' '300s'
+            printf '%-12s %-30s %s\n' 'code' 'gemini-*-pro-high (latest)' '600s'
+            printf '%-12s %-30s %s\n' 'analysis' 'gemini-*-pro-high (latest)' '600s'
+            printf '%-12s %-30s %s\n' 'review' 'gemini-*-pro-high (latest)' '600s'
+            printf '%-12s %-30s %s\n' 'implement' 'gemini-*-pro-high (latest)' '600s'
             exit 0 ;;
         --help)
             cat <<'HELP'
@@ -109,18 +109,7 @@ case "$TYPE_SAFE" in
     *) echo "ERROR: unknown --type '${TYPE_SAFE}'; expected search|code|review|analysis|implement" >&2; exit 2 ;;
 esac
 
-# ── Model auto-selection ──────────────────────────────────────────────────────
-if [[ -z "$MODEL" ]]; then
-    case "$TYPE" in
-        search)   MODEL="Gemini 3.6 Flash (High)" ;;
-        review)   MODEL="Gemini 3.1 Pro (High)" ;;
-        analysis) MODEL="Gemini 3.1 Pro (High)" ;;
-        code)      MODEL="Gemini 3.1 Pro (High)" ;;
-        implement) MODEL="Gemini 3.1 Pro (High)" ;;
-    esac
-fi
-
-# ── Model allowlist validation ────────────────────────────────────────────────
+# ── Fetch/cache live model list ───────────────────────────────────────────────
 CACHE_FILE="$HOME/.cache/agy-bridge-models"
 _agy_models=""
 if [[ ! -s "$CACHE_FILE" ]] || [[ -n "$(find "$CACHE_FILE" -mmin +60 2>/dev/null)" ]]; then
@@ -137,8 +126,18 @@ if [[ -z "$VALID_MODELS" ]]; then
     VALID_MODELS=$(cat "$CACHE_FILE" 2>/dev/null) || true
 fi
 [[ -n "$VALID_MODELS" ]] || { echo "ERROR: failed to retrieve model list from agy" >&2; exit 2; }
-if ! printf '%s\n' "$VALID_MODELS" | grep -qxF "$MODEL"; then
-    echo "ERROR: unknown --model '${MODEL}'; run 'agy models' for valid names" >&2; exit 2
+
+# ── Model auto-selection / validation ─────────────────────────────────────────
+if [[ -z "$MODEL" ]]; then
+    case "$TYPE" in
+        search) MODEL=$(printf '%s\n' "$VALID_MODELS" | grep -E '^gemini-[0-9.]+-flash-high$' | sort -V | tail -1) ;;
+        *)      MODEL=$(printf '%s\n' "$VALID_MODELS" | grep -E '^gemini-[0-9.]+-pro-high$' | sort -V | tail -1) ;;
+    esac
+    [[ -n "$MODEL" ]] || { echo "ERROR: no gemini model for --type '$TYPE' in agy models" >&2; exit 2; }
+else
+    if ! printf '%s\n' "$VALID_MODELS" | grep -qxF "$MODEL"; then
+        echo "ERROR: unknown --model '${MODEL}'; run 'agy models' for valid names" >&2; exit 2
+    fi
 fi
 
 # ── Default timeout ───────────────────────────────────────────────────────────
