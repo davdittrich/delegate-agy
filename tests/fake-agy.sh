@@ -38,7 +38,7 @@ fi
 
 case "${1:-}" in
     models)
-        printf '%s\n' "Gemini 3.1 Pro (High)" "Gemini 3.5 Flash (High)" "Gemini 3.5 Flash (Low)"
+        printf '%s\n' "gemini-3.6-flash-high" "gemini-3.6-flash-medium" "gemini-3.6-flash-low" "gemini-3.5-flash-high" "gemini-3.5-flash-medium" "gemini-3.5-flash-low" "gemini-3.1-pro-high" "gemini-3.1-pro-low"
         exit 0 ;;
     --version)
         echo "agy 0.0.0-fake"; exit 0 ;;
