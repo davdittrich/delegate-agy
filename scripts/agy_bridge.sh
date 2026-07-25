@@ -130,8 +130,8 @@ fi
 # ── Model auto-selection / validation ─────────────────────────────────────────
 if [[ -z "$MODEL" ]]; then
     case "$TYPE" in
-        search) MODEL=$(printf '%s\n' "$VALID_MODELS" | grep -E '^gemini-[0-9.]+-flash-high$' | sort -V | tail -1) ;;
-        *)      MODEL=$(printf '%s\n' "$VALID_MODELS" | grep -E '^gemini-[0-9.]+-pro-high$' | sort -V | tail -1) ;;
+        search) MODEL=$(printf '%s\n' "$VALID_MODELS" | grep -E '^gemini-[0-9.]+-flash-high$' | sort -V | tail -1) || true ;;
+        *)      MODEL=$(printf '%s\n' "$VALID_MODELS" | grep -E '^gemini-[0-9.]+-pro-high$' | sort -V | tail -1) || true ;;
     esac
     [[ -n "$MODEL" ]] || { echo "ERROR: no gemini model for --type '$TYPE' in agy models" >&2; exit 2; }
 else
