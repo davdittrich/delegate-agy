@@ -304,6 +304,40 @@ else
     bad "T3 empty prompt -> non-zero exit (no silent success)" "rc=$RC out=$OUT"
 fi
 
+echo "== agy_bridge.sh --add-dir passthrough (delegate-agy-0i9.2) =="
+
+# AD1: caller --add-dir reaches agy AND stays before the trailing WORK_DIR
+# --add-dir. fake-agy.sh resolves GEMINI.md/TASK from the LAST --add-dir seen
+# (tests/fake-agy.sh:57-59), so this also pins WORK_DIR-last: if a future edit
+# appended caller dirs after WORK_DIR, the TASK would no longer be found and
+# this case would fail (rc!=0, no marker in OUT).
+AD1_DIR="$SANDBOX/add-dir-target"
+mkdir -p "$AD1_DIR"
+AD1_ARGV="$SANDBOX/ad1_argv.log"
+: > "$AD1_ARGV"
+AD1_MARKER="ADDDIRMARKER77"
+FAKE_AGY_DUMP_ARGV="$AD1_ARGV" FAKE_AGY_ECHO_PROMPT=1 _run OUT RC bash "$BRIDGE" --type code --add-dir "$AD1_DIR" -- "$AD1_MARKER"
+AD1_CALLER_SEEN=0; grep -qF "$AD1_DIR" "$AD1_ARGV" && AD1_CALLER_SEEN=1
+AD1_LAST_ADDDIR_VAL="$(awk '/^--add-dir$/{v=""; getline v} END{print v}' "$AD1_ARGV")"
+if [[ "$RC" -eq 0 && "$AD1_CALLER_SEEN" -eq 1 && "$AD1_LAST_ADDDIR_VAL" != "$AD1_DIR" && "$OUT" == *"$AD1_MARKER"* ]]; then
+    ok "AD1 caller --add-dir reaches agy, stays before trailing WORK_DIR --add-dir"
+else
+    bad "AD1 caller --add-dir reaches agy, stays before trailing WORK_DIR --add-dir" "rc=$RC caller_seen=$AD1_CALLER_SEEN last=$AD1_LAST_ADDDIR_VAL out=$OUT argv=$(cat "$AD1_ARGV")"
+fi
+
+# AD2: --add-dir with a non-directory path is rejected at parse time (exit 2)
+# by the -d guard BEFORE the cd fallback ever runs. Asserted via EXACT output
+# match (not substring): if the -d guard is dropped, the cd fallback still
+# rejects the path but leaks an extra "cd: ...: No such file or directory"
+# line to stderr first — an exact match catches that, a substring match would not.
+AD2_BAD="$SANDBOX/add-dir-missing"
+_run OUT RC bash "$BRIDGE" --type code --add-dir "$AD2_BAD" -- "hi"
+if [[ "$RC" -eq 2 && "$OUT" == "ERROR: --add-dir '$AD2_BAD' is not a directory" ]]; then
+    ok "AD2 --add-dir rejects non-directory path via -d guard (exit 2, no cd leak)"
+else
+    bad "AD2 --add-dir rejects non-directory path via -d guard (exit 2, no cd leak)" "rc=$RC out=$OUT"
+fi
+
 echo "== policy files: fail-closed allowlist (vfn T1) =="
 
 # ST1
