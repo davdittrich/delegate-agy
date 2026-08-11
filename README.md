@@ -144,8 +144,8 @@ The skill triggers automatically inside Claude sessions. For direct use:
 # Web search with citations
 echo "Claude API pricing June 2026" | agy-bridge --type search
 
-# Code review — agy reads the file itself
-echo "Review scripts/deploy.sh for correctness" | agy-bridge --type review
+# Code review — grant read access to the directory holding the file
+echo "Review scripts/deploy.sh for correctness" | agy-bridge --type review --add-dir scripts
 
 # Inline prompt without stdin
 agy-bridge --type search -- "latest numpy release"

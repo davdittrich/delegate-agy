@@ -33,7 +33,13 @@ echo "Claude API pricing June 2026" | agy-bridge --type search
 
 ### Code / task delegation
 
-agy is sandbox-confined — it runs in an ephemeral workdir and cannot read the repo. Inline the needed file content into the piped prompt (as the `echo "$QUESTION" | agy-bridge` example shows):
+agy is sandbox-confined — it runs in an ephemeral workdir and by default cannot read the repo. Pass `--add-dir PATH` (repeatable) to grant read access to specific directories; `--sandbox` stays on unconditionally, so granted dirs are readable only, never a target for shell execution. `PATH` is validated at parse time (must exist as a directory) and resolved to an absolute path before agy runs — an invalid path exits 2 immediately, before any call is made. Grant the narrowest directory that covers what agy needs to read — `--add-dir` exposes everything under that path, not just the file(s) you care about.
+
+```bash
+echo "$QUESTION" | agy-bridge --type code --add-dir ./src
+```
+
+If you can't or don't want to grant a directory, inline the needed file content into the piped prompt instead:
 
 ```bash
 echo "$QUESTION" | agy-bridge --type code
