@@ -31,6 +31,7 @@ VERBOSE=0
 DIGEST=0
 DIGEST_WARN_CHARS=2000
 PROMPT_ARGS=()
+ADD_DIRS=()
 
 # ── Parse args ────────────────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
@@ -52,6 +53,11 @@ while [[ $# -gt 0 ]]; do
         --log-file)
             [[ $# -lt 2 ]] && { echo "ERROR: --log-file requires a value" >&2; exit 2; }
             LOG_FILE="$2"; shift 2 ;;
+        --add-dir)
+            [[ $# -lt 2 ]] && { echo "ERROR: --add-dir requires a value" >&2; exit 2; }
+            [[ -d "$2" ]] || { echo "ERROR: --add-dir '$2' is not a directory" >&2; exit 2; }
+            _d=$(cd "$2" && pwd) || { echo "ERROR: --add-dir '$2' is not a directory" >&2; exit 2; }
+            ADD_DIRS+=("$_d"); shift 2 ;;
         --json)    JSON_OUTPUT=1; shift ;;
         --verbose) VERBOSE=1; shift ;;
         --digest)  DIGEST=1; shift ;;
@@ -81,6 +87,8 @@ Options:
   --timeout N                seconds (default: 300 search, 600 other)
   --stdin-timeout N          seconds for stdin read (default: 30)
   --log-file PATH            write verbose metadata to file instead of stderr
+  --add-dir PATH             grant agy read access to PATH (repeatable; pass
+                             the narrowest sufficient directory)
   --json                     output JSON envelope
   --digest                   append a digest-only output contract (compressed
                              reply: key findings + file:line, no raw echoes)
@@ -269,7 +277,11 @@ AGY_POINTER='Complete the TASK described in your GEMINI.md context. Output only 
 START=$SECONDS
 EXIT_CODE=0
 set +e
-AGY_FLAGS=(--print "$AGY_POINTER" --sandbox --model "$MODEL" --add-dir "$WORK_DIR")
+_EXTRA_DIRS=()
+for _d in ${ADD_DIRS[@]+"${ADD_DIRS[@]}"}; do
+    _EXTRA_DIRS+=(--add-dir "$_d")
+done
+AGY_FLAGS=(--print "$AGY_POINTER" --sandbox --model "$MODEL" ${_EXTRA_DIRS[@]+"${_EXTRA_DIRS[@]}"} --add-dir "$WORK_DIR")
 if [[ "${AGY_SKIP_PERMISSIONS:-0}" == "1" ]]; then
     echo "WARNING: AGY_SKIP_PERMISSIONS=1 — running with --dangerously-skip-permissions" >&2
     AGY_FLAGS+=(--dangerously-skip-permissions)
