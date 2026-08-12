@@ -288,7 +288,8 @@ fi
 ( cd "$WORK_DIR" && "$TIMEOUT_BIN" "$TIMEOUT" "$AGY_BIN" \
     "${AGY_FLAGS[@]}" \
     > "$STDOUT_FILE" \
-    2> "$STDERR_FILE" )
+    2> "$STDERR_FILE" \
+    < /dev/null )
 EXIT_CODE=$?
 set -e
 DURATION=$(( SECONDS - START ))

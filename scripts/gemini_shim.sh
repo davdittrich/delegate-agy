@@ -190,7 +190,8 @@ EXIT_CODE=0
 set +e
 "$AGY_BIN" "${AGY_ARGS[@]}" \
     > "$STDOUT_FILE" \
-    2> "$STDERR_FILE"
+    2> "$STDERR_FILE" \
+    < /dev/null
 EXIT_CODE=$?
 set -e
 DURATION=$(( SECONDS - START ))
