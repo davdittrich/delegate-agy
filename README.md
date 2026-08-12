@@ -140,6 +140,8 @@ command.
 
 The skill triggers automatically inside Claude sessions. For direct use:
 
+`--add-dir` exposes everything under the granted directory to agy, not just the file(s) you care about — pass the narrowest sufficient path (a staging directory holding only the needed files keeps the grant auditable).
+
 ```bash
 # Web search with citations
 echo "Claude API pricing June 2026" | agy-bridge --type search
