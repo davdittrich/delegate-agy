@@ -21,6 +21,14 @@ if ! command -v agy &>/dev/null; then
     echo "ERROR: agy not found in PATH" >&2; exit 2
 fi
 AGY_BIN=$(command -v agy)
+if command -v timeout &>/dev/null; then
+    TIMEOUT_BIN="timeout"
+elif command -v gtimeout &>/dev/null; then
+    TIMEOUT_BIN="gtimeout"
+else
+    TIMEOUT_BIN=""
+fi
+STDIN_TIMEOUT="${GEMINI_SHIM_STDIN_TIMEOUT:-30}"
 
 # ── Model name mapping ────────────────────────────────────────────────────────
 # Maps gemini CLI model names/aliases → agy model names.
@@ -140,7 +148,13 @@ cat "$_SHIM_POLICY" > "$WORK_DIR/GEMINI.md" \
 if [[ ${#PROMPT_ARGS[@]} -gt 0 ]]; then
     printf '%s\n' "${PROMPT_ARGS[@]}" > "$PROMPT_FILE"
 elif [[ ! -t 0 ]]; then
-    cat > "$PROMPT_FILE"
+    if [[ -n "$TIMEOUT_BIN" ]]; then
+        "$TIMEOUT_BIN" "$STDIN_TIMEOUT" cat > "$PROMPT_FILE" || {
+            echo "ERROR: stdin read timed out after ${STDIN_TIMEOUT}s" >&2; exit 2
+        }
+    else
+        cat > "$PROMPT_FILE"
+    fi
 else
     echo "ERROR: no prompt (no stdin and no positional args)" >&2; exit 2
 fi
