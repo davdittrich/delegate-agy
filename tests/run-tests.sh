@@ -167,6 +167,43 @@ else
     bad "S7 whitespace-only prompt via stdin -> exit 2, agy never invoked" "rc=$RC out=$OUT"
 fi
 
+# S8 prompt delivered via GEMINI.md TASK, absent from argv AND stdin (mirrors
+# T1: agy_bridge.sh's guarantee -- gemini_shim.sh:172-176 embeds into
+# GEMINI.md, :180 passes only --print "$AGY_POINTER").
+(
+    RECDIR="$SANDBOX/shim_recorder"
+    mkdir -p "$RECDIR"
+    ARGV_LOG="$SANDBOX/shim_argv2.log"
+    STDIN_LOG="$SANDBOX/shim_stdin2.log"
+    : > "$ARGV_LOG"; : > "$STDIN_LOG"
+    cat > "$RECDIR/agy" <<EOF
+#!/usr/bin/env bash
+set -u
+printf '%s\n' "\$@" >> "$ARGV_LOG"
+cat > "$STDIN_LOG"
+exec "$HERE/fake-agy.sh" "\$@" < "$STDIN_LOG"
+EOF
+    chmod +x "$RECDIR/agy"
+    export PATH="$RECDIR:$PATH"
+    TOKEN="ZZSHIMLEAKTOKEN77"
+    OUT="$(FAKE_AGY_ECHO_PROMPT=1 bash "$SHIM" -p "$TOKEN" 2>/dev/null)"
+    token_in_out=0;   [[ "$OUT" == *"$TOKEN"* ]] && token_in_out=1
+    token_in_argv=0;  grep -q "$TOKEN" "$ARGV_LOG" && token_in_argv=1
+    token_in_stdin=0; grep -q "$TOKEN" "$STDIN_LOG" && token_in_stdin=1
+    pointer_in_argv=0; grep -q "GEMINI.md context" "$ARGV_LOG" && pointer_in_argv=1
+    if [[ "$token_in_out" -eq 1 && "$token_in_argv" -eq 0 && "$token_in_stdin" -eq 0 && "$pointer_in_argv" -eq 1 ]]; then
+        echo "S8_RESULT=ok"
+    else
+        echo "S8_RESULT=fail token_in_out=$token_in_out token_in_argv=$token_in_argv token_in_stdin=$token_in_stdin pointer_in_argv=$pointer_in_argv out=$OUT argv=$(cat "$ARGV_LOG") stdin=$(cat "$STDIN_LOG")"
+    fi
+) > "$SANDBOX/s8.out" 2>&1
+S8_LINE="$(grep '^S8_RESULT=' "$SANDBOX/s8.out")"
+if [[ "$S8_LINE" == "S8_RESULT=ok" ]]; then
+    ok "S8 shim delivers prompt via GEMINI.md TASK, absent from argv AND stdin"
+else
+    bad "S8 shim delivers prompt via GEMINI.md TASK, absent from argv AND stdin" "$S8_LINE"
+fi
+
 echo "== dynamic bridge model resolution (delegate-agy-xpx.4) =="
 
 # R1: bridge reaches agy for all 5 delegation types AND returns fake-agy's
