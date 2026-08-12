@@ -350,7 +350,7 @@ fi
 # agy_bridge.sh:318 also satisfies -- passing for the wrong reason).
 T3_DUMP="$SANDBOX/t3_argv.log"; : > "$T3_DUMP"
 FAKE_AGY_DUMP_ARGV="$T3_DUMP" _run OUT RC bash "$BRIDGE" --type code -- ""
-if [[ "$RC" -eq 2 && "$OUT" == *"ERROR: empty prompt"* && ! -s "$T3_DUMP" ]]; then
+if [[ "$RC" -eq 2 && "$OUT" == *"ERROR: empty prompt"* ]] && ! grep -q -- '--print' "$T3_DUMP"; then
     ok "T3 empty prompt -> exit 2, ERROR: empty prompt, agy never invoked"
 else
     bad "T3 empty prompt -> exit 2, ERROR: empty prompt, agy never invoked" "rc=$RC out=$OUT argv=$(cat "$T3_DUMP" 2>/dev/null)"
@@ -360,7 +360,7 @@ fi
 # must reject a prompt of pure whitespace, not just byte-empty.
 T3B_DUMP="$SANDBOX/t3b_argv.log"; : > "$T3B_DUMP"
 FAKE_AGY_DUMP_ARGV="$T3B_DUMP" _run OUT RC bash "$BRIDGE" --type code -- "   "
-if [[ "$RC" -eq 2 && "$OUT" == *"ERROR: empty prompt"* && ! -s "$T3B_DUMP" ]]; then
+if [[ "$RC" -eq 2 && "$OUT" == *"ERROR: empty prompt"* ]] && ! grep -q -- '--print' "$T3B_DUMP"; then
     ok "T3b whitespace-only prompt via args -> exit 2, agy never invoked"
 else
     bad "T3b whitespace-only prompt via args -> exit 2, agy never invoked" "rc=$RC out=$OUT"
@@ -369,7 +369,7 @@ fi
 # T3c: whitespace-only prompt via stdin (printf '\n\n' |).
 T3C_DUMP="$SANDBOX/t3c_argv.log"; : > "$T3C_DUMP"
 OUT="$(printf '\n\n' | FAKE_AGY_DUMP_ARGV="$T3C_DUMP" bash "$BRIDGE" --type code 2>&1)"; RC=$?
-if [[ "$RC" -eq 2 && "$OUT" == *"ERROR: empty prompt"* && ! -s "$T3C_DUMP" ]]; then
+if [[ "$RC" -eq 2 && "$OUT" == *"ERROR: empty prompt"* ]] && ! grep -q -- '--print' "$T3C_DUMP"; then
     ok "T3c whitespace-only prompt via stdin -> exit 2, agy never invoked"
 else
     bad "T3c whitespace-only prompt via stdin -> exit 2, agy never invoked" "rc=$RC out=$OUT"
@@ -380,10 +380,21 @@ fi
 # user prompt non-empty by prepending the search_web instruction.
 T3D_DUMP="$SANDBOX/t3d_argv.log"; : > "$T3D_DUMP"
 FAKE_AGY_DUMP_ARGV="$T3D_DUMP" _run OUT RC bash "$BRIDGE" --type search -- ""
-if [[ "$RC" -eq 2 && "$OUT" == *"ERROR: empty prompt"* && ! -s "$T3D_DUMP" ]]; then
+if [[ "$RC" -eq 2 && "$OUT" == *"ERROR: empty prompt"* ]] && ! grep -q -- '--print' "$T3D_DUMP"; then
     ok "T3d --type search empty prompt rejected before search-prefix augmentation"
 else
     bad "T3d --type search empty prompt rejected before search-prefix augmentation" "rc=$RC out=$OUT"
+fi
+
+# T3e: --digest -- "" -- proves the guard runs BEFORE the digest output
+# contract append (agy_bridge.sh:216-219), which would otherwise make an
+# empty user prompt non-empty by appending the OUTPUT CONTRACT text.
+T3E_DUMP="$SANDBOX/t3e_argv.log"; : > "$T3E_DUMP"
+FAKE_AGY_DUMP_ARGV="$T3E_DUMP" _run OUT RC bash "$BRIDGE" --type code --digest -- ""
+if [[ "$RC" -eq 2 && "$OUT" == *"ERROR: empty prompt"* ]] && ! grep -q -- '--print' "$T3E_DUMP"; then
+    ok "T3e --digest empty prompt rejected before digest output-contract append"
+else
+    bad "T3e --digest empty prompt rejected before digest output-contract append" "rc=$RC out=$OUT"
 fi
 
 echo "== agy_bridge.sh --add-dir passthrough (delegate-agy-0i9.2) =="
