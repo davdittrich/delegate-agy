@@ -429,19 +429,29 @@ else
     bad "ST5 WebSearch surfaced, zero residual agy-first framing" "ok=$ST5_OK residual=$ST5_RESIDUAL"
 fi
 
-# ST6: version bumped to 1.5.0 in manifest+setup; no stale 1.2.x/1.3.x/1.4.x in
-# tracked json/md (excluding beads export, spec archive, and the legacy
-# agy-uninstall.md command doc which keeps its own version line).
+# ST6: .claude-plugin/plugin.json is the single source of truth for the
+# version; both command docs must match it exactly, and no stale legacy-minor
+# version literal may linger in tracked json/md (excluding beads export and
+# the spec archive). Nothing here is a frozen literal: the expected version
+# and the stale-minor range are both derived from the manifest, so the check
+# cannot go stale on the next bump.
+ST6_VERSION="$(grep -m1 '"version"' "$ROOT/.claude-plugin/plugin.json" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')"
+ST6_MINOR="$(cut -d. -f2 <<<"$ST6_VERSION")"
 ST6_OK=1
-grep -q '1.5.0' "$ROOT/.claude-plugin/plugin.json" || ST6_OK=0
-grep -q '1.5.0' "$ROOT/.claude/commands/agy-setup.md" || ST6_OK=0
-ST6_STALE="$(cd "$ROOT" && grep -rn '1\.[234]\.[0-9]' --include='*.json' --include='*.md' . \
-    | grep -v '/.beads/' | grep -v 'docs/superpowers/specs' \
-    | grep -v 'agy-uninstall.md' | wc -l)"
-if [[ "$ST6_OK" -eq 1 && "$ST6_STALE" -eq 0 ]]; then
-    ok "ST6 version 1.5.0 in manifest+setup, no stale 1.2.x/1.3.x/1.4.x"
+[[ -n "$ST6_VERSION" ]] || ST6_OK=0
+grep -q "version: $ST6_VERSION" "$ROOT/.claude/commands/agy-setup.md" || ST6_OK=0
+grep -q "version: $ST6_VERSION" "$ROOT/.claude/commands/agy-uninstall.md" || ST6_OK=0
+if [[ "$ST6_MINOR" -ge 3 ]]; then
+    ST6_STALE="$(cd "$ROOT" && grep -rn "1\.[$(seq -s '' 2 $((ST6_MINOR - 1)))]\.[0-9]" \
+        --include='*.json' --include='*.md' . \
+        | grep -v '/.beads/' | grep -v 'docs/superpowers/specs' | wc -l)"
 else
-    bad "ST6 version 1.5.0 in manifest+setup, no stale 1.2.x/1.3.x/1.4.x" "ok=$ST6_OK stale=$ST6_STALE"
+    ST6_STALE=0
+fi
+if [[ "$ST6_OK" -eq 1 && "$ST6_STALE" -eq 0 ]]; then
+    ok "ST6 version $ST6_VERSION in manifest+both command docs, no stale legacy minors"
+else
+    bad "ST6 version $ST6_VERSION in manifest+both command docs, no stale legacy minors" "ok=$ST6_OK stale=$ST6_STALE"
 fi
 
 echo "== MCP tool-preference stanza gating (vfn T5) =="

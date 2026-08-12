@@ -1,7 +1,7 @@
 ---
 command: agy-uninstall
 description: Print the one validated command to remove agy-delegate's launcher wrappers (agy-bridge + gemini shim) and optionally de-register tokensave
-version: 1.5.0
+version: 1.5.1
 category: ai-delegation
 tags: [agy, uninstall, cleanup]
 ---
