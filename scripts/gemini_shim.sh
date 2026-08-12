@@ -29,6 +29,10 @@ else
     TIMEOUT_BIN=""
 fi
 STDIN_TIMEOUT="${GEMINI_SHIM_STDIN_TIMEOUT:-30}"
+[[ "$STDIN_TIMEOUT" =~ ^[1-9][0-9]*$ ]] || {
+    echo "ERROR: GEMINI_SHIM_STDIN_TIMEOUT must be a positive integer (got '$STDIN_TIMEOUT')" >&2
+    exit 2
+}
 
 # ── Model name mapping ────────────────────────────────────────────────────────
 # Maps gemini CLI model names/aliases → agy model names.

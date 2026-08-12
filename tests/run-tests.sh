@@ -404,6 +404,17 @@ else
     bad "AD7 --add-dir \$HOME/sub still granted (exact-match refusal only)" "rc=$RC seen=$AD7_SEEN argv=$(cat "$AD7_ARGV")"
 fi
 
+# AD8: HOME with a trailing slash must not bypass the broad-grant guard.
+# --add-dir "$HOME" resolves without a trailing slash; if the guard compared
+# raw "$_d" == "$HOME" it would silently miss this and grant access.
+AD8_HOME_NOSLASH="$HOME"
+_run OUT RC env HOME="${AD8_HOME_NOSLASH}/" bash "$BRIDGE" --type code --add-dir "$AD8_HOME_NOSLASH" -- "hi"
+if [[ "$RC" -eq 2 && "$OUT" == "ERROR: --add-dir '$AD8_HOME_NOSLASH' grants broad filesystem access; set AGY_ALLOW_BROAD_GRANT=1 to override" ]]; then
+    ok "AD8 trailing-slash \$HOME does not bypass broad-grant guard"
+else
+    bad "AD8 trailing-slash \$HOME does not bypass broad-grant guard" "rc=$RC out=$OUT"
+fi
+
 echo "== policy files: fail-closed allowlist (vfn T1) =="
 
 # ST1

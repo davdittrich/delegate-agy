@@ -56,7 +56,8 @@ while [[ $# -gt 0 ]]; do
         --add-dir)
             [[ $# -lt 2 ]] && { echo "ERROR: --add-dir requires a value" >&2; exit 2; }
             _d=$(CDPATH='' cd -- "$2" 2>/dev/null && pwd) || { echo "ERROR: --add-dir '$2' is not a directory" >&2; exit 2; }
-            if [[ "$_d" == "/" || "$_d" == "${HOME:-}" ]]; then
+            _home="${HOME:-}"
+            if [[ "$_d" == "/" || ( -n "$_home" && "$_d" == "${_home%/}" ) ]]; then
                 if [[ "${AGY_ALLOW_BROAD_GRANT:-0}" != "1" ]]; then
                     echo "ERROR: --add-dir '$_d' grants broad filesystem access; set AGY_ALLOW_BROAD_GRANT=1 to override" >&2; exit 2
                 fi
@@ -125,7 +126,7 @@ case "$TYPE_SAFE" in
 esac
 
 # ── Fetch/cache live model list ───────────────────────────────────────────────
-CACHE_FILE="${HOME:-}/.cache/agy-bridge-models"
+CACHE_FILE="$HOME/.cache/agy-bridge-models"
 _agy_models=""
 if [[ ! -s "$CACHE_FILE" ]] || [[ -n "$(find "$CACHE_FILE" -mmin +60 2>/dev/null)" ]]; then
     _agy_models=$("$AGY_BIN" models </dev/null 2>/dev/null) || {
@@ -236,14 +237,14 @@ fi
 # stanza is advisory GEMINI.md text — it does NOT relax --sandbox/--add-dir.
 _MCP_LEANCTX=0; _MCP_TOKENSAVE=0
 if command -v python3 >/dev/null 2>&1; then
-    _MCP_CACHE="${HOME:-}/.cache/agy-bridge-mcp"
+    _MCP_CACHE="$HOME/.cache/agy-bridge-mcp"
     if [[ -s "$_MCP_CACHE" ]] && [[ -z "$(find "$_MCP_CACHE" -mmin +60 2>/dev/null)" ]]; then
         _MCP_LEANCTX=$(sed -n '1p' "$_MCP_CACHE" 2>/dev/null)
         _MCP_TOKENSAVE=$(sed -n '2p' "$_MCP_CACHE" 2>/dev/null)
     else
         read _MCP_LEANCTX _MCP_TOKENSAVE < <(python3 - \
-            "${HOME:-}/.config/agy-delegate/config.json" \
-            "${HOME:-}/.gemini/antigravity-cli/mcp_config.json" <<'PY'
+            "$HOME/.config/agy-delegate/config.json" \
+            "$HOME/.gemini/antigravity-cli/mcp_config.json" <<'PY'
 import sys, json, os
 hint, live = sys.argv[1], sys.argv[2]
 lc = ts = False

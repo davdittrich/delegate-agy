@@ -246,6 +246,12 @@ The installer (`scripts/install.sh`) and uninstaller run with `set -euo pipefail
 | `--include-directories <dir>` | `--add-dir <dir>` |
 | `--version` | `agy --version` |
 
+### Environment variables
+
+| Variable | Default | Notes |
+|----------|---------|-------|
+| `GEMINI_SHIM_STDIN_TIMEOUT` | `30` | Seconds to wait for stdin before failing (exit 2). Must match `^[1-9][0-9]*$`; anything else is rejected at startup. If no `timeout`/`gtimeout` binary is on PATH, the read is unbounded regardless of this value. |
+
 ### Model name mapping
 
 | gemini name | agy model |
