@@ -62,6 +62,8 @@ is_our_wrapper() {
 # write_wrapper NAME PINNED_TARGET DEST
 # Emits a pinned-path launcher: fail-loud on missing target, validate regular
 # file, exec -a sets the launcher argv0; the shim resolves its own path via BASH_SOURCE. NO cache glob, NO per-call claude list.
+# The exec target is always the pinned literal above; the newer-sibling check
+# below only ever WARNS on stderr, it never feeds the exec path.
 write_wrapper() {
     local name="$1" target="$2" dest="$3"
     # Non-clobber: back up a pre-existing NON-agy file at dest.
@@ -72,6 +74,16 @@ write_wrapper() {
         echo "WARNING: '$dest' already exists and is not an agy-delegate wrapper." >&2
         echo "         Backed it up to '$bak' before overwriting." >&2
     fi
+    # Derive the pinned version dir's own basename and its parent (the
+    # versions root, e.g. .../agy-delegate/agy-delegate/) so the generated
+    # wrapper can warn (stderr only) if a newer sibling version directory
+    # shows up there after `claude plugin update`. Both are install-time
+    # literals baked into the heredoc below, same as _AGY_TARGET.
+    local scripts_dir version_dir version parent_dir
+    scripts_dir="${target%/*}"
+    version_dir="${scripts_dir%/*}"
+    version="${version_dir##*/}"
+    parent_dir="${version_dir%/*}"
     local tmp
     tmp="$(mktemp "$dest.agy-tmp.XXXXXX")"
     cat > "$tmp" <<WRAP
@@ -81,10 +93,28 @@ $WRAPPER_MARKER
 # Execs a PINNED ABSOLUTE PATH; fails loud if the plugin moved/was updated.
 set -euo pipefail
 _AGY_TARGET='$target'
+_AGY_VERSION='$version'
+_AGY_VERSIONS_ROOT='$parent_dir'
 if [[ ! -f "\$_AGY_TARGET" ]]; then
     echo "ERROR: agy-delegate moved or was updated; '\$_AGY_TARGET' is gone." >&2
     echo "       Re-run the install one-liner (see /agy-setup) to repin it." >&2
     exit 127
+fi
+# Newer-sibling check: warn only, never changes what gets exec'd. Only runs
+# when the pinned version dir's own name looks like a version (skips dev/test
+# installs where the plugin root isn't under a versioned cache layout).
+if [[ "\$_AGY_VERSION" =~ ^[0-9]+(\.[0-9]+)*\$ ]]; then
+    for _agy_sibling in "\$_AGY_VERSIONS_ROOT"/*/; do
+        [[ -d "\$_agy_sibling" ]] || continue
+        _agy_sibling_ver="\${_agy_sibling%/}"
+        _agy_sibling_ver="\${_agy_sibling_ver##*/}"
+        [[ "\$_agy_sibling_ver" =~ ^[0-9]+(\.[0-9]+)*\$ ]] || continue
+        [[ "\$_agy_sibling_ver" == "\$_AGY_VERSION" ]] && continue
+        if [[ "\$(printf '%s\n' "\$_agy_sibling_ver" "\$_AGY_VERSION" | sort -V | tail -n1)" == "\$_agy_sibling_ver" ]]; then
+            echo "WARNING: agy-delegate \$_AGY_VERSION is pinned but a newer version '\$_agy_sibling_ver' is also installed in '\$_AGY_VERSIONS_ROOT'." >&2
+            echo "         Still running the pinned \$_AGY_VERSION copy. Re-run the install one-liner (see /agy-setup) to repin \$_agy_sibling_ver." >&2
+        fi
+    done
 fi
 exec -a "$name" bash "\$_AGY_TARGET" "\$@"
 WRAP

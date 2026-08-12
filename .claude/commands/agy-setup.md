@@ -18,8 +18,12 @@ real `gemini` command for every caller** whose `PATH` includes `~/.local/bin`
 first (your interactive shell, Claude Octopus, Metaswarm — all of them will
 invoke agy instead). It also writes `~/.local/bin/agy-bridge`. Both are pinned
 launchers that exec an absolute path recorded at install time; if the plugin is
-updated or moved they fail loud and ask you to re-run this install. To undo
-everything, run the uninstall command at the bottom.
+moved (pinned path gone) they fail loud and ask you to re-run this install. If
+the plugin is updated but Claude Code's cache leaves the old version directory
+in place too (observed behavior), the pinned path still resolves, so the
+wrapper keeps running the pinned (now stale) copy and prints a stderr warning
+naming both versions instead of failing — re-run this install to repin. To
+undo everything, run the uninstall command at the bottom.
 
 ## Install (copy-paste this)
 

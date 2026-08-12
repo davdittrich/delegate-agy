@@ -988,6 +988,43 @@ else
     ok "I15 (skipped: no git repo) install/uninstall repo-untouched"
 fi
 
+# I16: newer sibling version dir -> stderr warning naming both versions;
+# stdout + exit code byte-identical to the no-sibling run; exec target stays
+# pinned to the install-time literal (no glob feeds exec). (delegate-agy-dsf)
+IH="$(_fresh_home)"
+VROOT="$(mktemp -d "$SANDBOX/vfake.XXXXXX")"
+mkdir -p "$VROOT/agy-delegate/1.0.0/scripts"
+cp "$ROOT/scripts/agy_bridge.sh" "$ROOT/scripts/gemini_shim.sh" "$VROOT/agy-delegate/1.0.0/scripts/"
+env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" \
+    AGY_PLUGIN_DIR="$VROOT/agy-delegate/1.0.0" \
+    bash "$INSTALL" > "$SANDBOX/last-install.log" 2>&1
+BW="$IH/.local/bin/agy-bridge"
+OUT_NOSIB="$(env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" bash "$BW" --types 2>"$SANDBOX/err-nosib.log")"
+RC_NOSIB=$?
+ERR_NOSIB="$(cat "$SANDBOX/err-nosib.log")"
+mkdir -p "$VROOT/agy-delegate/1.1.0/scripts"
+OUT_SIB="$(env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" bash "$BW" --types 2>"$SANDBOX/err-sib.log")"
+RC_SIB=$?
+ERR_SIB="$(cat "$SANDBOX/err-sib.log")"
+rm -rf "$VROOT/agy-delegate/1.1.0"
+OUT_GONE="$(env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" bash "$BW" --types 2>"$SANDBOX/err-gone.log")"
+RC_GONE=$?
+ERR_GONE="$(cat "$SANDBOX/err-gone.log")"
+I16_OK=1
+[[ "$ERR_NOSIB" != *"WARNING"* ]] || I16_OK=0
+case "$ERR_SIB" in *"1.0.0"*"1.1.0"*|*"1.1.0"*"1.0.0"*) :;; *) I16_OK=0;; esac
+[[ "$OUT_NOSIB" == "$OUT_SIB" ]] || I16_OK=0
+[[ "$RC_NOSIB" -eq "$RC_SIB" ]] || I16_OK=0
+[[ "$ERR_GONE" != *"WARNING"* ]] || I16_OK=0
+grep -qF "_AGY_TARGET='$VROOT/agy-delegate/1.0.0/scripts/agy_bridge.sh'" "$BW" || I16_OK=0
+grep -q '[*]' <(grep '^exec ' "$BW") && I16_OK=0
+if [[ "$I16_OK" -eq 1 ]]; then
+    ok "I16 newer sibling version -> stderr warning, stdout/exit unchanged, exec target still pinned"
+else
+    bad "I16 newer sibling version -> stderr warning, stdout/exit unchanged, exec target still pinned" \
+        "rc_nosib=$RC_NOSIB rc_sib=$RC_SIB err_sib=${ERR_SIB:0:200} err_gone=${ERR_GONE:0:200}"
+fi
+
 echo
 echo "PASS=$PASS FAIL=$FAIL"
 if [[ "$FAIL" -eq 0 ]]; then
