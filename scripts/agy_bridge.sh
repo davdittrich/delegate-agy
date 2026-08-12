@@ -284,11 +284,11 @@ AGY_POINTER='Complete the TASK described in your GEMINI.md context. Output only 
 START=$SECONDS
 EXIT_CODE=0
 set +e
-_EXTRA_DIRS=()
+AGY_FLAGS=(--print "$AGY_POINTER" --sandbox --model "$MODEL")
 for _d in ${ADD_DIRS[@]+"${ADD_DIRS[@]}"}; do
-    _EXTRA_DIRS+=(--add-dir "$_d")
+    AGY_FLAGS+=(--add-dir "$_d")
 done
-AGY_FLAGS=(--print "$AGY_POINTER" --sandbox --model "$MODEL" ${_EXTRA_DIRS[@]+"${_EXTRA_DIRS[@]}"} --add-dir "$WORK_DIR")
+AGY_FLAGS+=(--add-dir "$WORK_DIR")
 if [[ "${AGY_SKIP_PERMISSIONS:-0}" == "1" ]]; then
     echo "WARNING: AGY_SKIP_PERMISSIONS=1 — running with --dangerously-skip-permissions" >&2
     AGY_FLAGS+=(--dangerously-skip-permissions)
