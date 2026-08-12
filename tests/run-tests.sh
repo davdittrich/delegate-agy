@@ -1017,6 +1017,7 @@ case "$ERR_SIB" in *"1.0.0"*"1.1.0"*|*"1.1.0"*"1.0.0"*) :;; *) I16_OK=0;; esac
 [[ "$RC_NOSIB" -eq "$RC_SIB" ]] || I16_OK=0
 [[ "$ERR_GONE" != *"WARNING"* ]] || I16_OK=0
 grep -qF "_AGY_TARGET='$VROOT/agy-delegate/1.0.0/scripts/agy_bridge.sh'" "$BW" || I16_OK=0
+[[ "$(grep -c '^_AGY_TARGET=' "$BW")" -eq 1 ]] || I16_OK=0
 grep -qE '^exec -a "[^"]+" bash "\$_AGY_TARGET" "\$@"$' "$BW" || I16_OK=0
 if [[ "$I16_OK" -eq 1 ]]; then
     ok "I16 newer sibling version -> stderr warning, stdout/exit unchanged, exec target still pinned"
