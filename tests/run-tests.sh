@@ -430,28 +430,29 @@ else
 fi
 
 # ST6: .claude-plugin/plugin.json is the single source of truth for the
-# version; both command docs must match it exactly, and no stale legacy-minor
-# version literal may linger in tracked json/md (excluding beads export and
-# the spec archive). Nothing here is a frozen literal: the expected version
-# and the stale-minor range are both derived from the manifest, so the check
-# cannot go stale on the next bump.
+# plugin version; both command docs must match it exactly. Additionally, no
+# tracked json/md file may declare (not merely mention — a changelog heading
+# like "### 1.5.1" is not a declaration) any OTHER version in a
+# `"version": "X.Y.Z"` or frontmatter `version: X.Y.Z` line, excluding the
+# beads export, the spec archive, and agy.md/agy-review.md/agy-search.md
+# (whose frontmatter version is that command doc's own content revision,
+# never coupled to the plugin release — see dc4ad12/e1479a3 history). This is
+# a version-agnostic declaration scan, not a minor-number range, so it cannot
+# degenerate at any version number.
 ST6_VERSION="$(grep -m1 '"version"' "$ROOT/.claude-plugin/plugin.json" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')"
-ST6_MINOR="$(cut -d. -f2 <<<"$ST6_VERSION")"
 ST6_OK=1
 [[ -n "$ST6_VERSION" ]] || ST6_OK=0
 grep -q "version: $ST6_VERSION" "$ROOT/.claude/commands/agy-setup.md" || ST6_OK=0
 grep -q "version: $ST6_VERSION" "$ROOT/.claude/commands/agy-uninstall.md" || ST6_OK=0
-if [[ "$ST6_MINOR" -ge 3 ]]; then
-    ST6_STALE="$(cd "$ROOT" && grep -rn "1\.[$(seq -s '' 2 $((ST6_MINOR - 1)))]\.[0-9]" \
-        --include='*.json' --include='*.md' . \
-        | grep -v '/.beads/' | grep -v 'docs/superpowers/specs' | wc -l)"
-else
-    ST6_STALE=0
-fi
+ST6_STALE="$(cd "$ROOT" && grep -rnE '"version": *"[0-9]+\.[0-9]+\.[0-9]+"|^version: [0-9]+\.[0-9]+\.[0-9]+$' \
+    --include='*.json' --include='*.md' . \
+    | grep -v '/.beads/' | grep -v 'docs/superpowers/specs' \
+    | grep -Ev '/\.claude/commands/agy(-review|-search)?\.md:' \
+    | grep -Fv "$ST6_VERSION" | wc -l)"
 if [[ "$ST6_OK" -eq 1 && "$ST6_STALE" -eq 0 ]]; then
-    ok "ST6 version $ST6_VERSION in manifest+both command docs, no stale legacy minors"
+    ok "ST6 version $ST6_VERSION in manifest+both command docs, no other declared version"
 else
-    bad "ST6 version $ST6_VERSION in manifest+both command docs, no stale legacy minors" "ok=$ST6_OK stale=$ST6_STALE"
+    bad "ST6 version $ST6_VERSION in manifest+both command docs, no other declared version" "ok=$ST6_OK stale=$ST6_STALE"
 fi
 
 echo "== MCP tool-preference stanza gating (vfn T5) =="
