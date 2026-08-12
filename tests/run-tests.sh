@@ -446,7 +446,7 @@ grep -q "version: $ST6_VERSION" "$ROOT/.claude/commands/agy-setup.md" || ST6_OK=
 grep -q "version: $ST6_VERSION" "$ROOT/.claude/commands/agy-uninstall.md" || ST6_OK=0
 ST6_STALE="$(cd "$ROOT" && git grep -nE '"version": *"[0-9]+\.[0-9]+\.[0-9]+"|^version: [0-9]+\.[0-9]+\.[0-9]+$' \
     -- '*.json' '*.md' \
-    | grep -v '/.beads/' | grep -v 'docs/superpowers/specs' \
+    | grep -Ev '^\.beads/' | grep -v '^docs/superpowers/specs' \
     | grep -Ev '^\.claude/commands/agy(-review|-search)?\.md:' \
     | grep -Ev ": *\"?${ST6_VERSION}\"?,?\$" | wc -l)"
 if [[ "$ST6_OK" -eq 1 && "$ST6_STALE" -eq 0 ]]; then
