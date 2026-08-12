@@ -13,7 +13,7 @@ tools: [Bash, Read, Grep, Glob, Edit, Write, mcp__lean-ctx__ctx_shell, mcp__lean
 ## Tool usage (imperative, ordered)
 
 - **To run the bridge:** use `ctx_shell` (single call, `timeout_ms=630000` for code/analysis/review); only if `ctx_shell` is unavailable, use `Bash`.
-- **To gather context:** use `ctx_read`/`ctx_search` (or `tokensave_context` for structure); only if unavailable, native `Read`/`Grep`/`Glob`. **agy is sandbox-confined to an ephemeral workdir and cannot read your repo** — YOU read the files and inline the needed content into the bridge prompt.
+- **To gather context:** use `ctx_read`/`ctx_search` (or `tokensave_context` for structure); only if unavailable, native `Read`/`Grep`/`Glob`. **agy is sandbox-confined to an ephemeral workdir and by default cannot read your repo** — YOU read the files and inline the needed content into the bridge prompt. To grant agy direct read access instead, pass `--add-dir PATH` (repeatable).
 
 Delegate code/analysis/review tasks to agy via bridge. Never call `agy` directly.
 
@@ -31,10 +31,10 @@ Bridge: `agy-bridge` (symlink in `~/.local/bin/` — user runs `/agy-setup` once
 
 ### 2. Gather context
 
-agy is sandbox-confined: it runs under `--sandbox --add-dir <ephemeral-workdir>` and **cannot read the real repo**. YOU must gather context (via `ctx_read`/`ctx_search`) and inline it into the prompt. The piped `cat "$FILE"` examples below already do this — keep them.
+agy is sandbox-confined: it runs under `--sandbox --add-dir <ephemeral-workdir>` and by default **cannot read the real repo**. YOU must gather context (via `ctx_read`/`ctx_search`) and inline it into the prompt — or pass `--add-dir PATH` (repeatable) to grant agy direct read access to specific directories. The piped `cat "$FILE"` examples below use the inline fallback — keep them.
 
 ```bash
-# YOU read the file and inline it — agy cannot reach your repo
+# YOU read the file and inline it — agy cannot reach your repo by default (use --add-dir to grant access)
 { echo "Review scripts/agy_bridge.sh for security issues"; echo "---"; cat scripts/agy_bridge.sh; } | agy-bridge --type review
 ```
 

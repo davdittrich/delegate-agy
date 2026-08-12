@@ -268,7 +268,7 @@ EOF
     chmod +x "$RECDIR/agy"
     export PATH="$RECDIR:$PATH"
     TOKEN="ZZLEAKTOKEN42"
-    OUT="$(FAKE_AGY_ECHO_PROMPT=1 bash "$BRIDGE" --type code -- "$TOKEN" 2>/dev/null)"
+    OUT="$(FAKE_AGY_ECHO_PROMPT=1 bash "$BRIDGE" --type code --timeout 5 -- "$TOKEN" 2>/dev/null)"
     token_in_out=0;   [[ "$OUT" == *"$TOKEN"* ]] && token_in_out=1
     token_in_argv=0;  grep -q "$TOKEN" "$ARGV_LOG" && token_in_argv=1
     token_in_stdin=0; grep -q "$TOKEN" "$STDIN_LOG" && token_in_stdin=1
@@ -349,9 +349,9 @@ AD3_RESOLVED="$(cd "$AD3_ROOT/-P" && pwd)"
 AD3_ARGV="$SANDBOX/ad3_argv.log"
 : > "$AD3_ARGV"
 AD3_OLDPWD="$PWD"
-cd "$AD3_ROOT"
+cd "$AD3_ROOT" || exit 1
 FAKE_AGY_DUMP_ARGV="$AD3_ARGV" FAKE_AGY_STDOUT="ok" _run OUT RC bash "$BRIDGE" --type code --add-dir "-P" -- "hi"
-cd "$AD3_OLDPWD"
+cd "$AD3_OLDPWD" || exit 1
 AD3_TARGET_SEEN=0; grep -qF "$AD3_RESOLVED" "$AD3_ARGV" && AD3_TARGET_SEEN=1
 AD3_HOME_LEAKED=0; grep -qxF "$HOME" "$AD3_ARGV" && AD3_HOME_LEAKED=1
 if [[ "$RC" -eq 0 && "$AD3_TARGET_SEEN" -eq 1 && "$AD3_HOME_LEAKED" -eq 0 ]]; then
@@ -444,11 +444,11 @@ ST6_OK=1
 [[ -n "$ST6_VERSION" ]] || ST6_OK=0
 grep -q "version: $ST6_VERSION" "$ROOT/.claude/commands/agy-setup.md" || ST6_OK=0
 grep -q "version: $ST6_VERSION" "$ROOT/.claude/commands/agy-uninstall.md" || ST6_OK=0
-ST6_STALE="$(cd "$ROOT" && grep -rnE '"version": *"[0-9]+\.[0-9]+\.[0-9]+"|^version: [0-9]+\.[0-9]+\.[0-9]+$' \
-    --include='*.json' --include='*.md' . \
+ST6_STALE="$(cd "$ROOT" && git grep -nE '"version": *"[0-9]+\.[0-9]+\.[0-9]+"|^version: [0-9]+\.[0-9]+\.[0-9]+$' \
+    -- '*.json' '*.md' \
     | grep -v '/.beads/' | grep -v 'docs/superpowers/specs' \
-    | grep -Ev '/\.claude/commands/agy(-review|-search)?\.md:' \
-    | grep -Fv "$ST6_VERSION" | wc -l)"
+    | grep -Ev '^\.claude/commands/agy(-review|-search)?\.md:' \
+    | grep -Ev ": *\"?${ST6_VERSION}\"?,?\$" | wc -l)"
 if [[ "$ST6_OK" -eq 1 && "$ST6_STALE" -eq 0 ]]; then
     ok "ST6 version $ST6_VERSION in manifest+both command docs, no other declared version"
 else
