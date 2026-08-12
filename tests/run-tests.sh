@@ -360,6 +360,50 @@ else
     bad "AD3 --add-dir named '-P' grants itself, not \$HOME (cd -- / CDPATH= guard)" "rc=$RC target_seen=$AD3_TARGET_SEEN home_leaked=$AD3_HOME_LEAKED argv=$(cat "$AD3_ARGV")"
 fi
 
+# AD4: --add-dir "$HOME" is refused with exit 2 and the broad-grant message.
+_run OUT RC bash "$BRIDGE" --type code --add-dir "$HOME" -- "hi"
+if [[ "$RC" -eq 2 && "$OUT" == "ERROR: --add-dir '$HOME' grants broad filesystem access; set AGY_ALLOW_BROAD_GRANT=1 to override" ]]; then
+    ok "AD4 --add-dir \$HOME refused by default (exit 2, message matches)"
+else
+    bad "AD4 --add-dir \$HOME refused by default (exit 2, message matches)" "rc=$RC out=$OUT"
+fi
+
+# AD5: --add-dir / is refused with exit 2.
+_run OUT RC bash "$BRIDGE" --type code --add-dir / -- "hi"
+if [[ "$RC" -eq 2 && "$OUT" == "ERROR: --add-dir '/' grants broad filesystem access; set AGY_ALLOW_BROAD_GRANT=1 to override" ]]; then
+    ok "AD5 --add-dir / refused by default (exit 2)"
+else
+    bad "AD5 --add-dir / refused by default (exit 2)" "rc=$RC out=$OUT"
+fi
+
+# AD6: AGY_ALLOW_BROAD_GRANT=1 overrides the $HOME refusal, warns on stderr,
+# and $HOME reaches agy's argv.
+AD6_ARGV="$SANDBOX/ad6_argv.log"
+: > "$AD6_ARGV"
+FAKE_AGY_DUMP_ARGV="$AD6_ARGV" FAKE_AGY_STDOUT="ok" AGY_ALLOW_BROAD_GRANT=1 \
+    _run OUT RC bash "$BRIDGE" --type code --add-dir "$HOME" -- "hi"
+AD6_WARNED=0; [[ "$OUT" == *"WARNING: AGY_ALLOW_BROAD_GRANT=1"* ]] && AD6_WARNED=1
+AD6_HOME_SEEN=0; grep -qxF "$HOME" "$AD6_ARGV" && AD6_HOME_SEEN=1
+if [[ "$RC" -eq 0 && "$AD6_WARNED" -eq 1 && "$AD6_HOME_SEEN" -eq 1 ]]; then
+    ok "AD6 AGY_ALLOW_BROAD_GRANT=1 overrides \$HOME refusal, warns, grants \$HOME"
+else
+    bad "AD6 AGY_ALLOW_BROAD_GRANT=1 overrides \$HOME refusal, warns, grants \$HOME" "rc=$RC warned=$AD6_WARNED home_seen=$AD6_HOME_SEEN out=$OUT argv=$(cat "$AD6_ARGV")"
+fi
+
+# AD7: --add-dir "$HOME/sub" (a subdirectory) is still granted normally,
+# proving the guard is an exact-match refusal, not a prefix match.
+AD7_DIR="$HOME/sub"
+mkdir -p "$AD7_DIR"
+AD7_ARGV="$SANDBOX/ad7_argv.log"
+: > "$AD7_ARGV"
+FAKE_AGY_DUMP_ARGV="$AD7_ARGV" FAKE_AGY_STDOUT="ok" _run OUT RC bash "$BRIDGE" --type code --add-dir "$AD7_DIR" -- "hi"
+AD7_SEEN=0; grep -qxF "$AD7_DIR" "$AD7_ARGV" && AD7_SEEN=1
+if [[ "$RC" -eq 0 && "$AD7_SEEN" -eq 1 ]]; then
+    ok "AD7 --add-dir \$HOME/sub still granted (exact-match refusal only)"
+else
+    bad "AD7 --add-dir \$HOME/sub still granted (exact-match refusal only)" "rc=$RC seen=$AD7_SEEN argv=$(cat "$AD7_ARGV")"
+fi
+
 echo "== policy files: fail-closed allowlist (vfn T1) =="
 
 # ST1

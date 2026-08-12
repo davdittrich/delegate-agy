@@ -140,7 +140,7 @@ command.
 
 The skill triggers automatically inside Claude sessions. For direct use:
 
-`--add-dir` exposes everything under the granted directory to agy, not just the file(s) you care about — pass the narrowest sufficient path (a staging directory holding only the needed files keeps the grant auditable).
+`--add-dir` exposes everything under the granted directory to agy, not just the file(s) you care about — pass the narrowest sufficient path (a staging directory holding only the needed files keeps the grant auditable). `/` and `$HOME` (exact match) are refused with exit 2 unless `AGY_ALLOW_BROAD_GRANT=1` is set; subdirectories such as `$HOME/sub` are unaffected.
 
 ```bash
 # Web search with citations
@@ -218,7 +218,7 @@ The plugin installs a `SubagentStart` hook (`hooks/agy-subagent-policy.sh`, wire
 
 ## Security
 
-Don't pipe credentials, API keys, or PII through the bridge. The prompt is written to a 0600 per-run `GEMINI.md` (not passed on the command line), so it stays out of process listings. Per-type tool restrictions are prompt-advisory (not API-enforced) instructing agy not to run shell commands; the API-level floor is `--sandbox`, which confines reads/writes to the granted `--add-dir` paths — a directory granted via `--add-dir` is exposed to the provider and is writable under `--type implement`. Model names are validated at startup against a list fetched from agy and cached for 60 minutes at `~/.cache/agy-bridge-models`.
+Don't pipe credentials, API keys, or PII through the bridge. The prompt is written to a 0600 per-run `GEMINI.md` (not passed on the command line), so it stays out of process listings. Per-type tool restrictions are prompt-advisory (not API-enforced) instructing agy not to run shell commands; the API-level floor is `--sandbox`, which confines reads/writes to the granted `--add-dir` paths — a directory granted via `--add-dir` is exposed to the provider and is writable under `--type implement`. Model names are validated at startup against a list fetched from agy and cached for 60 minutes at `~/.cache/agy-bridge-models`. `--add-dir` refuses `/` and `$HOME` (exact resolved match) with exit 2 by default, overridable with `AGY_ALLOW_BROAD_GRANT=1`; this is a speed bump against the two broadest accidental grants, not a containment boundary — it does not stop, for example, a symlink under a granted subdirectory that points back at `$HOME`.
 
 The installer (`scripts/install.sh`) and uninstaller run with `set -euo pipefail`, refuse to run as root, write only under `~/.local/bin`, `~` (rc backups), `~/.config/agy-delegate`, and `~/.gemini`, and never touch the repo. The generated launcher wrappers exec a **pinned absolute path** (no user-writable cache glob, no per-invocation `claude plugin list`) and fail loud if that path is missing.
 
