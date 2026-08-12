@@ -196,6 +196,10 @@ else
     echo "ERROR: no prompt (no stdin, no -- args)" >&2; exit 2
 fi
 
+if ! grep -q '[^[:space:]]' "$PROMPT_FILE"; then
+    echo "ERROR: empty prompt" >&2; exit 2
+fi
+
 # ── Search prefix ─────────────────────────────────────────────────────────────
 if [[ "$TYPE" == "search" ]] && ! grep -q "search_web" "$PROMPT_FILE"; then
     printf 'Use your search_web tool to answer this query. Cite sources with URLs.\n\n' \

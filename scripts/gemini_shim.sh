@@ -163,7 +163,7 @@ else
     echo "ERROR: no prompt (no stdin and no positional args)" >&2; exit 2
 fi
 
-if [[ ! -s "$PROMPT_FILE" ]]; then
+if ! grep -q '[^[:space:]]' "$PROMPT_FILE"; then
     echo "ERROR: empty prompt" >&2; exit 2
 fi
 
