@@ -55,8 +55,7 @@ while [[ $# -gt 0 ]]; do
             LOG_FILE="$2"; shift 2 ;;
         --add-dir)
             [[ $# -lt 2 ]] && { echo "ERROR: --add-dir requires a value" >&2; exit 2; }
-            [[ -d "$2" ]] || { echo "ERROR: --add-dir '$2' is not a directory" >&2; exit 2; }
-            _d=$(cd "$2" && pwd) || { echo "ERROR: --add-dir '$2' is not a directory" >&2; exit 2; }
+            _d=$(CDPATH= cd -- "$2" 2>/dev/null && pwd) || { echo "ERROR: --add-dir '$2' is not a directory" >&2; exit 2; }
             ADD_DIRS+=("$_d"); shift 2 ;;
         --json)    JSON_OUTPUT=1; shift ;;
         --verbose) VERBOSE=1; shift ;;

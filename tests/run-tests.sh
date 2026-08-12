@@ -325,17 +325,39 @@ else
     bad "AD1 caller --add-dir reaches agy, stays before trailing WORK_DIR --add-dir" "rc=$RC caller_seen=$AD1_CALLER_SEEN last=$AD1_LAST_ADDDIR_VAL out=$OUT argv=$(cat "$AD1_ARGV")"
 fi
 
-# AD2: --add-dir with a non-directory path is rejected at parse time (exit 2)
-# by the -d guard BEFORE the cd fallback ever runs. Asserted via EXACT output
-# match (not substring): if the -d guard is dropped, the cd fallback still
-# rejects the path but leaks an extra "cd: ...: No such file or directory"
-# line to stderr first — an exact match catches that, a substring match would not.
+# AD2: --add-dir with a non-directory path is rejected (exit 2) by the
+# `cd -- ... 2>/dev/null` guard. Asserted via EXACT output match (not
+# substring): if the 2>/dev/null were dropped, `cd`'s own
+# "cd: ...: No such file or directory" line would leak to stderr first — an
+# exact match catches that, a substring match would not.
 AD2_BAD="$SANDBOX/add-dir-missing"
 _run OUT RC bash "$BRIDGE" --type code --add-dir "$AD2_BAD" -- "hi"
 if [[ "$RC" -eq 2 && "$OUT" == "ERROR: --add-dir '$AD2_BAD' is not a directory" ]]; then
-    ok "AD2 --add-dir rejects non-directory path via -d guard (exit 2, no cd leak)"
+    ok "AD2 --add-dir rejects non-directory path (exit 2, no cd stderr leak)"
 else
-    bad "AD2 --add-dir rejects non-directory path via -d guard (exit 2, no cd leak)" "rc=$RC out=$OUT"
+    bad "AD2 --add-dir rejects non-directory path (exit 2, no cd stderr leak)" "rc=$RC out=$OUT"
+fi
+
+# AD3: a directory literally named "-P", passed as a bare relative arg, must
+# be granted as itself, not parsed as a `cd` option (which would silently
+# land on $HOME and over-grant it). The relative form is required to
+# reproduce: an absolute path merely ending in "/-P" never reaches cd's
+# option parser.
+AD3_ROOT="$SANDBOX/ad3root"
+mkdir -p "$AD3_ROOT/-P"
+AD3_RESOLVED="$(cd "$AD3_ROOT/-P" && pwd)"
+AD3_ARGV="$SANDBOX/ad3_argv.log"
+: > "$AD3_ARGV"
+AD3_OLDPWD="$PWD"
+cd "$AD3_ROOT"
+FAKE_AGY_DUMP_ARGV="$AD3_ARGV" FAKE_AGY_STDOUT="ok" _run OUT RC bash "$BRIDGE" --type code --add-dir "-P" -- "hi"
+cd "$AD3_OLDPWD"
+AD3_TARGET_SEEN=0; grep -qF "$AD3_RESOLVED" "$AD3_ARGV" && AD3_TARGET_SEEN=1
+AD3_HOME_LEAKED=0; grep -qxF "$HOME" "$AD3_ARGV" && AD3_HOME_LEAKED=1
+if [[ "$RC" -eq 0 && "$AD3_TARGET_SEEN" -eq 1 && "$AD3_HOME_LEAKED" -eq 0 ]]; then
+    ok "AD3 --add-dir named '-P' grants itself, not \$HOME (cd -- / CDPATH= guard)"
+else
+    bad "AD3 --add-dir named '-P' grants itself, not \$HOME (cd -- / CDPATH= guard)" "rc=$RC target_seen=$AD3_TARGET_SEEN home_leaked=$AD3_HOME_LEAKED argv=$(cat "$AD3_ARGV")"
 fi
 
 echo "== policy files: fail-closed allowlist (vfn T1) =="
