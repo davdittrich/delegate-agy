@@ -7,9 +7,11 @@
 #   - gemini     : execs this plugin's scripts/gemini_shim.sh (drop-in shim)
 #
 # SECURITY MODEL
-#   - Wrappers exec a PINNED ABSOLUTE PATH recorded at install time. They do NOT
-#     glob ~/.claude/plugins/cache (user-writable = exec-hijack) and do NOT call
-#     `claude plugin list` per invocation. If the pinned target vanishes (plugin
+#   - Wrappers exec a PINNED ABSOLUTE PATH recorded at install time. The EXEC
+#     TARGET is never derived from a cache glob (user-writable = exec-hijack)
+#     and never from `claude plugin list` per invocation — only from the
+#     install-time literal. (A sibling-version glob may run to print a stderr
+#     warning; it never feeds exec.) If the pinned target vanishes (plugin
 #     updated/moved) the wrapper FAILS LOUD and tells the user to re-run install.
 #   - refuse-root; set -euo pipefail; every expansion quoted; [[ ]] not [ ].
 #   - writes ONLY under ~/.local/bin, ~ (rc backups), ~/.config/agy-delegate,
@@ -61,7 +63,7 @@ is_our_wrapper() {
 
 # write_wrapper NAME PINNED_TARGET DEST
 # Emits a pinned-path launcher: fail-loud on missing target, validate regular
-# file, exec -a sets the launcher argv0; the shim resolves its own path via BASH_SOURCE. NO cache glob, NO per-call claude list.
+# file, exec -a sets the launcher argv0; the shim resolves its own path via BASH_SOURCE. NO cache glob or claude list feeds the EXEC TARGET (a sibling-version glob may run, stderr-warn only).
 # The exec target is always the pinned literal above; the newer-sibling check
 # below only ever WARNS on stderr, it never feeds the exec path.
 write_wrapper() {
@@ -104,17 +106,19 @@ fi
 # when the pinned version dir's own name looks like a version (skips dev/test
 # installs where the plugin root isn't under a versioned cache layout).
 if [[ "\$_AGY_VERSION" =~ ^[0-9]+(\.[0-9]+)*\$ ]]; then
+    _agy_versions=("\$_AGY_VERSION")
     for _agy_sibling in "\$_AGY_VERSIONS_ROOT"/*/; do
         [[ -d "\$_agy_sibling" ]] || continue
         _agy_sibling_ver="\${_agy_sibling%/}"
         _agy_sibling_ver="\${_agy_sibling_ver##*/}"
         [[ "\$_agy_sibling_ver" =~ ^[0-9]+(\.[0-9]+)*\$ ]] || continue
-        [[ "\$_agy_sibling_ver" == "\$_AGY_VERSION" ]] && continue
-        if [[ "\$(printf '%s\n' "\$_agy_sibling_ver" "\$_AGY_VERSION" | sort -V | tail -n1)" == "\$_agy_sibling_ver" ]]; then
-            echo "WARNING: agy-delegate \$_AGY_VERSION is pinned but a newer version '\$_agy_sibling_ver' is also installed in '\$_AGY_VERSIONS_ROOT'." >&2
-            echo "         Still running the pinned \$_AGY_VERSION copy. Re-run the install one-liner (see /agy-setup) to repin \$_agy_sibling_ver." >&2
-        fi
+        _agy_versions+=("\$_agy_sibling_ver")
     done
+    _agy_max="\$(printf '%s\n' "\${_agy_versions[@]}" | sort -V | tail -n1)"
+    if [[ "\$_agy_max" != "\$_AGY_VERSION" ]]; then
+        echo "WARNING: agy-delegate \$_AGY_VERSION is pinned but a newer version '\$_agy_max' is also installed in '\$_AGY_VERSIONS_ROOT'." >&2
+        echo "         Still running the pinned \$_AGY_VERSION copy. Re-run the install one-liner (see /agy-setup) to repin \$_agy_max." >&2
+    fi
 fi
 exec -a "$name" bash "\$_AGY_TARGET" "\$@"
 WRAP
