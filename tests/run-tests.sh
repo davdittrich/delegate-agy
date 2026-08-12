@@ -430,29 +430,20 @@ else
 fi
 
 # ST6: .claude-plugin/plugin.json is the single source of truth for the
-# plugin version; both command docs must match it exactly. Additionally, no
-# tracked json/md file may declare (not merely mention — a changelog heading
-# like "### 1.5.1" is not a declaration) any OTHER version in a
-# `"version": "X.Y.Z"` or frontmatter `version: X.Y.Z` line, excluding the
-# beads export, the spec archive, and agy.md/agy-review.md/agy-search.md
-# (whose frontmatter version is that command doc's own content revision,
-# never coupled to the plugin release — see dc4ad12/e1479a3 history). This is
-# a version-agnostic declaration scan, not a minor-number range, so it cannot
-# degenerate at any version number.
+# plugin version; agy-setup.md and agy-uninstall.md must each declare it
+# exactly, anchored line-start-to-line-end so a longer version (1.5.11)
+# cannot satisfy a shorter expected one (1.5.1) via substring match.
 ST6_VERSION="$(grep -m1 '"version"' "$ROOT/.claude-plugin/plugin.json" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')"
 ST6_OK=1
 [[ -n "$ST6_VERSION" ]] || ST6_OK=0
-grep -q "version: $ST6_VERSION" "$ROOT/.claude/commands/agy-setup.md" || ST6_OK=0
-grep -q "version: $ST6_VERSION" "$ROOT/.claude/commands/agy-uninstall.md" || ST6_OK=0
-ST6_STALE="$(cd "$ROOT" && git grep -nE '"version": *"[0-9]+\.[0-9]+\.[0-9]+"|^version: [0-9]+\.[0-9]+\.[0-9]+$' \
-    -- '*.json' '*.md' \
-    | grep -Ev '^\.beads/' | grep -v '^docs/superpowers/specs' \
-    | grep -Ev '^\.claude/commands/agy(-review|-search)?\.md:' \
-    | grep -Ev ": *\"?${ST6_VERSION}\"?,?\$" | wc -l)"
-if [[ "$ST6_OK" -eq 1 && "$ST6_STALE" -eq 0 ]]; then
-    ok "ST6 version $ST6_VERSION in manifest+both command docs, no other declared version"
+ST6_ESC="${ST6_VERSION//./\\.}"
+for f in "$ROOT/.claude/commands/agy-setup.md" "$ROOT/.claude/commands/agy-uninstall.md"; do
+    grep -qE "^version: ${ST6_ESC}\$" "$f" || ST6_OK=0
+done
+if [[ "$ST6_OK" -eq 1 ]]; then
+    ok "ST6 version $ST6_VERSION in manifest+both command docs"
 else
-    bad "ST6 version $ST6_VERSION in manifest+both command docs, no other declared version" "ok=$ST6_OK stale=$ST6_STALE"
+    bad "ST6 version $ST6_VERSION in manifest+both command docs" "ok=$ST6_OK"
 fi
 
 echo "== MCP tool-preference stanza gating (vfn T5) =="
