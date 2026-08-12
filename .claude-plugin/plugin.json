@@ -1,6 +1,6 @@
 {
   "name": "agy-delegate",
-  "version": "1.5.1",
+  "version": "1.6.0",
   "description": "Delegate web searches and tasks to agy (Google Antigravity CLI). Routes through Gemini with native web grounding and source citations.",
   "author": {
     "name": "Dennis Dittrich",

@@ -323,6 +323,15 @@ config/policies/               — GEMINI.md tool restriction policies (one file
 
 ## Changelog
 
+### 1.6.0
+
+- `agy-bridge` gains repeatable `--add-dir PATH` passthrough, granting the delegated model read access to caller-chosen directories without inlining file bodies into the prompt.
+- `--add-dir` refuses the two broadest grants — `/` and `$HOME` (exact resolved match) — with exit 2, overridable via `AGY_ALLOW_BROAD_GRANT=1`; a trailing-slash bypass on `$HOME` and unguarded `cd` option/CDPATH injection on `-`-leading directory names are both closed.
+- `gemini_shim.sh`'s stdin prompt read is now timeout-bounded (`GEMINI_SHIM_STDIN_TIMEOUT`, default 30s, validated against `^[1-9][0-9]*$`), mirroring the bridge and preventing a never-EOF pipe from hanging every agent session that shells out to `gemini`.
+- Both wrappers reject whitespace-only prompts with exit 2 before search-prefix/digest augmentation, instead of silently forwarding an effectively empty prompt to agy and burning a paid call.
+- Fixed an inherited-stdin hang: both wrappers now redirect agy's stdin from `/dev/null` since the prompt is already consumed into `GEMINI.md` before agy runs.
+- Corrected the README/SKILL.md `--sandbox` scope claim: it is the API-level floor bounding reads/writes to granted `--add-dir` paths, not a read-only/no-shell-exec guarantee — that expectation is prompt-advisory only and does not hold under `--type implement`.
+
 ### 1.5.1
 
 - Bridge resolves each `--type` to the **latest** matching Gemini id from the live `agy models` list at runtime, replacing a pinned model name that drifted from agy's output. Fixes `agy-bridge --type search` (and all types) failing with `unknown --model` on agy 1.5.0.
