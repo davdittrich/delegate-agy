@@ -44,7 +44,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 ### Phase 1.5: Contract check against a real agy
 **Goal**: An operator can ask the real binary which assumptions hold and get either a recorded answer or an honest "could not ask" — and the later phases build on the recorded answers rather than on hypotheses.
-**Depends on**: Nothing (read-only against the installed `agy`; independent of Phase 1)
+**Depends on**: Nothing
 **Requirements**: S5
 **Tickets**: `delegate-agy-xfa` (P1). `delegate-agy-9qp` (P2) carries the probe evidence that motivated this phase's move and closes when its doc corrections land. `delegate-agy-62x`, which raised the id-vs-display-name question and was closed without ever being verified, is answered by criterion 1.
 **Success Criteria** (what must be TRUE):
@@ -58,7 +58,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 ### Phase 2: Model-list handling, end to end
 **Goal**: A bare environment cannot crash the bridge, and one bad `agy models` reply cannot degrade the other tool or blame the user for it.
-**Depends on**: Phase 1.5 (its fixtures are what criterion 4's "byte-identical to what shipped" is checked against; independent of Phase 1 — different code region in the same two files)
+**Depends on**: Phase 1.5
 **Requirements**: S1, S4
 **Tickets**: `delegate-agy-30m` (P1), `delegate-agy-8ph` (P2)
 **Success Criteria** (what must be TRUE):
@@ -69,6 +69,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: TBD
 
 **Note**: `delegate-agy-8ph` forbids a one-sided fix and forbids changing the 60-minute TTL as a substitute. Both writers change together or neither does.
+
+**On the Phase 1.5 dependency**: 1.5's recorded fixtures are what criterion 4's "byte-identical to what shipped" is checked against — without them this phase re-asserts a hypothesis about `agy models` output rather than a fact. Otherwise this phase is independent of Phase 1: same two files, different code region.
 
 ### Phase 3: The exit-code contract
 **Goal**: Every documented exit code is reachable, means exactly one thing, and the docs quote the message the code actually prints.
@@ -98,7 +100,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 ### Phase 5: The shim's failure-mode contract
 **Goal**: An operator can read exactly what `gemini` does to a caller that has never heard of agy, for every way this plugin fails.
-**Depends on**: Phases 1, 1.5, 2, 3, 4 (each settles one of the four failure modes this phase pins down; 1.5 supplies the real-agy behavior the "hung agy" and "unparseable model list" rows are written against)
+**Depends on**: Phases 1, 1.5, 2, 3, 4
 **Requirements**: S3
 **Tickets**: none open — this phase states the contract the earlier phases make true
 **Success Criteria** (what must be TRUE):
@@ -107,6 +109,8 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Every row where the shim and bridge differ states why in one line, and no row differs without a stated reason.
   4. An unrecognized model name still passes through to agy unchanged — the shim warns or degrades but never hard-rejects input it merely does not recognize.
 **Plans**: TBD
+
+**Note**: each dependency settles one of the four failure modes this phase pins down. Phase 1.5 supplies the real-agy behavior the "hung agy" and "unparseable model list" rows are written against, so those rows describe what agy does rather than what it was assumed to do.
 
 ### Phase 6: Ship 1.6.2
 **Goal**: The held release lands on master with every follow-up it surfaced already closed.
