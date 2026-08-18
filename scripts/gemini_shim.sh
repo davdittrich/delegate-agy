@@ -59,8 +59,19 @@ SHIM_TIMEOUT="${GEMINI_SHIM_TIMEOUT:-600}"
 # ~/.local/bin/gemini and shadows the real gemini for every caller on PATH, so a
 # missing helper would break `gemini` box-wide. ~20 duplicated lines is the
 # cheaper failure mode. Behavior is pinned by tests (R4, SH7-SH11) either way.
+# A non-positive-integer bound is CORRECTED, not rejected: coreutils timeout
+# documents "A duration of 0 disables the associated timeout", so passing 0
+# through would reintroduce the unbounded hang this release exists to fix.
+# agy_bridge.sh exits 2 on the same value; this script shadows `gemini` for
+# every caller on PATH and must not hard-exit over an optional knob, so it
+# falls back to the default instead.
 AGY_MODELS_TIMEOUT="${AGY_MODELS_TIMEOUT:-20}"
-MODELS_CACHE="$HOME/.cache/agy-bridge-models"
+[[ "$AGY_MODELS_TIMEOUT" =~ ^[1-9][0-9]*$ ]] || AGY_MODELS_TIMEOUT=20
+# ${HOME:-} — this runs under `set -u` before any flag is parsed, and the shim
+# is reached with HOME unset by systemd units without User=, `env -i`, container
+# entrypoints and CI runners. An unwritable cache path degrades to
+# fetch-every-time via the || true guards below; it may never abort `gemini`.
+MODELS_CACHE="${HOME:-/nonexistent}/.cache/agy-bridge-models"
 LIVE_MODELS=""
 
 # Echo the live model ids, one per line, or nothing if agy is unreachable and no
@@ -72,19 +83,21 @@ load_models() {
         # Third agy call site in this script, bounded like the other two. agy
         # ignores SIGTERM (observed, see scripts/agy_bridge.sh), so `-k`
         # escalates to SIGKILL; a plain `timeout` would hand the shim the very
-        # hang this release exists to fix. A malformed AGY_MODELS_TIMEOUT is not
-        # rejected at startup the way the two other bounds are: this call is
-        # optional, so a bad value degrades to the cache instead of breaking
-        # `gemini` for every caller on PATH.
+        # hang this release exists to fix. AGY_MODELS_TIMEOUT is guaranteed a
+        # positive integer by the check above.
         if [[ -n "$TIMEOUT_BIN" ]]; then
             raw=$("$TIMEOUT_BIN" -k 3 "$AGY_MODELS_TIMEOUT" "$AGY_BIN" models </dev/null 2>/dev/null) || raw=""
         else
             raw=$("$AGY_BIN" models </dev/null 2>/dev/null) || raw=""
         fi
         if [[ -n "$raw" ]]; then
+            # stderr suppressed across the whole write: an unwritable cache dir
+            # (HOME unset, read-only FS) otherwise makes bash print the failed
+            # redirect on every single invocation. Caching is best-effort — the
+            # fetched list in $raw is already usable without it.
             mkdir -p "${MODELS_CACHE%/*}" 2>/dev/null || true
-            printf '%s' "$raw" > "$MODELS_CACHE.tmp.$$" \
-                && mv "$MODELS_CACHE.tmp.$$" "$MODELS_CACHE" || true
+            { printf '%s' "$raw" > "$MODELS_CACHE.tmp.$$" \
+                && mv "$MODELS_CACHE.tmp.$$" "$MODELS_CACHE"; } 2>/dev/null || true
             chmod 600 "$MODELS_CACHE" 2>/dev/null || true
         fi
     fi
@@ -118,11 +131,13 @@ print(json.load(open(sys.argv[1])).get(sys.argv[2], ''))
     fi
     # Unresolvable: pass through unchanged. This shim shadows the system
     # `gemini`, so refusing a name it does not recognise would break callers
-    # using models this map has never heard of. Warn only when a live list
-    # exists to contradict the name — with no list everything looks unknown and
-    # the warning would be pure noise on an already-degraded path.
-    if [[ -n "$LIVE_MODELS" ]]; then
-        echo "WARNING: model '$m' is not a known alias and not in the agy model list; passing it through unchanged" >&2
+    # using models this map has never heard of. Warn only on a list that
+    # actually contains gemini ids: with no list, or with the gemini-less reply
+    # a degraded/unauthenticated agy returns (agy_bridge.sh treats that as
+    # fatal), every name looks unknown — including real aliases — and the
+    # warning would be noise on an already-degraded path, cached for 60 minutes.
+    if printf '%s\n' "$LIVE_MODELS" | grep -q '^gemini-'; then
+        echo "WARNING: model '$m' did not resolve against the agy model list; passing it through unchanged" >&2
     fi
     printf '%s\n' "$m"
 }

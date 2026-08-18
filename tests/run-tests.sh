@@ -893,15 +893,26 @@ rm -f "$_SHIM_CACHE"
 # system `gemini` on PATH for Octopus/Metaswarm; rejecting a name it does not
 # know would break every caller using a model this map has never heard of. It
 # warns (a live list contradicts the name) but must not rewrite or refuse it.
+# stdout and stderr are captured SEPARATELY here, not via _run (which merges
+# them): the warning must reach stderr and must NOT touch stdout. A regression
+# to a plain `echo` would corrupt the --output-format json envelope Metaswarm
+# parses, and a merged capture cannot tell the two cases apart.
 SH9_DUMP="$SANDBOX/sh9_argv.log"
+SH9_OUT="$SANDBOX/sh9.out"
+SH9_ERR="$SANDBOX/sh9.err"
 : > "$SH9_DUMP"
-FAKE_AGY_DUMP_ARGV="$SH9_DUMP" FAKE_AGY_STDOUT="ok" _run OUT RC bash "$SHIM" -m zzz-unknown-model -p x
+FAKE_AGY_DUMP_ARGV="$SH9_DUMP" FAKE_AGY_STDOUT="ok" \
+    bash "$SHIM" -m zzz-unknown-model -p x > "$SH9_OUT" 2> "$SH9_ERR"
+RC=$?
 SH9_ID="$(awk '/^--model$/{getline; print; exit}' "$SH9_DUMP")"
-if [[ "$RC" -eq 0 && "$OUT" == *"ok"* && "$SH9_ID" == "zzz-unknown-model" && "$OUT" == *"WARNING"* ]]; then
-    ok "SH9 unknown model still reaches agy unchanged, with a warning (leniency preserved)"
+if [[ "$RC" -eq 0 && "$SH9_ID" == "zzz-unknown-model" ]] \
+   && grep -q 'ok' "$SH9_OUT" \
+   && grep -q 'WARNING' "$SH9_ERR" \
+   && ! grep -q 'WARNING' "$SH9_OUT"; then
+    ok "SH9 unknown model reaches agy unchanged; warning on stderr only, never stdout"
 else
-    bad "SH9 unknown model still reaches agy unchanged, with a warning (leniency preserved)" \
-        "rc=$RC model=$SH9_ID out=$OUT"
+    bad "SH9 unknown model reaches agy unchanged; warning on stderr only, never stdout" \
+        "rc=$RC model=$SH9_ID stdout=$(cat "$SH9_OUT") stderr=$(cat "$SH9_ERR")"
 fi
 rm -f "$_SHIM_CACHE"
 
@@ -931,19 +942,88 @@ rm -f "$_SHIM_CACHE"
 # With no cache to fall back to, the shim must still deliver the prompt with
 # the name passed through untouched -- an unreachable model list may not be
 # allowed to fail, or stall, a `gemini` that shadows the system binary.
+# The invocation is wrapped in `timeout 30` so an unbounded-fetch regression
+# fails the suite in 30s instead of stalling it for the fixture's full 300s
+# sleep. rc=124 from that outer bound IS the failure signal, and the elapsed
+# assertion below still distinguishes "returned fast" from "returned at all".
 rm -f "$_SHIM_CACHE"
 _SH11_START=$(date +%s)
 SH11_DUMP="$SANDBOX/sh11_argv.log"
 : > "$SH11_DUMP"
 FAKE_AGY_MODELS_HANG=1 AGY_MODELS_TIMEOUT=2 FAKE_AGY_DUMP_ARGV="$SH11_DUMP" FAKE_AGY_STDOUT="ok" \
-    _run OUT RC bash "$SHIM" -m flash -p x
+    _run OUT RC timeout 30 bash "$SHIM" -m flash -p x
 _SH11_ELAPSED=$(( $(date +%s) - _SH11_START ))
 SH11_ID="$(awk '/^--model$/{getline; print; exit}' "$SH11_DUMP")"
-if [[ "$RC" -eq 0 && "$_SH11_ELAPSED" -lt 40 && "$SH11_ID" == "flash" && "$OUT" != *"WARNING"* ]]; then
+if [[ "$RC" -eq 0 && "$_SH11_ELAPSED" -lt 25 && "$SH11_ID" == "flash" && "$OUT" != *"WARNING"* ]]; then
     ok "SH11 hung 'agy models' is killed; shim degrades to pass-through, does not hang"
 else
     bad "SH11 hung 'agy models' is killed; shim degrades to pass-through, does not hang" \
         "rc=$RC elapsed=${_SH11_ELAPSED}s model=$SH11_ID out=$OUT"
+fi
+rm -f "$_SHIM_CACHE"
+
+# SH12: HOME unset must not break the shim (regression guard). The model cache
+# lives under $HOME, but this script runs under `set -u` and shadows the system
+# `gemini` for every caller on PATH -- systemd units without User=, `env -i`
+# invocations, container entrypoints and CI runners all reach it with no HOME.
+# An unresolvable cache path must degrade to fetch-every-time, exactly as every
+# other line on this path degrades, and never abort before flag parsing.
+# stderr is asserted EMPTY, not merely free of "unbound variable": an
+# unwritable cache path makes bash report the failed redirect on every call,
+# which would put a scary line into every caller's log for a degradation the
+# shim handles fine. Caching is best-effort; failing to cache is not an event.
+SH12_RC=0
+SH12_OUT="$( unset HOME; bash "$SHIM" --version 2>"$SANDBOX/sh12a.err" )" || SH12_RC=$?
+SH12_RC2=0
+SH12_OUT2="$( unset HOME; FAKE_AGY_STDOUT="ok" bash "$SHIM" -m flash -p x 2>"$SANDBOX/sh12b.err" )" || SH12_RC2=$?
+SH12_ERR="$(cat "$SANDBOX/sh12a.err" "$SANDBOX/sh12b.err")"
+if [[ "$SH12_RC" -eq 0 && "$SH12_OUT" == *"agy 0.0.0-fake"* \
+      && "$SH12_RC2" -eq 0 && "$SH12_OUT2" == *"ok"* \
+      && -z "$SH12_ERR" ]]; then
+    ok "SH12 HOME unset still runs (--version and a delegation), silently"
+else
+    bad "SH12 HOME unset still runs (--version and a delegation), silently" \
+        "rc=$SH12_RC out=$SH12_OUT rc2=$SH12_RC2 out2=$SH12_OUT2 stderr=$SH12_ERR"
+fi
+rm -f "$_SHIM_CACHE"
+
+# SH13: AGY_MODELS_TIMEOUT=0 must NOT disable the bound. coreutils timeout
+# documents "A duration of 0 disables the associated timeout", so passing it
+# through reintroduces the exact unbounded hang this release exists to fix --
+# in the PATH-shadowing script. Every non-positive-integer value falls back to
+# the default instead. agy_bridge.sh rejects the same value outright; the shim
+# may not hard-exit, so it corrects it. Wrapped in `timeout 30` to fail fast.
+rm -f "$_SHIM_CACHE"
+_SH13_START=$(date +%s)
+FAKE_AGY_MODELS_HANG=1 AGY_MODELS_TIMEOUT=0 FAKE_AGY_STDOUT="ok" \
+    _run OUT RC timeout 30 bash "$SHIM" -m flash -p x
+_SH13_ELAPSED=$(( $(date +%s) - _SH13_START ))
+if [[ "$RC" -eq 0 && "$_SH13_ELAPSED" -lt 29 && "$OUT" == *"ok"* ]]; then
+    ok "SH13 AGY_MODELS_TIMEOUT=0 does not disable the fetch bound"
+else
+    bad "SH13 AGY_MODELS_TIMEOUT=0 does not disable the fetch bound" \
+        "rc=$RC elapsed=${_SH13_ELAPSED}s out=$OUT"
+fi
+rm -f "$_SHIM_CACHE"
+
+# SH14: a model list with no gemini ids is a degraded/unauthenticated agy
+# (agy_bridge.sh treats it as fatal), NOT evidence about any particular name.
+# The shim caches that reply, so an ungated warning would then declare every
+# name unknown -- including real aliases like `flash` -- for a full 60 minutes.
+rm -f "$_SHIM_CACHE"
+SH14_OUT="$SANDBOX/sh14.out"
+SH14_ERR="$SANDBOX/sh14.err"
+SH14_DUMP="$SANDBOX/sh14_argv.log"
+: > "$SH14_DUMP"
+FAKE_AGY_MODELS_GARBAGE=1 FAKE_AGY_DUMP_ARGV="$SH14_DUMP" FAKE_AGY_STDOUT="ok" \
+    bash "$SHIM" -m flash -p x > "$SH14_OUT" 2> "$SH14_ERR"
+SH14_RC=$?
+SH14_ID="$(awk '/^--model$/{getline; print; exit}' "$SH14_DUMP")"
+if [[ "$SH14_RC" -eq 0 && "$SH14_ID" == "flash" ]] && ! grep -q 'WARNING' "$SH14_ERR"; then
+    ok "SH14 a gemini-less model list is not treated as evidence a name is unknown"
+else
+    bad "SH14 a gemini-less model list is not treated as evidence a name is unknown" \
+        "rc=$SH14_RC model=$SH14_ID stderr=$(cat "$SH14_ERR")"
 fi
 rm -f "$_SHIM_CACHE"
 

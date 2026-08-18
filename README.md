@@ -267,6 +267,8 @@ The installer (`scripts/install.sh`) and uninstaller run with `set -euo pipefail
 | Variable | Default | Notes |
 |----------|---------|-------|
 | `GEMINI_SHIM_STDIN_TIMEOUT` | `30` | Seconds to wait for stdin before failing (exit 2). Must match `^[1-9][0-9]*$`; anything else is rejected at startup. If no `timeout`/`gtimeout` binary is on PATH, the read is unbounded regardless of this value. |
+| `GEMINI_SHIM_TIMEOUT` | `600` | Seconds to wait for the agy delegation call, escalated to `SIGKILL` 5s after `SIGTERM` (agy ignores `SIGTERM`). Exceeding it exits 124. Must match `^[1-9][0-9]*$`; anything else is rejected at startup. If no `timeout`/`gtimeout` binary is on PATH, the call is unbounded regardless of this value. |
+| `AGY_MODELS_TIMEOUT` | `20` | Seconds to wait for the `agy models` fetch that resolves model names, escalated to `SIGKILL` after 3s. Shared with `agy_bridge.sh`. Anything not matching `^[1-9][0-9]*$` — including `0`, which coreutils `timeout` treats as "no timeout" — is **corrected to 20 rather than rejected**: an optional knob must not stop a `gemini` that shadows the system binary. Exceeding it is not fatal; the shim falls back to the cache and then to passing the name through. If no `timeout`/`gtimeout` binary is on PATH, the fetch is unbounded regardless of this value. |
 
 ### Model name mapping
 
@@ -295,9 +297,12 @@ Values must be classes, never ids or display names: a pinned name goes stale the
 day agy ships a new model.
 
 The live list is cached for 60 minutes in `~/.cache/agy-bridge-models`, shared
-with `agy_bridge.sh`. `AGY_MODELS_TIMEOUT` (default `20`s) bounds the fetch. If
-agy is unreachable and no cache exists, names pass through untouched rather than
-failing — this shim shadows the system `gemini` for every caller on `PATH`.
+with `agy_bridge.sh`, and fetched only when a model is actually requested
+(`--help`, `--version` and model-less calls never fetch). The fetch is bounded by
+`AGY_MODELS_TIMEOUT` (see the table above). If agy is unreachable and no cache
+exists — or `HOME` is unset, or agy returns a list with no `gemini-` ids — names
+pass through untouched rather than failing, and no warning is emitted: this shim
+shadows the system `gemini` for every caller on `PATH`.
 
 ### Manual installation
 
