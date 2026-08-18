@@ -270,22 +270,34 @@ The installer (`scripts/install.sh`) and uninstaller run with `set -euo pipefail
 
 ### Model name mapping
 
-| gemini name | agy model |
-|-------------|-----------|
-| `pro` (Metaswarm default) | `Gemini 3.1 Pro (High)` |
-| `gemini-pro` / `gemini-3.1-pro` / `gemini-3.1-pro-high` | `Gemini 3.1 Pro (High)` |
-| `gemini-3.1-pro-low` | `Gemini 3.1 Pro (Low)` |
-| `flash` / `gemini-flash` | `Gemini 3.6 Flash (High)` |
-| `gemini-3.6-flash` / `gemini-3.6-flash-high` | `Gemini 3.6 Flash (High)` |
-| `gemini-3.6-flash-medium` | `Gemini 3.6 Flash (Medium)` |
-| `gemini-3.6-flash-low` | `Gemini 3.6 Flash (Low)` |
-| `gemini-3.5-flash` / `gemini-3.5-flash-high` | `Gemini 3.5 Flash (High)` |
-| `gemini-3.5-flash-medium` | `Gemini 3.5 Flash (Medium)` |
-| `gemini-3.5-flash-low` | `Gemini 3.5 Flash (Low)` |
-| `gemini-2.5-pro` / `gemini-2.5-flash` (legacy) | `Gemini 3.1 Pro (High)` / `Gemini 3.6 Flash (High)` |
-| any other string | pass through unchanged |
+Model names are resolved against the **live `agy models` list**, never against a
+hardcoded version. `config/model-map.json` maps a gemini name to a model *class*;
+the shim then picks the newest live id matching `gemini-<version>-<class>` — the
+same `sort -V | tail -1` rule `agy_bridge.sh` uses for `--type`. A new agy model
+generation is picked up automatically, with no edit to this repo.
 
-Mappings are in `config/model-map.json` — add aliases there without touching scripts.
+| gemini name | agy class | resolves to |
+|-------------|-----------|-------------|
+| `pro` (Metaswarm default) | `pro-high` | newest `gemini-*-pro-high` |
+| `gemini-pro` / `gemini-3.1-pro` / `gemini-3.1-pro-high` | `pro-high` | newest `gemini-*-pro-high` |
+| `gemini-3.1-pro-low` | `pro-low` | newest `gemini-*-pro-low` |
+| `flash` / `gemini-flash` | `flash-high` | newest `gemini-*-flash-high` |
+| `gemini-3.6-flash` / `gemini-3.6-flash-high` | `flash-high` | newest `gemini-*-flash-high` |
+| `gemini-3.6-flash-medium` / `gemini-3.5-flash-medium` | `flash-medium` | newest `gemini-*-flash-medium` |
+| `gemini-3.6-flash-low` / `gemini-3.5-flash-low` | `flash-low` | newest `gemini-*-flash-low` |
+| `gemini-3.5-flash` / `gemini-3.5-flash-high` | `flash-high` | newest `gemini-*-flash-high` |
+| `gemini-2.5-pro` / `gemini-2.5-flash` (legacy) | `pro-high` / `flash-high` | newest of that class |
+| a name that is a live agy id | — | itself, unchanged (an explicit pin is never upgraded) |
+| any other string | — | pass through unchanged, with a warning on stderr |
+
+Aliases are in `config/model-map.json` — add them there without touching scripts.
+Values must be classes, never ids or display names: a pinned name goes stale the
+day agy ships a new model.
+
+The live list is cached for 60 minutes in `~/.cache/agy-bridge-models`, shared
+with `agy_bridge.sh`. `AGY_MODELS_TIMEOUT` (default `20`s) bounds the fetch. If
+agy is unreachable and no cache exists, names pass through untouched rather than
+failing — this shim shadows the system `gemini` for every caller on `PATH`.
 
 ### Manual installation
 
@@ -326,7 +338,7 @@ scripts/agy_bridge.sh          — typed bridge (execed by the ~/.local/bin/agy-
 scripts/gemini_shim.sh         — drop-in gemini CLI shim (execed by the ~/.local/bin/gemini wrapper)
 skills/agy-delegate/SKILL.md   — skill definition
 config/provider.md             — provider details, auth, timeout guidance
-config/model-map.json          — gemini alias → agy model name mapping table
+config/model-map.json          — gemini alias → agy model class (resolved live, never pinned)
 config/policies/               — GEMINI.md tool restriction policies (one file per mode)
   search.md                    — web search only
   code.md                      — read + grep, no writes

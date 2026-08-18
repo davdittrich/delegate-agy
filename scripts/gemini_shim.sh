@@ -45,18 +45,86 @@ SHIM_TIMEOUT="${GEMINI_SHIM_TIMEOUT:-600}"
 }
 
 # ── Model name mapping ────────────────────────────────────────────────────────
-# Maps gemini CLI model names/aliases → agy model names.
-# Mappings are in config/model-map.json — update there without touching scripts.
-# Run `agy models` to see current agy model list.
+# Maps gemini CLI model names/aliases → agy model ids, resolved against the LIVE
+# `agy models` list. config/model-map.json holds alias → model CLASS (pro-high,
+# flash-high, …); the version is never written down anywhere, it is read from
+# agy. A map pinning "gemini-3.6-flash-high" — or its display name — is stale the
+# day agy ships 3.7: that is delegate-agy-ovu, the drift bug this whole release
+# exists to kill (delegate-agy-62x).
+#
+# The live list is shared with scripts/agy_bridge.sh: same cache file, same
+# 60-minute refresh window, same `cut -f1` normalisation of agy's
+# "id<TAB>display name" output, same `sort -V | tail -1` newest-wins pick.
+# Deliberately NOT factored into a sourced library: this script installs as
+# ~/.local/bin/gemini and shadows the real gemini for every caller on PATH, so a
+# missing helper would break `gemini` box-wide. ~20 duplicated lines is the
+# cheaper failure mode. Behavior is pinned by tests (R4, SH7-SH11) either way.
+AGY_MODELS_TIMEOUT="${AGY_MODELS_TIMEOUT:-20}"
+MODELS_CACHE="$HOME/.cache/agy-bridge-models"
+LIVE_MODELS=""
+
+# Echo the live model ids, one per line, or nothing if agy is unreachable and no
+# cache exists. Never fails the script: an unresolvable list degrades to
+# pass-through (see map_model), never to a hard error.
+load_models() {
+    local raw=""
+    if [[ ! -s "$MODELS_CACHE" ]] || [[ -n "$(find "$MODELS_CACHE" -mmin +60 2>/dev/null)" ]]; then
+        # Third agy call site in this script, bounded like the other two. agy
+        # ignores SIGTERM (observed, see scripts/agy_bridge.sh), so `-k`
+        # escalates to SIGKILL; a plain `timeout` would hand the shim the very
+        # hang this release exists to fix. A malformed AGY_MODELS_TIMEOUT is not
+        # rejected at startup the way the two other bounds are: this call is
+        # optional, so a bad value degrades to the cache instead of breaking
+        # `gemini` for every caller on PATH.
+        if [[ -n "$TIMEOUT_BIN" ]]; then
+            raw=$("$TIMEOUT_BIN" -k 3 "$AGY_MODELS_TIMEOUT" "$AGY_BIN" models </dev/null 2>/dev/null) || raw=""
+        else
+            raw=$("$AGY_BIN" models </dev/null 2>/dev/null) || raw=""
+        fi
+        if [[ -n "$raw" ]]; then
+            mkdir -p "${MODELS_CACHE%/*}" 2>/dev/null || true
+            printf '%s' "$raw" > "$MODELS_CACHE.tmp.$$" \
+                && mv "$MODELS_CACHE.tmp.$$" "$MODELS_CACHE" || true
+            chmod 600 "$MODELS_CACHE" 2>/dev/null || true
+        fi
+    fi
+    # Failed or hung fetch → fall back to the cache, however stale. Silently:
+    # a shadowing `gemini` running off its cache is normal operation, and a
+    # warning here would land in every Octopus/Metaswarm log line.
+    [[ -n "$raw" ]] || raw=$(cat "$MODELS_CACHE" 2>/dev/null) || true
+    [[ -n "$raw" ]] && printf '%s\n' "$raw" | cut -f1
+    return 0
+}
+
 map_model() {
-    local m="$1"
-    local map_file
+    local m="$1" map_file class resolved=""
+    # A name that is a live id RIGHT NOW is honored verbatim — an explicit pin
+    # must never be silently upgraded to a newer version. Checked before the
+    # map, so map keys that are also live ids (gemini-3.1-pro-high …) stay
+    # pass-through while they exist and only fall to their class once retired.
+    if [[ -n "$LIVE_MODELS" ]] && printf '%s\n' "$LIVE_MODELS" | grep -qxF "$m"; then
+        printf '%s\n' "$m"; return 0
+    fi
     map_file="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)/../config/model-map.json"
-    python3 -c "
+    class=$(python3 -c "
 import json, sys
-d = json.load(open(sys.argv[1]))
-print(d.get(sys.argv[2], sys.argv[2]))
-" "$map_file" "$m"
+print(json.load(open(sys.argv[1])).get(sys.argv[2], ''))
+" "$map_file" "$m" 2>/dev/null) || class=""
+    if [[ -n "$class" && -n "$LIVE_MODELS" ]]; then
+        resolved=$(printf '%s\n' "$LIVE_MODELS" | grep -E "^gemini-[0-9.]+-${class}\$" | sort -V | tail -1) || resolved=""
+    fi
+    if [[ -n "$resolved" ]]; then
+        printf '%s\n' "$resolved"; return 0
+    fi
+    # Unresolvable: pass through unchanged. This shim shadows the system
+    # `gemini`, so refusing a name it does not recognise would break callers
+    # using models this map has never heard of. Warn only when a live list
+    # exists to contradict the name — with no list everything looks unknown and
+    # the warning would be pure noise on an already-degraded path.
+    if [[ -n "$LIVE_MODELS" ]]; then
+        echo "WARNING: model '$m' is not a known alias and not in the agy model list; passing it through unchanged" >&2
+    fi
+    printf '%s\n' "$m"
 }
 
 # ── Parse gemini flags ────────────────────────────────────────────────────────
@@ -143,7 +211,10 @@ HELP
 done
 
 # ── Map model name ────────────────────────────────────────────────────────────
+# Fetched lazily, only when a model was actually requested: --help, --version
+# and model-less invocations must not pay for a model-list round trip.
 if [[ -n "$MODEL" ]]; then
+    LIVE_MODELS=$(load_models)
     MODEL=$(map_model "$MODEL")
 fi
 

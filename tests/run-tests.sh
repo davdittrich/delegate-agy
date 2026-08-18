@@ -148,12 +148,33 @@ else
     bad "S5 RESOURCE_EXHAUSTED stderr surfaced" "rc=$RC out=$OUT"
 fi
 
-# S6: model-map mappings (flash -> Gemini 3.6 Flash (High); sonnet key purged)
-S6_FLASH="$(python3 -c 'import json; d=json.load(open("config/model-map.json")); print(d.get("flash"))')"
-if [[ "$S6_FLASH" == "Gemini 3.6 Flash (High)" ]]; then
-    ok "S6 model-map resolves flash alias correctly"
+# S6: model-map is alias -> CLASS, never a frozen id or a display name
+# (delegate-agy-62x). A value outside the class set is a pinned name that will
+# go stale on agy's next release -- the exact drift that broke the bridge in
+# delegate-agy-ovu. Key set is pinned too: dropping one breaks a live caller.
+S6_OUT="$(python3 - "$ROOT/config/model-map.json" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+classes = {"pro-high", "pro-low", "flash-high", "flash-medium", "flash-low"}
+required = {
+    "pro", "gemini-pro", "flash", "gemini-flash",
+    "gemini-3.6-flash", "gemini-3.6-flash-high", "gemini-3.6-flash-medium",
+    "gemini-3.6-flash-low", "gemini-3.5-flash", "gemini-3.5-flash-high",
+    "gemini-3.5-flash-medium", "gemini-3.5-flash-low",
+    "gemini-3.1-pro", "gemini-3.1-pro-high", "gemini-3.1-pro-low",
+    "gemini-2.5-pro", "gemini-2.5-flash",
+    "gemini-2.5-flash-preview-04-17", "gemini-2.5-pro-preview-06-05",
+}
+frozen = sorted(k for k, v in d.items() if v not in classes)
+missing = sorted(required - set(d))
+print("flash=%s frozen=%s missing=%s" % (
+    d.get("flash"), ",".join(frozen) or "none", ",".join(missing) or "none"))
+PY
+)"
+if [[ "$S6_OUT" == "flash=flash-high frozen=none missing=none" ]]; then
+    ok "S6 model-map maps aliases to classes only, all legacy keys preserved"
 else
-    bad "S6 model-map resolves flash alias correctly" "flash=$S6_FLASH"
+    bad "S6 model-map maps aliases to classes only, all legacy keys preserved" "$S6_OUT"
 fi
 
 # S7: whitespace-only prompt via stdin (2dc.7) -- `-p ""` selects the stdin
@@ -330,18 +351,26 @@ fi
 # model list on their next fetch -- same pattern as R3/R3c/R6.
 rm -f "$HOME/.cache/agy-bridge-models"
 
-# R4: gemini_shim.sh -m flash still maps to "Gemini 3.6 Flash (High)" post map-purge
-# (reuses the SH2 FAKE_AGY_DUMP_ARGV harness defined below, in the
-# "gemini_shim.sh: no stanza + --sandbox floor" section).
+# R4: gemini_shim.sh -m flash resolves against the LIVE `agy models` list and
+# hands agy a real ID (delegate-agy-62x purge-guard). The map used to hold
+# DISPLAY NAMES ("Gemini 3.6 Flash (High)") frozen at whatever agy shipped that
+# week; agy's canonical identifier is the id, and a frozen literal of either
+# kind goes stale on the next agy release. Any display name or hardcoded id
+# reappearing on the wire fails here.
+# (Reuses the SH2 FAKE_AGY_DUMP_ARGV harness defined below, in the
+# "gemini_shim.sh: no stanza + --sandbox floor" section.)
 R4_DUMP="$SANDBOX/purge_argv.log"
 : > "$R4_DUMP"
+rm -f "$HOME/.cache/agy-bridge-models"
 FAKE_AGY_DUMP_ARGV="$R4_DUMP" _run OUT RC bash "$SHIM" -m flash -p x
 R4_MODEL_VAL="$(awk '/^--model$/{getline; print; exit}' "$R4_DUMP")"
-if [[ "$R4_MODEL_VAL" == "Gemini 3.6 Flash (High)" ]]; then
-    ok "R4 gemini_shim.sh -m flash still maps to Gemini 3.6 Flash (High) (purge-guard)"
+if [[ "$R4_MODEL_VAL" == "gemini-3.6-flash-high" ]]; then
+    ok "R4 gemini_shim.sh -m flash resolves to a live agy id, not a display name (purge-guard)"
 else
-    bad "R4 gemini_shim.sh -m flash still maps to Gemini 3.6 Flash (High) (purge-guard)" "argv=$(cat "$R4_DUMP")"
+    bad "R4 gemini_shim.sh -m flash resolves to a live agy id, not a display name (purge-guard)" \
+        "model=$R4_MODEL_VAL argv=$(cat "$R4_DUMP")"
 fi
+rm -f "$HOME/.cache/agy-bridge-models"
 
 echo "== agy_bridge.sh --digest (ps3.2) =="
 
@@ -816,6 +845,107 @@ if [[ "$RC" -eq 137 && "$OUT" == *"killed"* && "$OUT" != *"timeout after"* ]]; t
 else
     bad "SH6 137 well inside GEMINI_SHIM_TIMEOUT bound reported as killed, not as a timeout" "rc=$RC out=$OUT"
 fi
+
+echo "== gemini_shim.sh: dynamic model resolution (delegate-agy-62x) =="
+
+_SHIM_CACHE="$HOME/.cache/agy-bridge-models"
+# _shim_model DUMPVAR -- run the shim with the given args and echo the value the
+# shim passed to agy's --model. Every case below asserts on the wire, not on
+# the map file: what agy receives is the only thing that matters.
+_shim_model() {
+    local dump="$SANDBOX/shim_model_argv.log"
+    : > "$dump"
+    FAKE_AGY_DUMP_ARGV="$dump" bash "$SHIM" "$@" >/dev/null 2>&1 || true
+    awk '/^--model$/{getline; print; exit}' "$dump"
+}
+
+# SH7: an alias resolves to the NEWEST id in its class from the live list --
+# the anti-freeze assertion. The seeded list carries versions (9.8/9.9) that
+# appear in no map, no script and no fixture, so only a live `sort -V | tail -1`
+# over the actual list can produce 9.9. A map that pins a version cannot.
+mkdir -p "$(dirname "$_SHIM_CACHE")"
+printf '%s\t%s\n' \
+    "gemini-9.8-flash-high" "Gemini 9.8 Flash (High)" \
+    "gemini-9.9-flash-high" "Gemini 9.9 Flash (High)" \
+    "gemini-9.9-pro-high"   "Gemini 9.9 Pro (High)" > "$_SHIM_CACHE"
+SH7_FLASH="$(_shim_model -m flash -p x)"
+SH7_PRO="$(_shim_model -m pro -p x)"
+if [[ "$SH7_FLASH" == "gemini-9.9-flash-high" && "$SH7_PRO" == "gemini-9.9-pro-high" ]]; then
+    ok "SH7 aliases resolve to the newest live id in their class (not a frozen version)"
+else
+    bad "SH7 aliases resolve to the newest live id in their class (not a frozen version)" \
+        "flash=$SH7_FLASH pro=$SH7_PRO"
+fi
+rm -f "$_SHIM_CACHE"
+
+# SH8: an explicit id that is live RIGHT NOW is honored verbatim. A pinned
+# request must never be silently upgraded: gemini-3.5-flash-low is both a live
+# id and a map key, so a map-first implementation would rewrite it to 3.6.
+SH8_ID="$(_shim_model -m gemini-3.5-flash-low -p x)"
+if [[ "$SH8_ID" == "gemini-3.5-flash-low" ]]; then
+    ok "SH8 explicit live id passes through unchanged (no silent version upgrade)"
+else
+    bad "SH8 explicit live id passes through unchanged (no silent version upgrade)" "model=$SH8_ID"
+fi
+rm -f "$_SHIM_CACHE"
+
+# SH9: an unrecognised name still REACHES agy unchanged. This shim shadows the
+# system `gemini` on PATH for Octopus/Metaswarm; rejecting a name it does not
+# know would break every caller using a model this map has never heard of. It
+# warns (a live list contradicts the name) but must not rewrite or refuse it.
+SH9_DUMP="$SANDBOX/sh9_argv.log"
+: > "$SH9_DUMP"
+FAKE_AGY_DUMP_ARGV="$SH9_DUMP" FAKE_AGY_STDOUT="ok" _run OUT RC bash "$SHIM" -m zzz-unknown-model -p x
+SH9_ID="$(awk '/^--model$/{getline; print; exit}' "$SH9_DUMP")"
+if [[ "$RC" -eq 0 && "$OUT" == *"ok"* && "$SH9_ID" == "zzz-unknown-model" && "$OUT" == *"WARNING"* ]]; then
+    ok "SH9 unknown model still reaches agy unchanged, with a warning (leniency preserved)"
+else
+    bad "SH9 unknown model still reaches agy unchanged, with a warning (leniency preserved)" \
+        "rc=$RC model=$SH9_ID out=$OUT"
+fi
+rm -f "$_SHIM_CACHE"
+
+# SH10: resolution survives a FAILED fetch via the stale cache, silently. The
+# bridge shares this cache file; a 2-hour-old entry is past the 60-min refresh
+# window, so this exercises fetch -> fail -> stale fallback. 7.7 exists only in
+# this cache, so a resolved 7.7 can only have come from it. No WARNING: a
+# PATH-shadowing `gemini` degrading to its cache is normal operation, not an
+# event every Octopus/Metaswarm log line needs to carry.
+mkdir -p "$(dirname "$_SHIM_CACHE")"
+printf '%s\t%s\n' "gemini-7.7-flash-high" "Gemini 7.7 Flash (High)" > "$_SHIM_CACHE"
+touch -d '2 hours ago' "$_SHIM_CACHE"
+SH10_DUMP="$SANDBOX/sh10_argv.log"
+: > "$SH10_DUMP"
+FAKE_AGY_MODELS_FAIL=1 FAKE_AGY_DUMP_ARGV="$SH10_DUMP" FAKE_AGY_STDOUT="ok" \
+    _run OUT RC bash "$SHIM" -m flash -p x
+SH10_ID="$(awk '/^--model$/{getline; print; exit}' "$SH10_DUMP")"
+if [[ "$RC" -eq 0 && "$SH10_ID" == "gemini-7.7-flash-high" && "$OUT" != *"WARNING"* ]]; then
+    ok "SH10 failed model fetch falls back to the stale cache, quietly"
+else
+    bad "SH10 failed model fetch falls back to the stale cache, quietly" "rc=$RC model=$SH10_ID out=$OUT"
+fi
+rm -f "$_SHIM_CACHE"
+
+# SH11: the model fetch is BOUNDED (delegate-agy-pgx). It is the shim's third
+# agy call site; agy ignores SIGTERM, so only `timeout -k` ends a hung fetch.
+# With no cache to fall back to, the shim must still deliver the prompt with
+# the name passed through untouched -- an unreachable model list may not be
+# allowed to fail, or stall, a `gemini` that shadows the system binary.
+rm -f "$_SHIM_CACHE"
+_SH11_START=$(date +%s)
+SH11_DUMP="$SANDBOX/sh11_argv.log"
+: > "$SH11_DUMP"
+FAKE_AGY_MODELS_HANG=1 AGY_MODELS_TIMEOUT=2 FAKE_AGY_DUMP_ARGV="$SH11_DUMP" FAKE_AGY_STDOUT="ok" \
+    _run OUT RC bash "$SHIM" -m flash -p x
+_SH11_ELAPSED=$(( $(date +%s) - _SH11_START ))
+SH11_ID="$(awk '/^--model$/{getline; print; exit}' "$SH11_DUMP")"
+if [[ "$RC" -eq 0 && "$_SH11_ELAPSED" -lt 40 && "$SH11_ID" == "flash" && "$OUT" != *"WARNING"* ]]; then
+    ok "SH11 hung 'agy models' is killed; shim degrades to pass-through, does not hang"
+else
+    bad "SH11 hung 'agy models' is killed; shim degrades to pass-through, does not hang" \
+        "rc=$RC elapsed=${_SH11_ELAPSED}s model=$SH11_ID out=$OUT"
+fi
+rm -f "$_SHIM_CACHE"
 
 echo "== install.sh / uninstall.sh (vfn.11) =="
 
