@@ -173,6 +173,15 @@ fi
 # so caches written by an older bridge normalize on load. Tab-free lines pass through.
 VALID_MODELS=$(printf '%s\n' "$VALID_MODELS" | cut -f1)
 
+# A list with no gemini ids at all is a degraded agy (unauthenticated, or an
+# output format change), NOT a bad --type. Say which, so the next reader does
+# not go hunting through --type and --model flags.
+if ! printf '%s\n' "$VALID_MODELS" | grep -q '^gemini-'; then
+    echo "ERROR: agy model list contains no 'gemini-' ids; agy may be unauthenticated" >&2
+    echo "       or its 'agy models' output format changed. Run 'agy models' to inspect." >&2
+    exit 2
+fi
+
 # ── Model auto-selection / validation ─────────────────────────────────────────
 if [[ -z "$MODEL" ]]; then
     case "$TYPE" in

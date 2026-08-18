@@ -316,6 +316,20 @@ else
     bad "R7 fetch failure with no cache exits 2 and surfaces agy's stderr" "rc=$RC out=$OUT"
 fi
 
+# R8: a list with NO gemini ids at all is a degraded/unauthenticated agy, not a
+# bad --type. It must say so rather than blaming the type the user picked.
+rm -f "$HOME/.cache/agy-bridge-models"
+FAKE_AGY_MODELS_GARBAGE=1 _run OUT RC bash "$BRIDGE" --type code -- "garbage list"
+if [[ "$RC" -eq 2 && "$OUT" == *"no 'gemini-' ids"* && "$OUT" != *"for --type"* ]]; then
+    ok "R8 model list with no gemini ids reports a degraded list, not a bad --type"
+else
+    bad "R8 model list with no gemini ids reports a degraded list, not a bad --type" "rc=$RC out=$OUT"
+fi
+# The garbage fetch above exits 0, so the bridge caches it (same shared $HOME
+# as every other test in this run). Clear it so later tests still see a full
+# model list on their next fetch -- same pattern as R3/R3c/R6.
+rm -f "$HOME/.cache/agy-bridge-models"
+
 # R4: gemini_shim.sh -m flash still maps to "Gemini 3.6 Flash (High)" post map-purge
 # (reuses the SH2 FAKE_AGY_DUMP_ARGV harness defined below, in the
 # "gemini_shim.sh: no stanza + --sandbox floor" section).
