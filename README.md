@@ -333,6 +333,15 @@ config/policies/               — GEMINI.md tool restriction policies (one file
 
 ## Changelog
 
+### 1.6.2
+
+- `agy-bridge` no longer hangs when agy does. Both agy invocations now escalate to `SIGKILL`: the model fetch via `timeout -k 3 $AGY_MODELS_TIMEOUT` (default 20s) and the delegation call via `timeout -k 5 $TIMEOUT`. agy ignores `SIGTERM`, so plain `timeout` sent the signal and then blocked forever — the delegation call outlived even its own 600s bound. A failed fetch now falls back to the stale cached list with a warning instead of hard-failing while a usable list sits on disk.
+- A failed `agy models` surfaces agy's own stderr instead of discarding it. That text is the only diagnostic when the real fault is auth or the network, and swallowing it was why a fetch failure was misread as a `--type` problem.
+- A model list carrying no `gemini-` ids reports a degraded/unauthenticated agy rather than blaming the `--type` the user picked.
+- An agy killed by something other than its own timeout — an OOM killer, an external `kill -9`, a container preemption — is now reported as such instead of as a timeout. Exit 137 arriving before the bound elapsed names the real cause and preserves the 137 exit status, rather than telling an operator to raise `--timeout` against a memory problem.
+- The pinned launcher refuses to run (exit 127) when Claude Code's install registry reports a different active version, naming both versions; it prints the exact repin command when the active version is numeric and the constructed installer path exists on disk, otherwise a generic pointer to `/agy-setup`. Previously a superseded pin only warned on stderr and kept running the stale copy, so a shipped fix could sit installed-but-never-executed. Replaces the newer-sibling directory scan.
+- `/agy-setup` leads with a readable two-step install (print the path, run it) instead of the 9-line resolve-and-validate pipeline; the pipeline remains as a fallback where no registry file exists.
+
 ### 1.6.1
 
 - Fixed every bridge delegation failing on current agy: `agy models` now emits `id<TAB>display name` per line, so the bridge's `$`-anchored matchers found nothing — auto-select died with `no gemini model for --type`, and explicit `--model` died with `unknown --model`. The fetched list (and any stale cache written in the tabbed form) is now reduced to its id column before matching; the anchored patterns and the unknown-model rejection are unchanged.

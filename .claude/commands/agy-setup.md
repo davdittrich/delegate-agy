@@ -1,7 +1,7 @@
 ---
 command: agy-setup
 description: Print the one secure command to install agy-delegate's launcher wrappers (agy-bridge + gemini shim)
-version: 1.6.1
+version: 1.6.2
 category: ai-delegation
 tags: [agy, setup, install, bridge, gemini]
 ---
