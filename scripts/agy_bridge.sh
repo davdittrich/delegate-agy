@@ -20,6 +20,13 @@ else
     echo "ERROR: timeout/gtimeout not found in PATH (install coreutils)" >&2; exit 2
 fi
 
+# Bound on the `agy models` fetch. Separate from --timeout (which bounds the
+# delegation call) because a hung model list must fail fast, not after 600s.
+AGY_MODELS_TIMEOUT="${AGY_MODELS_TIMEOUT:-20}"
+[[ "$AGY_MODELS_TIMEOUT" =~ ^[1-9][0-9]*$ ]] || {
+    echo "ERROR: AGY_MODELS_TIMEOUT must be a positive integer" >&2; exit 2
+}
+
 # ── Defaults ─────────────────────────────────────────────────────────────────
 TYPE="code"
 MODEL=""
@@ -129,13 +136,32 @@ esac
 CACHE_FILE="$HOME/.cache/agy-bridge-models"
 _agy_models=""
 if [[ ! -s "$CACHE_FILE" ]] || [[ -n "$(find "$CACHE_FILE" -mmin +60 2>/dev/null)" ]]; then
-    _agy_models=$("$AGY_BIN" models </dev/null 2>/dev/null) || {
-        echo "ERROR: failed to retrieve model list from agy" >&2; exit 2
-    }
-    mkdir -p "${CACHE_FILE%/*}" 2>/dev/null || true
-    printf '%s' "$_agy_models" > "$CACHE_FILE.tmp.$$" \
-        && mv "$CACHE_FILE.tmp.$$" "$CACHE_FILE" || true
-    chmod 600 "$CACHE_FILE" 2>/dev/null || true
+    # agy ignores SIGTERM (observed: `timeout 25 agy models` still running after
+    # 3+ min), so -k escalates to SIGKILL. Its stderr is kept, not discarded --
+    # it is the only diagnostic when auth or the network is the real fault.
+    _agy_err="$(mktemp -t agy-models-err.XXXXXX)"
+    if _agy_models=$("$TIMEOUT_BIN" -k 3 "$AGY_MODELS_TIMEOUT" \
+                     "$AGY_BIN" models </dev/null 2>"$_agy_err"); then
+        mkdir -p "${CACHE_FILE%/*}" 2>/dev/null || true
+        printf '%s' "$_agy_models" > "$CACHE_FILE.tmp.$$" \
+            && mv "$CACHE_FILE.tmp.$$" "$CACHE_FILE" || true
+        chmod 600 "$CACHE_FILE" 2>/dev/null || true
+    else
+        _agy_rc=$?
+        _agy_models=""
+        if [[ "$_agy_rc" -eq 124 || "$_agy_rc" -eq 137 ]]; then
+            _agy_why="timed out after ${AGY_MODELS_TIMEOUT}s"
+        else
+            _agy_why="exited $_agy_rc"
+        fi
+        if [[ -s "$CACHE_FILE" ]]; then
+            echo "WARNING: 'agy models' $_agy_why; using the stale cached list." >&2
+        else
+            echo "ERROR: 'agy models' $_agy_why and no cached list is available." >&2
+        fi
+        [[ -s "$_agy_err" ]] && sed 's/^/       agy: /' "$_agy_err" >&2
+    fi
+    rm -f "$_agy_err"
 fi
 VALID_MODELS="${_agy_models:-}"
 if [[ -z "$VALID_MODELS" ]]; then

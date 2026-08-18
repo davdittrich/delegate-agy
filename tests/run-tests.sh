@@ -277,6 +277,45 @@ else
     bad "R3d unknown --model still exits 2 after tab normalization" "rc=$RC out=$OUT"
 fi
 
+# R5: a hung `agy models` must not hang the bridge. fake-agy traps SIGTERM in
+# hang mode (real agy ignores it too), so this also proves `timeout -k` is what
+# does the killing -- plain `timeout` would never return.
+_R5_CACHE="$HOME/.cache/agy-bridge-models"
+rm -f "$_R5_CACHE"
+_R5_START=$(date +%s)
+FAKE_AGY_MODELS_HANG=1 AGY_MODELS_TIMEOUT=2 _run OUT RC bash "$BRIDGE" --type code -- "hang check"
+_R5_ELAPSED=$(( $(date +%s) - _R5_START ))
+if [[ "$RC" -eq 2 && "$_R5_ELAPSED" -lt 30 && "$OUT" == *"timed out"* ]]; then
+    ok "R5 hung 'agy models' is killed and reported, does not hang the bridge"
+else
+    bad "R5 hung 'agy models' is killed and reported, does not hang the bridge" \
+        "rc=$RC elapsed=${_R5_ELAPSED}s out=$OUT"
+fi
+
+# R6: a stale cache is USED (with a warning) when the live fetch fails, rather
+# than the bridge hard-failing while a perfectly usable list sits on disk.
+_R6_CACHE="$HOME/.cache/agy-bridge-models"
+mkdir -p "$(dirname "$_R6_CACHE")"
+printf '%s\t%s\n' "gemini-3.1-pro-high" "Gemini 3.1 Pro (High)" > "$_R6_CACHE"
+touch -d '2 hours ago' "$_R6_CACHE"
+FAKE_AGY_MODELS_FAIL=1 FAKE_AGY_STDOUT="ok" _run OUT RC bash "$BRIDGE" --type code --verbose -- "stale fallback"
+if [[ "$RC" -eq 0 && "$OUT" == *"model=gemini-3.1-pro-high"* && "$OUT" == *"WARNING"* ]]; then
+    ok "R6 failed fetch falls back to stale cache with a warning"
+else
+    bad "R6 failed fetch falls back to stale cache with a warning" "rc=$RC out=$OUT"
+fi
+rm -f "$_R6_CACHE"
+
+# R7: with NO cache to fall back to, the failure is fatal AND agy's own stderr
+# is surfaced -- that text is the only diagnostic for an auth/network fault.
+rm -f "$HOME/.cache/agy-bridge-models"
+FAKE_AGY_MODELS_FAIL=1 _run OUT RC bash "$BRIDGE" --type code -- "no cache"
+if [[ "$RC" -eq 2 && "$OUT" == *"FAKE-AGY-AUTH-FAILURE"* ]]; then
+    ok "R7 fetch failure with no cache exits 2 and surfaces agy's stderr"
+else
+    bad "R7 fetch failure with no cache exits 2 and surfaces agy's stderr" "rc=$RC out=$OUT"
+fi
+
 # R4: gemini_shim.sh -m flash still maps to "Gemini 3.6 Flash (High)" post map-purge
 # (reuses the SH2 FAKE_AGY_DUMP_ARGV harness defined below, in the
 # "gemini_shim.sh: no stanza + --sandbox floor" section).
