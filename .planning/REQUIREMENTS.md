@@ -35,7 +35,8 @@ The launcher compares its pinned version against Claude Code's install registry 
 
 Every `agy` invocation is wrapped in `timeout` **with `-k`**. agy ignores SIGTERM, so a plain `timeout` signals and then blocks forever.
 
-- Acceptance: all four call sites bounded — `agy_bridge.sh` model fetch and delegation, `gemini_shim.sh` `--version` and delegation. Where no `timeout`/`gtimeout` binary exists the call is unbounded **by documented decision**, and that decision is stated identically in both scripts.
+- Acceptance, stated as an invariant rather than a list: **every** `"$AGY_BIN"` occurrence in `scripts/agy_bridge.sh` and `scripts/gemini_shim.sh` is either wrapped in `"$TIMEOUT_BIN" -k …` or sits in a `TIMEOUT_BIN`-empty fallback that the recorded decision permits, enforced by a test that reads the scripts. Where no `timeout`/`gtimeout` binary exists the call is unbounded **by documented decision**, and that decision is stated identically in both scripts.
+- Do not restate this as a count. It has been wrong three times — two, then four, now five — most recently because this project's own work added a call site. A number decays; the invariant does not.
 - Open question, not yet decided: the bridge treats a missing `timeout` binary as fatal while the shim degrades. Both behaviors are defensible; the divergence is currently undocumented. Resolve before close.
 - Evidence: `README.md` §Environment variables; `tests/run-tests.sh` R5/R6/R7, T4/T5, SH4/SH5/SH6.
 
@@ -84,7 +85,7 @@ An output-format change must fail loudly and diagnosably, never silently resolve
 | R5 | Phase 3 | `6q1`, `v5a` | partial — 137 discrimination shipped on branch; docs and empty-stderr suffix still wrong |
 | R6 | Phase 3 | — | shipped on branch, needs regression coverage |
 | R8 | Phase 4 | — | shipped on branch, reviewed |
-| R11 | Phase 1 | `cy5` | partial — all four call sites carry `-k` on the branch **when a `timeout` binary exists**; the empty-`TIMEOUT_BIN` fallbacks are unbounded and the bridge/shim divergence is undecided |
+| R11 | Phase 1 | `cy5` | partial — every `agy` invocation on the branch carries `-k` **when a `timeout` binary exists**; the empty-`TIMEOUT_BIN` fallbacks are unbounded and the bridge/shim divergence is undecided. No count stated deliberately: see R11's acceptance |
 | S1 | Phase 2 | — | partial — tab normalization shipped 1.6.1; degraded-list reporting not yet distinct from an unmatched `--type` |
 | S2 | Phase 4 | — | shipped on branch |
 | S3 | Phase 5 | `cy5` (shared with R11) | open — contract table and per-mode tests not written |

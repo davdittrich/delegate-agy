@@ -163,7 +163,11 @@ codebase disagrees with the codebase itself, the codebase wins — see the `[INF
   blocking-followups' inventory (four call sites total: `agy_bridge.sh:143`,
   `agy_bridge.sh:342`, `gemini_shim.sh:94`, `gemini_shim.sh:209`) supersedes
   bridge-resilience's original "both call sites" claim — bridge-resilience's own text
-  contains a same-day in-document correction to four. **Current code state (verified
+  contains a same-day in-document correction to four. **That four-count is itself now
+  stale: there are five, the fifth added by the shim's dynamic model resolution
+  (`gemini_shim.sh:89`). Three successive inventories, three wrong numbers — treat any
+  stated count here as history, and the invariant in REQUIREMENTS.md R11 as the
+  requirement.** **Current code state (verified
   2026-08-19, master branch): NOT yet satisfied.** `scripts/gemini_shim.sh:94` and `:209`
   have no `timeout` wrapper at all (fully unbounded); `scripts/agy_bridge.sh:305` uses plain
   `timeout` with no `-k`; only the model-fetch `-k`-bounding and the launcher/installer work

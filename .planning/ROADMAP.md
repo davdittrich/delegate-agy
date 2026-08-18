@@ -33,10 +33,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   1. The divergence is decided and the decision recorded in PROJECT.md's Key Decisions table with its rationale — hard-fail like the bridge, degrade with a loud warning, or degrade for everything except the delegation call itself.
   2. With no `timeout`/`gtimeout` on PATH and an unresponsive fake agy, `gemini` and `agy-bridge` each do exactly what that decision says, proven by a test per entry point; neither leaves an agy process running with no bound unless the recorded decision says it should.
   3. A reader of README's environment-variable section finds both behaviors stated side by side, with the reason they do or do not differ.
-  4. With a `timeout` binary present, none of the four `agy` call sites (`agy_bridge.sh` model fetch and delegation, `gemini_shim.sh` `--version` and delegation) can outlive its bound against a SIGTERM-ignoring fake — every one carries `-k`.
+  4. With a `timeout` binary present, no `agy` invocation anywhere in the scripts can outlive its bound against a SIGTERM-ignoring fake. This is enforced as an **invariant, not a count**: a test asserts that every `"$AGY_BIN"` occurrence in `scripts/agy_bridge.sh` and `scripts/gemini_shim.sh` is either wrapped in `"$TIMEOUT_BIN" -k …` or sits in a `TIMEOUT_BIN`-empty fallback branch that Criterion 1's recorded decision explicitly permits — so a call site added later fails the suite instead of slipping through unbounded.
 **Plans**: TBD
 
 **Note**: the ticket names three candidate designs and states that the choice, not just the implementation, is open. This phase is not done when code changes; it is done when the choice is written down.
+
+**Why criterion 4 is an invariant rather than a list.** The count of `agy` call sites has been stated wrong three times in three different ways: the original plan said two, a whole-branch review corrected it to four, and it is now five — the last because this project's own dynamic-model-resolution work added one to the shim. A criterion naming a number is correct only until the next commit and then silently goes stale, which is precisely the failure mode that let an unbounded call survive a release built to eliminate unbounded calls. Assert the property over the file instead: any new call site must justify itself against the test, not against someone's memory of how many there were.
 
 ### Phase 2: Model-list handling, end to end
 **Goal**: A bare environment cannot crash the bridge, and one bad `agy models` reply cannot degrade the other tool or blame the user for it.
