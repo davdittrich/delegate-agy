@@ -16,6 +16,8 @@ This is brownfield. 1.6.1 ships and works; 1.6.2 is written, sits on `fix/agy-br
 
 Decimal phases appear between their surrounding integers in numeric order.
 
+**`Depends on` lines are machine-read.** The dependency extractor scrapes every number on the line and ignores the leading word, so `Nothing (independent of Phases 1–2)` resolves as a dependency on 1 and 2. Write the line as either `Nothing` or a bare phase list and put every parenthetical, rationale, or criterion reference in a `**Note**:` beneath the phase (`delegate-agy-1i9`).
+
 - [ ] **Phase 1: The missing-`timeout` decision** - Settle whether the shim degrades or refuses when no `timeout` binary exists, then say so in both scripts
 - [ ] **Phase 1.5: Contract check against a real agy** (INSERTED 2026-08-19, was Phase 7) - Ask the real binary which assumptions hold and record the answers as fixtures the later phases build on
 - [ ] **Phase 2: Model-list handling, end to end** - No crash on a bare environment, no poisoned shared cache, no misattributed blame for a degraded agy
@@ -74,7 +76,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 ### Phase 3: The exit-code contract
 **Goal**: Every documented exit code is reachable, means exactly one thing, and the docs quote the message the code actually prints.
-**Depends on**: Nothing (independent of Phases 1–2)
+**Depends on**: Nothing
 **Requirements**: R5, R6
 **Tickets**: `delegate-agy-6q1` (P3), `delegate-agy-v5a` (P3)
 **Success Criteria** (what must be TRUE):
@@ -85,9 +87,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   5. agy exiting 0 with empty stdout yields exit 3 with 0-byte stdout in text mode and an `{"error":…}` envelope carrying no `response` key in JSON mode — a regression test pins both shapes so the failure payload can never become success-shaped.
 **Plans**: TBD
 
+**Note**: independent of Phases 1–2 — this phase owns the bridge's error output, a different code region from the `TIMEOUT_BIN` branches and the model cache. Criterion 5's empty-success case is not hypothetical: a live agy was observed on 2026-08-19 exiting rc=0 with completely empty stdout when a tool hit a headless permission gate.
+
 ### Phase 4: Installer and launcher surface
 **Goal**: The registry read stays a version comparison and contributes nothing else, and no install path can abort after the wrappers are written.
-**Depends on**: Nothing (independent of Phases 1–3 — `install.sh`, the generated wrapper, and the docs one-liner)
+**Depends on**: Nothing
 **Requirements**: R8, S2
 **Tickets**: `delegate-agy-4vy` (P3), `delegate-agy-4xn` (P3)
 **Success Criteria** (what must be TRUE):
@@ -97,6 +101,8 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. `AGY_SETUP_PATCH_ALIASES=1` on a host with no `python3` ends in the same graceful state as every other python3-absent path in the installer, rather than hard-failing after the wrappers already exist on disk.
   5. The documented CLI fallback one-liner reaches its validating `case` under `set -euo pipefail` instead of aborting on a SIGPIPE from `head`.
 **Plans**: TBD
+
+**Note**: independent of Phases 1–3 — this phase owns `install.sh`, the generated wrapper, and the docs one-liner, none of which the other phases touch. `delegate-agy-lkg` lands here too: the "non-fatal live verify" at `install.sh:360-368` invokes the bridge and shim with no installer-side bound, so it can sit for up to `GEMINI_SHIM_TIMEOUT` (default 600s) under a line that says it is non-fatal.
 
 ### Phase 5: The shim's failure-mode contract
 **Goal**: An operator can read exactly what `gemini` does to a caller that has never heard of agy, for every way this plugin fails.
