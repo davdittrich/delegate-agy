@@ -1,6 +1,6 @@
 ---
 command: agy-setup
-description: Print the one secure command to install agy-delegate's launcher wrappers (agy-bridge + gemini shim)
+description: Print the plugin's install path and the command to install agy-delegate's launcher wrappers (agy-bridge + gemini shim)
 version: 1.6.2
 category: ai-delegation
 tags: [agy, setup, install, bridge, gemini]
@@ -8,8 +8,9 @@ tags: [agy, setup, install, bridge, gemini]
 
 agy-delegate ships a self-contained, hardened installer that YOU run in your
 own terminal (`scripts/install.sh`). This command does NOT run it for you — it
-prints the exact, validated one-line command to copy-paste, plus the opt-in
-variants and the uninstall command.
+prints two commands to copy-paste: one to find the plugin's install path so
+you can read it yourself, and one to run the installer against that path —
+plus the opt-in variants and the uninstall command.
 
 ## Shadow notice (read before installing)
 

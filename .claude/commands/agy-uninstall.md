@@ -1,6 +1,6 @@
 ---
 command: agy-uninstall
-description: Print the one validated command to remove agy-delegate's launcher wrappers (agy-bridge + gemini shim) and optionally de-register tokensave
+description: Print the plugin's install path and the command to remove agy-delegate's launcher wrappers (agy-bridge + gemini shim) and optionally de-register tokensave
 version: 1.6.2
 category: ai-delegation
 tags: [agy, uninstall, cleanup]
@@ -8,7 +8,8 @@ tags: [agy, uninstall, cleanup]
 
 agy-delegate ships a self-contained uninstaller that YOU run in your own
 terminal (`scripts/uninstall.sh`). This command does NOT run it for you — it
-prints the exact, validated one-line command to copy-paste.
+prints two commands to copy-paste: one to find the plugin's install path so
+you can read it yourself, and one to run the uninstaller against that path.
 
 The uninstaller reverses `scripts/install.sh`: it removes **only** our
 signature-marked wrappers `~/.local/bin/agy-bridge` and `~/.local/bin/gemini`

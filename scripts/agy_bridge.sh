@@ -357,10 +357,10 @@ if [[ "$EXIT_CODE" -eq 137 && "$DURATION" -lt "$TIMEOUT" ]]; then
     if [[ "$JSON_OUTPUT" -eq 1 ]]; then
         python3 -c "
 import json, sys
-print(json.dumps({'success':False,'model_used':sys.argv[1],'type':sys.argv[2],'duration_seconds':int(sys.argv[3]),'error':sys.argv[4]}))
-" "$MODEL" "$TYPE" "$DURATION" "Killed (signal 9) after ${DURATION}s, before its ${TIMEOUT}s bound -- possible OOM or external kill"
+print(json.dumps({'success':False,'model_used':sys.argv[1],'type':sys.argv[2],'duration_seconds':int(sys.argv[3]),'error':sys.argv[4] + ': ' + open(sys.argv[5]).read()}))
+" "$MODEL" "$TYPE" "$DURATION" "Killed (signal 9) after ${DURATION}s, before its ${TIMEOUT}s bound -- possible OOM or external kill" "$STDERR_FILE" || true
     else
-        printf 'ERROR: agy killed (signal 9) after %ds, before its %ds bound -- possible OOM or external kill\n' "$DURATION" "$TIMEOUT" >&2
+        printf 'ERROR: agy killed (signal 9) after %ds, before its %ds bound -- possible OOM or external kill: %s\n' "$DURATION" "$TIMEOUT" "$(cat "$STDERR_FILE" 2>/dev/null || true)" >&2
     fi
     exit "$EXIT_CODE"
 elif [[ "$EXIT_CODE" -eq 124 || "$EXIT_CODE" -eq 137 ]]; then
