@@ -10,9 +10,14 @@
 #   - Wrappers exec a PINNED ABSOLUTE PATH recorded at install time. The EXEC
 #     TARGET is never derived from a cache glob (user-writable = exec-hijack)
 #     and never from `claude plugin list` per invocation — only from the
-#     install-time literal. (A sibling-version glob may run to print a stderr
-#     warning; it never feeds exec.) If the pinned target vanishes (plugin
-#     updated/moved) the wrapper FAILS LOUD and tells the user to re-run install.
+#     install-time literal. (The wrapper does read Claude Code's install
+#     registry, installed_plugins.json, but for COMPARISON ONLY: it matches its
+#     own exact "<plugin>@<marketplace>" key, bounds the read to that entry, and
+#     uses the result solely to detect a stale pin. No registry-supplied value
+#     ever reaches exec or is printed as a path.) If the pinned target vanishes
+#     (plugin updated/moved) the wrapper FAILS LOUD and tells the user to re-run
+#     install; a stale pin likewise FAILS LOUD (exit 127) instead of running the
+#     superseded copy.
 #   - refuse-root; set -euo pipefail; every expansion quoted; [[ ]] not [ ].
 #   - writes ONLY under ~/.local/bin, ~ (rc backups), ~/.config/agy-delegate,
 #     ~/.gemini. NEVER touches the repo.
@@ -83,7 +88,7 @@ write_wrapper() {
     # root, e.g. .../agy-delegate/agy-delegate/) and this install's registry
     # key, so the generated wrapper can detect a stale pin. All are
     # install-time literals baked into the heredoc below, same as _AGY_TARGET.
-    local scripts_dir version_dir version parent_dir marketplace_dir reg_key
+    local scripts_dir version_dir version parent_dir marketplace_dir reg_key reg_key_re
     scripts_dir="${target%/*}"
     version_dir="${scripts_dir%/*}"
     version="${version_dir##*/}"
@@ -93,8 +98,12 @@ write_wrapper() {
     # cache/<marketplace>/<plugin>/<version>/ -- so both halves come from the
     # pinned path itself. Deriving the EXACT key (rather than matching a
     # "agy-delegate@" prefix) means a lookalike plugin installed from a
-    # different marketplace cannot match this grep.
+    # different marketplace cannot match this address.
     reg_key="${parent_dir##*/}@${marketplace_dir##*/}"
+    # The wrapper matches that key as a sed ADDRESS, so escape the BRE
+    # metacharacters a directory name could legally contain; without this an
+    # unlucky (or hostile) name would widen the match beyond our own entry.
+    reg_key_re="$(printf '%s' "$reg_key" | sed 's|[][\.*^$]|\\&|g')"
     local tmp
     tmp="$(mktemp "$dest.agy-tmp.XXXXXX")"
     cat > "$tmp" <<WRAP
@@ -115,13 +124,18 @@ fi
 # Claude Code currently reports as installed. COMPARISON ONLY -- nothing read
 # here reaches exec; \$_AGY_TARGET stays the install-time literal above.
 # A missing or unparseable registry is silence, not an error: dev and test
-# installs have no registry and must keep working. Both pipelines end in
-# '|| true' because this wrapper runs under 'set -euo pipefail' and grep
-# exits non-zero when the plugin key is absent.
+# installs have no registry and must keep working; the pipeline ends in
+# '|| true' because this wrapper runs under 'set -euo pipefail'.
+# The window is bounded to OUR OWN entry, not a fixed line count: the range
+# starts only on a line ending in '[' (so an empty '"key": [],' entry matches
+# nothing rather than running on into the next plugin) and ends at that
+# array's own ']'. The version match is anchored at line start so a compact,
+# single-line registry cannot hand back a later entry's version. Both shapes
+# otherwise mis-attribute a NEIGHBOURING plugin's version and refuse to run.
 _AGY_REGISTRY="\${CLAUDE_CONFIG_DIR:-\$HOME/.claude}/plugins/installed_plugins.json"
 if [[ -r "\$_AGY_REGISTRY" ]]; then
-    _agy_active="\$(grep -A6 -F '"$reg_key":' "\$_AGY_REGISTRY" 2>/dev/null \
-        | sed -nE 's/.*"version"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/p' | head -1 || true)"
+    _agy_active="\$(sed -n '/"$reg_key_re":[[:space:]]*\[\$/,/^[[:space:]]*\]/p' "\$_AGY_REGISTRY" 2>/dev/null \
+        | sed -nE 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/p' | head -1 || true)"
     if [[ -n "\$_agy_active" && "\$_agy_active" != "\$_AGY_VERSION" ]]; then
         echo "ERROR: agy-delegate \$_agy_active is installed, but this launcher is pinned to \$_AGY_VERSION." >&2
         echo "       Refusing to run the stale \$_AGY_VERSION copy." >&2

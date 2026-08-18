@@ -1198,6 +1198,96 @@ else
         "rc_noreg=$RC_NOREG rc_match=$RC_MATCH rc_stale=$RC_STALE rc_badjson=$RC_BADJSON rc_evil=$RC_EVIL err_stale=${ERR_STALE:0:200}"
 fi
 
+# I17: the stale-pin extraction window is bounded to OUR OWN registry entry.
+# Two registry shapes mis-attribute a neighbouring plugin's version when the
+# window is a fixed line count and the version match is greedy/unanchored:
+#   (f) our key present but with an EMPTY array -- a `grep -A6` window runs
+#       past it into the next plugin's entry;
+#   (g) a COMPACT (single-line) registry -- an unanchored greedy `.*"version"`
+#       selects the LAST version in the whole file;
+#   (h) a SEMI-COMPACT registry -- the window matches but the entry body is one
+#       line, so only the line-start anchor stops the same greedy selection.
+# All three must stay SILENT and exec normally. Neither can reach exec or print an
+# attacker path, but a spurious exit 127 would break every caller on PATH,
+# because ~/.local/bin/gemini shadows the real gemini command.
+IH="$(_fresh_home)"
+VROOT2="$(mktemp -d "$SANDBOX/vfake2.XXXXXX")"
+mkdir -p "$VROOT2/agy-delegate/1.0.0/scripts"
+cp "$ROOT/scripts/agy_bridge.sh" "$ROOT/scripts/gemini_shim.sh" "$VROOT2/agy-delegate/1.0.0/scripts/"
+env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" \
+    AGY_PLUGIN_DIR="$VROOT2/agy-delegate/1.0.0" \
+    bash "$INSTALL" > "$SANDBOX/last-install.log" 2>&1
+BW="$IH/.local/bin/agy-bridge"
+REG_KEY2="agy-delegate@$(basename "$VROOT2")"
+NEIGHBOUR="/tmp/AGY-NEIGHBOUR-PATH-SENTINEL"
+
+# baseline: no registry file yet -> silent, works normally
+OUT_BASE="$(env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" bash "$BW" --types 2>"$SANDBOX/err-base.log")"
+RC_BASE=$?
+ERR_BASE="$(cat "$SANDBOX/err-base.log")"
+
+# (f) our key is an EMPTY array; a populated third-party entry follows it
+mkdir -p "$IH/.claude/plugins"
+cat > "$IH/.claude/plugins/installed_plugins.json" <<REGJSON
+{
+  "version": 2,
+  "plugins": {
+    "$REG_KEY2": [],
+    "other-plugin@other-marketplace": [
+      {
+        "scope": "user",
+        "installPath": "$NEIGHBOUR",
+        "version": "9.9.9"
+      }
+    ]
+  }
+}
+REGJSON
+OUT_EMPTY="$(env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" bash "$BW" --types 2>"$SANDBOX/err-empty.log")"
+RC_EMPTY=$?
+ERR_EMPTY="$(cat "$SANDBOX/err-empty.log")"
+
+# (g) COMPACT registry: our key first AT the pinned version, a third-party
+#     entry later on the SAME line carrying a different version
+printf '%s' "{\"version\":2,\"plugins\":{\"$REG_KEY2\":[{\"scope\":\"user\",\"installPath\":\"$NEIGHBOUR\",\"version\":\"1.0.0\"}],\"other-plugin@other-marketplace\":[{\"scope\":\"user\",\"installPath\":\"$NEIGHBOUR\",\"version\":\"9.9.9\"}]}}" \
+    > "$IH/.claude/plugins/installed_plugins.json"
+OUT_COMPACT="$(env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" bash "$BW" --types 2>"$SANDBOX/err-compact.log")"
+RC_COMPACT=$?
+ERR_COMPACT="$(cat "$SANDBOX/err-compact.log")"
+
+# (h) SEMI-COMPACT registry: our array opens on its own line, so the window
+#     DOES match, but the entry body is a single line carrying two version
+#     fields. Only the line-start anchor on the version match stops the greedy
+#     tail from selecting the neighbouring object's version.
+{
+    printf '%s\n' '{' '  "version": 2,' '  "plugins": {' "    \"$REG_KEY2\": ["
+    printf '%s\n' "{\"scope\":\"user\",\"installPath\":\"$NEIGHBOUR\",\"version\":\"1.0.0\"},{\"scope\":\"user\",\"installPath\":\"$NEIGHBOUR\",\"version\":\"9.9.9\"}"
+    printf '%s\n' '    ]' '  }' '}'
+} > "$IH/.claude/plugins/installed_plugins.json"
+OUT_SEMI="$(env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" bash "$BW" --types 2>"$SANDBOX/err-semi.log")"
+RC_SEMI=$?
+ERR_SEMI="$(cat "$SANDBOX/err-semi.log")"
+
+I17_OK=1
+[[ "$ERR_EMPTY"   != *"ERROR"* ]]       || I17_OK=0
+[[ "$ERR_EMPTY"   != *"9.9.9"* ]]       || I17_OK=0
+[[ "$RC_EMPTY"    -eq "$RC_BASE" ]]     || I17_OK=0
+[[ "$OUT_EMPTY"   == "$OUT_BASE" ]]     || I17_OK=0
+[[ "$ERR_COMPACT" != *"ERROR"* ]]       || I17_OK=0
+[[ "$ERR_COMPACT" != *"9.9.9"* ]]       || I17_OK=0
+[[ "$RC_COMPACT"  -eq "$RC_BASE" ]]     || I17_OK=0
+[[ "$OUT_COMPACT" == "$OUT_BASE" ]]     || I17_OK=0
+[[ "$ERR_SEMI"    != *"ERROR"* ]]       || I17_OK=0
+[[ "$ERR_SEMI"    != *"9.9.9"* ]]       || I17_OK=0
+[[ "$RC_SEMI"     -eq "$RC_BASE" ]]     || I17_OK=0
+[[ "$OUT_SEMI"    == "$OUT_BASE" ]]     || I17_OK=0
+if [[ "$I17_OK" -eq 1 ]]; then
+    ok "I17 registry window bounded to our entry (empty/compact/semi-compact -> silent)"
+else
+    bad "I17 registry window bounded to our entry (empty/compact/semi-compact -> silent)" \
+        "rc_base=$RC_BASE rc_empty=$RC_EMPTY rc_compact=$RC_COMPACT rc_semi=$RC_SEMI err_empty=${ERR_EMPTY:0:120} err_compact=${ERR_COMPACT:0:120} err_semi=${ERR_SEMI:0:120}"
+fi
+
 echo
 echo "PASS=$PASS FAIL=$FAIL"
 if [[ "$FAIL" -eq 0 ]]; then
