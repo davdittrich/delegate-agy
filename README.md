@@ -78,10 +78,12 @@ claude plugin install ./delegate-agy
 **4. Run the installer.**
 
 Run `/agy-setup` inside Claude Code. It does NOT install anything for you — it
-prints the shadow notice plus one **validated, self-resolving** command you run
-in your own terminal. That command resolves this plugin's `scripts/install.sh`
-from `claude plugin list --json`, checks the resolved path matches
-`*/agy-delegate/*/scripts/install.sh` and is a real file, then runs it.
+prints the shadow notice plus the plugin's install path, read straight from
+`~/.claude/plugins/installed_plugins.json`, and the `scripts/install.sh`
+command to run against it. If that registry file is missing, it falls back to
+a command that resolves the path from `claude plugin list --json` instead and
+validates the result before running it, since that path comes from command
+output rather than your own eyes.
 
 ```
 /agy-setup

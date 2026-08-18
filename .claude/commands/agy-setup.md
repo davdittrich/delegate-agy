@@ -28,11 +28,26 @@ the uninstall command at the bottom.
 
 ## Install (copy-paste this)
 
-The command resolves the plugin's own `scripts/install.sh` from
-`claude plugin list --json`, **validates** the resolved string matches
-`*/agy-delegate/*/scripts/install.sh` AND is a regular file, and only then
-runs it. It refuses anything that does not match — no blind `bash`-ing of an
-attacker-controlled path.
+Find the plugin's install path, then run its installer. Both steps print a path
+you can read before anything executes:
+
+```bash
+grep -A6 '"agy-delegate@' ~/.claude/plugins/installed_plugins.json \
+  | sed -n 's/.*"installPath"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1
+```
+
+That prints something like
+`/home/you/.claude/plugins/cache/agy-delegate/agy-delegate/1.6.2`. Check it
+looks right, then run:
+
+```bash
+bash <that-path>/scripts/install.sh
+```
+
+If the registry file is missing (older Claude Code, or a non-standard config
+dir), fall back to resolving it through the CLI — this form validates the
+resolved string before executing it, because it comes from command output
+rather than your own eyes:
 
 ```bash
 RESOLVED="$(claude plugin list --json 2>/dev/null \
@@ -53,18 +68,18 @@ project MUTATE tools) without the interactive prompt — prepend
 `AGY_SETUP_REGISTER_TOKENSAVE=1`:
 
 ```bash
-AGY_SETUP_REGISTER_TOKENSAVE=1 bash "$RESOLVED"
+AGY_SETUP_REGISTER_TOKENSAVE=1 bash <that-path>/scripts/install.sh
 ```
 
 Apply the recursive-`gemini` shell-rc alias patch (default is dry-run/advisory)
 — prepend `AGY_SETUP_PATCH_ALIASES=1`:
 
 ```bash
-AGY_SETUP_PATCH_ALIASES=1 bash "$RESOLVED"
+AGY_SETUP_PATCH_ALIASES=1 bash <that-path>/scripts/install.sh
 ```
 
-(Both flags can be combined; `"$RESOLVED"` is the validated installer path from
-the install command above.)
+(Both flags can be combined. `<that-path>` is the install path you printed
+above; if you used the CLI fallback, use `"$RESOLVED"` instead.)
 
 ## Uninstall
 
@@ -73,5 +88,5 @@ shadowed original), and — with `AGY_UNINSTALL_TOKENSAVE=1` — de-registers
 tokensave and removes the availability hint.
 
 ```bash
-bash "$(dirname "$RESOLVED")/uninstall.sh"
+bash <that-path>/scripts/uninstall.sh
 ```

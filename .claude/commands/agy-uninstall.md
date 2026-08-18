@@ -19,10 +19,26 @@ run as root.
 
 ## Uninstall (copy-paste this)
 
-The command resolves the plugin's own `scripts/uninstall.sh` from
-`claude plugin list --json`, **validates** the resolved string matches
-`*/agy-delegate/*/scripts/uninstall.sh` AND is a regular file, and only then
-runs it — no blind `bash`-ing of an attacker-controlled path.
+Find the plugin's install path, then run its uninstaller. Both steps print a
+path you can read before anything executes:
+
+```bash
+grep -A6 '"agy-delegate@' ~/.claude/plugins/installed_plugins.json \
+  | sed -n 's/.*"installPath"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1
+```
+
+That prints something like
+`/home/you/.claude/plugins/cache/agy-delegate/agy-delegate/1.6.2`. Check it
+looks right, then run:
+
+```bash
+bash <that-path>/scripts/uninstall.sh
+```
+
+If the registry file is missing (older Claude Code, or a non-standard config
+dir), fall back to resolving it through the CLI — this form validates the
+resolved string before executing it, because it comes from command output
+rather than your own eyes:
 
 ```bash
 RESOLVED="$(claude plugin list --json 2>/dev/null \
@@ -41,7 +57,8 @@ esac
 Prepend `AGY_UNINSTALL_TOKENSAVE=1`:
 
 ```bash
-AGY_UNINSTALL_TOKENSAVE=1 bash "$RESOLVED"
+AGY_UNINSTALL_TOKENSAVE=1 bash <that-path>/scripts/uninstall.sh
 ```
 
-(`"$RESOLVED"` is the validated uninstaller path from the command above.)
+(`<that-path>` is the uninstall path you printed above; if you used the CLI
+fallback, use `"$RESOLVED"` instead.)
