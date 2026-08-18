@@ -20,13 +20,6 @@ else
     echo "ERROR: timeout/gtimeout not found in PATH (install coreutils)" >&2; exit 2
 fi
 
-# Bound on the `agy models` fetch. Separate from --timeout (which bounds the
-# delegation call) because a hung model list must fail fast, not after 600s.
-AGY_MODELS_TIMEOUT="${AGY_MODELS_TIMEOUT:-20}"
-[[ "$AGY_MODELS_TIMEOUT" =~ ^[1-9][0-9]*$ ]] || {
-    echo "ERROR: AGY_MODELS_TIMEOUT must be a positive integer" >&2; exit 2
-}
-
 # ── Defaults ─────────────────────────────────────────────────────────────────
 TYPE="code"
 MODEL=""
@@ -136,32 +129,13 @@ esac
 CACHE_FILE="$HOME/.cache/agy-bridge-models"
 _agy_models=""
 if [[ ! -s "$CACHE_FILE" ]] || [[ -n "$(find "$CACHE_FILE" -mmin +60 2>/dev/null)" ]]; then
-    # agy ignores SIGTERM (observed: `timeout 25 agy models` still running after
-    # 3+ min), so -k escalates to SIGKILL. Its stderr is kept, not discarded --
-    # it is the only diagnostic when auth or the network is the real fault.
-    _agy_err="$(mktemp -t agy-models-err.XXXXXX)"
-    if _agy_models=$("$TIMEOUT_BIN" -k 3 "$AGY_MODELS_TIMEOUT" \
-                     "$AGY_BIN" models </dev/null 2>"$_agy_err"); then
-        mkdir -p "${CACHE_FILE%/*}" 2>/dev/null || true
-        printf '%s' "$_agy_models" > "$CACHE_FILE.tmp.$$" \
-            && mv "$CACHE_FILE.tmp.$$" "$CACHE_FILE" || true
-        chmod 600 "$CACHE_FILE" 2>/dev/null || true
-    else
-        _agy_rc=$?
-        _agy_models=""
-        if [[ "$_agy_rc" -eq 124 || "$_agy_rc" -eq 137 ]]; then
-            _agy_why="timed out after ${AGY_MODELS_TIMEOUT}s"
-        else
-            _agy_why="exited $_agy_rc"
-        fi
-        if [[ -s "$CACHE_FILE" ]]; then
-            echo "WARNING: 'agy models' $_agy_why; using the stale cached list." >&2
-        else
-            echo "ERROR: 'agy models' $_agy_why and no cached list is available." >&2
-        fi
-        [[ -s "$_agy_err" ]] && sed 's/^/       agy: /' "$_agy_err" >&2
-    fi
-    rm -f "$_agy_err"
+    _agy_models=$("$AGY_BIN" models </dev/null 2>/dev/null) || {
+        echo "ERROR: failed to retrieve model list from agy" >&2; exit 2
+    }
+    mkdir -p "${CACHE_FILE%/*}" 2>/dev/null || true
+    printf '%s' "$_agy_models" > "$CACHE_FILE.tmp.$$" \
+        && mv "$CACHE_FILE.tmp.$$" "$CACHE_FILE" || true
+    chmod 600 "$CACHE_FILE" 2>/dev/null || true
 fi
 VALID_MODELS="${_agy_models:-}"
 if [[ -z "$VALID_MODELS" ]]; then
@@ -172,15 +146,6 @@ fi
 # matches below (both '$'-anchored) still hold. Applied after the cache read too,
 # so caches written by an older bridge normalize on load. Tab-free lines pass through.
 VALID_MODELS=$(printf '%s\n' "$VALID_MODELS" | cut -f1)
-
-# A list with no gemini ids at all is a degraded agy (unauthenticated, or an
-# output format change), NOT a bad --type. Say which, so the next reader does
-# not go hunting through --type and --model flags.
-if ! printf '%s\n' "$VALID_MODELS" | grep -q '^gemini-'; then
-    echo "ERROR: agy model list contains no 'gemini-' ids; agy may be unauthenticated" >&2
-    echo "       or its 'agy models' output format changed. Run 'agy models' to inspect." >&2
-    exit 2
-fi
 
 # ── Model auto-selection / validation ─────────────────────────────────────────
 if [[ -z "$MODEL" ]]; then
@@ -337,9 +302,7 @@ if [[ "${AGY_SKIP_PERMISSIONS:-0}" == "1" ]]; then
     echo "WARNING: AGY_SKIP_PERMISSIONS=1 — running with --dangerously-skip-permissions" >&2
     AGY_FLAGS+=(--dangerously-skip-permissions)
 fi
-# -k 5: agy ignores SIGTERM (observed), so plain `timeout` would send the
-# signal and then block forever waiting for a child that never dies.
-( cd "$WORK_DIR" && "$TIMEOUT_BIN" -k 5 "$TIMEOUT" "$AGY_BIN" \
+( cd "$WORK_DIR" && "$TIMEOUT_BIN" "$TIMEOUT" "$AGY_BIN" \
     "${AGY_FLAGS[@]}" \
     > "$STDOUT_FILE" \
     2> "$STDERR_FILE" \
@@ -349,21 +312,7 @@ set -e
 DURATION=$(( SECONDS - START ))
 
 # ── Handle errors ─────────────────────────────────────────────────────────────
-if [[ "$EXIT_CODE" -eq 137 && "$DURATION" -lt "$TIMEOUT" ]]; then
-    # A 137 (SIGKILL) landing BEFORE our own $TIMEOUT bound cannot be the -k
-    # escalation above -- that can only fire at/after $TIMEOUT elapses. It's an
-    # external kill (OOM killer, `kill -9`, cgroup/container preemption).
-    # Report it distinctly: "raise --timeout" is useless advice against an OOM.
-    if [[ "$JSON_OUTPUT" -eq 1 ]]; then
-        python3 -c "
-import json, sys
-print(json.dumps({'success':False,'model_used':sys.argv[1],'type':sys.argv[2],'duration_seconds':int(sys.argv[3]),'error':sys.argv[4] + ': ' + open(sys.argv[5]).read()}))
-" "$MODEL" "$TYPE" "$DURATION" "Killed (signal 9) after ${DURATION}s, before its ${TIMEOUT}s bound -- possible OOM or external kill" "$STDERR_FILE" || true
-    else
-        printf 'ERROR: agy killed (signal 9) after %ds, before its %ds bound -- possible OOM or external kill: %s\n' "$DURATION" "$TIMEOUT" "$(cat "$STDERR_FILE" 2>/dev/null || true)" >&2
-    fi
-    exit "$EXIT_CODE"
-elif [[ "$EXIT_CODE" -eq 124 || "$EXIT_CODE" -eq 137 ]]; then
+if [[ "$EXIT_CODE" -eq 124 ]]; then
     if [[ "$JSON_OUTPUT" -eq 1 ]]; then
         python3 -c "
 import json, sys

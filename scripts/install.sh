@@ -10,14 +10,9 @@
 #   - Wrappers exec a PINNED ABSOLUTE PATH recorded at install time. The EXEC
 #     TARGET is never derived from a cache glob (user-writable = exec-hijack)
 #     and never from `claude plugin list` per invocation — only from the
-#     install-time literal. (The wrapper does read Claude Code's install
-#     registry, installed_plugins.json, but for COMPARISON ONLY: it matches its
-#     own exact "<plugin>@<marketplace>" key, bounds the read to that entry, and
-#     uses the result solely to detect a stale pin. No registry-supplied value
-#     ever reaches exec or is printed as a path.) If the pinned target vanishes
-#     (plugin updated/moved) the wrapper FAILS LOUD and tells the user to re-run
-#     install; a stale pin likewise FAILS LOUD (exit 127) instead of running the
-#     superseded copy.
+#     install-time literal. (A sibling-version glob may run to print a stderr
+#     warning; it never feeds exec.) If the pinned target vanishes (plugin
+#     updated/moved) the wrapper FAILS LOUD and tells the user to re-run install.
 #   - refuse-root; set -euo pipefail; every expansion quoted; [[ ]] not [ ].
 #   - writes ONLY under ~/.local/bin, ~ (rc backups), ~/.config/agy-delegate,
 #     ~/.gemini. NEVER touches the repo.
@@ -68,12 +63,9 @@ is_our_wrapper() {
 
 # write_wrapper NAME PINNED_TARGET DEST
 # Emits a pinned-path launcher: fail-loud on missing target, validate regular
-# file, exec -a sets the launcher argv0; the shim resolves its own path via BASH_SOURCE. NO cache glob, claude list, or install registry feeds the EXEC TARGET.
-# The exec target is always the pinned literal below. The stale-pin check reads
-# Claude Code's install registry for COMPARISON ONLY: when the active version
-# differs from the pin it exits 127 instead of running the stale copy, and the
-# repin path it prints is constructed from install-time literals, never from
-# anything the registry supplied.
+# file, exec -a sets the launcher argv0; the shim resolves its own path via BASH_SOURCE. NO cache glob or claude list feeds the EXEC TARGET (a sibling-version glob may run, stderr-warn only).
+# The exec target is always the pinned literal above; the newer-sibling check
+# below only ever WARNS on stderr, it never feeds the exec path.
 write_wrapper() {
     local name="$1" target="$2" dest="$3"
     # Non-clobber: back up a pre-existing NON-agy file at dest.
@@ -84,26 +76,16 @@ write_wrapper() {
         echo "WARNING: '$dest' already exists and is not an agy-delegate wrapper." >&2
         echo "         Backed it up to '$bak' before overwriting." >&2
     fi
-    # Derive the pinned version dir's own basename, its parent (the versions
-    # root, e.g. .../agy-delegate/agy-delegate/) and this install's registry
-    # key, so the generated wrapper can detect a stale pin. All are
-    # install-time literals baked into the heredoc below, same as _AGY_TARGET.
-    local scripts_dir version_dir version parent_dir marketplace_dir reg_key reg_key_re
+    # Derive the pinned version dir's own basename and its parent (the
+    # versions root, e.g. .../agy-delegate/agy-delegate/) so the generated
+    # wrapper can warn (stderr only) if a newer sibling version directory
+    # shows up there after `claude plugin update`. Both are install-time
+    # literals baked into the heredoc below, same as _AGY_TARGET.
+    local scripts_dir version_dir version parent_dir
     scripts_dir="${target%/*}"
     version_dir="${scripts_dir%/*}"
     version="${version_dir##*/}"
-    parent_dir="${version_dir%/*}"        # .../plugins/cache/<marketplace>/<plugin>
-    marketplace_dir="${parent_dir%/*}"    # .../plugins/cache/<marketplace>
-    # Registry key is "<plugin>@<marketplace>", and the cache layout is
-    # cache/<marketplace>/<plugin>/<version>/ -- so both halves come from the
-    # pinned path itself. Deriving the EXACT key (rather than matching a
-    # "agy-delegate@" prefix) means a lookalike plugin installed from a
-    # different marketplace cannot match this address.
-    reg_key="${parent_dir##*/}@${marketplace_dir##*/}"
-    # The wrapper matches that key as a sed ADDRESS, so escape the BRE
-    # metacharacters a directory name could legally contain; without this an
-    # unlucky (or hostile) name would widen the match beyond our own entry.
-    reg_key_re="$(printf '%s' "$reg_key" | sed 's|[][\.*^$]|\\&|g')"
+    parent_dir="${version_dir%/*}"
     local tmp
     tmp="$(mktemp "$dest.agy-tmp.XXXXXX")"
     cat > "$tmp" <<WRAP
@@ -120,36 +102,22 @@ if [[ ! -f "\$_AGY_TARGET" ]]; then
     echo "       Re-run the install one-liner (see /agy-setup) to repin it." >&2
     exit 127
 fi
-# Stale-pin check: compare the install-time pinned version against the version
-# Claude Code currently reports as installed. COMPARISON ONLY -- nothing read
-# here reaches exec; \$_AGY_TARGET stays the install-time literal above.
-# A missing or unparseable registry is silence, not an error: dev and test
-# installs have no registry and must keep working; the pipeline ends in
-# '|| true' because this wrapper runs under 'set -euo pipefail'.
-# The window is bounded to OUR OWN entry, not a fixed line count: the range
-# starts only on a line ending in '[' (so an empty '"key": [],' entry matches
-# nothing rather than running on into the next plugin) and ends at that
-# array's own ']'. The version match is anchored at line start so a compact,
-# single-line registry cannot hand back a later entry's version. Both shapes
-# otherwise mis-attribute a NEIGHBOURING plugin's version and refuse to run.
-_AGY_REGISTRY="\${CLAUDE_CONFIG_DIR:-\$HOME/.claude}/plugins/installed_plugins.json"
-if [[ -r "\$_AGY_REGISTRY" ]]; then
-    _agy_active="\$(sed -n '/"$reg_key_re":[[:space:]]*\[\$/,/^[[:space:]]*\]/p' "\$_AGY_REGISTRY" 2>/dev/null \
-        | sed -nE 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/p' | head -1 || true)"
-    if [[ -n "\$_agy_active" && "\$_agy_active" != "\$_AGY_VERSION" ]]; then
-        echo "ERROR: agy-delegate \$_agy_active is installed, but this launcher is pinned to \$_AGY_VERSION." >&2
-        echo "       Refusing to run the stale \$_AGY_VERSION copy." >&2
-        # The repin path is CONSTRUCTED from the install-time versions root plus
-        # a version string validated as numeric. No registry-supplied path is
-        # ever printed: a hostile plugin that got its entry matched could
-        # otherwise make this line tell the user to bash an attacker path.
-        if [[ "\$_agy_active" =~ ^[0-9]+(\.[0-9]+)*\$ ]] \
-           && [[ -f "\$_AGY_VERSIONS_ROOT/\$_agy_active/scripts/install.sh" ]]; then
-            echo "       Re-run: bash \$_AGY_VERSIONS_ROOT/\$_agy_active/scripts/install.sh" >&2
-        else
-            echo "       Re-run the installer (see /agy-setup) to repin." >&2
-        fi
-        exit 127
+# Newer-sibling check: warn only, never changes what gets exec'd. Only runs
+# when the pinned version dir's own name looks like a version (skips dev/test
+# installs where the plugin root isn't under a versioned cache layout).
+if [[ "\$_AGY_VERSION" =~ ^[0-9]+(\.[0-9]+)*\$ ]]; then
+    _agy_versions=("\$_AGY_VERSION")
+    for _agy_sibling in "\$_AGY_VERSIONS_ROOT"/*/; do
+        [[ -d "\$_agy_sibling" ]] || continue
+        _agy_sibling_ver="\${_agy_sibling%/}"
+        _agy_sibling_ver="\${_agy_sibling_ver##*/}"
+        [[ "\$_agy_sibling_ver" =~ ^[0-9]+(\.[0-9]+)*\$ ]] || continue
+        _agy_versions+=("\$_agy_sibling_ver")
+    done
+    _agy_max="\$(printf '%s\n' "\${_agy_versions[@]}" | sort -V | tail -n1)"
+    if [[ "\$_agy_max" != "\$_AGY_VERSION" ]]; then
+        echo "WARNING: agy-delegate \$_AGY_VERSION is pinned but a newer version '\$_agy_max' is also installed in '\$_AGY_VERSIONS_ROOT'." >&2
+        echo "         Still running the pinned \$_AGY_VERSION copy. Re-run the install one-liner (see /agy-setup) to repin \$_agy_max." >&2
     fi
 fi
 exec -a "$name" bash "\$_AGY_TARGET" "\$@"

@@ -78,14 +78,10 @@ claude plugin install ./delegate-agy
 **4. Run the installer.**
 
 Run `/agy-setup` inside Claude Code. It does NOT install anything for you — it
-prints the shadow notice plus two commands to copy-paste: a `grep` command
-that reads the plugin's install path straight from
-`~/.claude/plugins/installed_plugins.json` (so you read the path yourself
-before anything runs), and the `scripts/install.sh` command to run against
-it. If that registry file is missing, it falls back to a command that
-resolves the path from `claude plugin list --json` instead and validates the
-result before running it, since that path comes from command output rather
-than your own eyes.
+prints the shadow notice plus one **validated, self-resolving** command you run
+in your own terminal. That command resolves this plugin's `scripts/install.sh`
+from `claude plugin list --json`, checks the resolved path matches
+`*/agy-delegate/*/scripts/install.sh` and is a real file, then runs it.
 
 ```
 /agy-setup
@@ -104,12 +100,9 @@ path disappears and the wrapper **fails loud** with a "re-run the install"
 message and a non-zero exit. If instead the plugin is **updated** and Claude
 Code's cache leaves the old version directory in place alongside the new one
 (observed behavior — the stale copy is not deleted), the pinned path still
-resolves, so the wrapper compares its pinned version against the version Claude
-Code reports as installed and **refuses to run**: it exits `127` naming both
-versions and — when the active version is numeric and the constructed
-installer path exists on disk — the exact command to repin (otherwise a
-generic pointer to `/agy-setup`), rather than silently executing the
-stale copy. **Re-run `/agy-setup`'s install command after any plugin update**
+resolves, so the wrapper keeps running the pinned copy and instead prints a
+**stderr warning** naming both versions; stdout and the exit code are
+unaffected. **Re-run `/agy-setup`'s install command after any plugin update**
 to repin the wrappers either way.
 
 > **Shadow blast radius.** `~/.local/bin/gemini` shadows the real `gemini`
@@ -222,13 +215,11 @@ The plugin installs a `SubagentStart` hook (`hooks/agy-subagent-policy.sh`, wire
 |-------|-----|
 | `agy-bridge: command not found` | Run `/agy-setup` and its printed install command to create the wrapper |
 | `agy-delegate moved or was updated` (wrapper fails loud) | The plugin was moved, or updated in a way that removed the pinned version dir — re-run `/agy-setup`'s install command to repin the wrappers |
-| `ERROR: agy-delegate ... is installed, but this launcher is pinned to ...` | The plugin was updated but the wrapper is still pinned to the old version; it refuses to run the stale copy (exit `127`) until you repin — run the command it prints, or re-run `/agy-setup`'s install command |
+| `WARNING: agy-delegate ... is pinned but a newer version ... is also installed` | The plugin was updated but Claude Code left the old version dir in the cache; the wrapper keeps running the pinned (old) copy — re-run `/agy-setup`'s install command to repin the newer one |
 | `agy: command not found` | Add `~/.local/bin` to `$PATH`: bash/zsh: `export PATH="$HOME/.local/bin:$PATH"` · fish: `fish_add_path ~/.local/bin` |
 | Response missing source URLs | Use `--type search` |
 | Model name rejected | Run `agy models`; exact string required |
-| Exit code 2 (`agy model list contains no 'gemini-' ids; agy may be unauthenticated`) | The fetched (or cached) model list has no `gemini-`-prefixed ids — agy is degraded or unauthenticated, not a bad `--type`. Run `agy models` directly to see its raw output, and re-authenticate if needed. |
 | Exit code 124 | Timeout — simplify the query or pass `--timeout 600` |
-| Exit code 137 (`agy killed (signal 9) after Ns, before its Ms bound -- possible OOM or external kill`) | An external kill (OOM killer, `kill -9`, container preemption) landed before the bridge's own `--timeout` bound elapsed, so it isn't the bridge's own `-k` escalation. Check the host/container for memory pressure — raising `--timeout` won't help. |
 | Exit code 3 (`agy returned empty output`) | agy exited 0 with no output — usually quota `RESOURCE_EXHAUSTED (429)`. The reason (full agy stderr) is surfaced; wait for quota reset or re-auth. Both `agy-bridge` and the `gemini` shim fail loud here rather than reporting empty success. |
 | `ERROR: timeout/gtimeout not found in PATH` | `brew install coreutils` (macOS) |
 
@@ -236,7 +227,7 @@ The plugin installs a `SubagentStart` hook (`hooks/agy-subagent-policy.sh`, wire
 
 Don't pipe credentials, API keys, or PII through the bridge. The prompt is written to a 0600 per-run `GEMINI.md` (not passed on the command line), so it stays out of process listings. Per-type tool restrictions are prompt-advisory (not API-enforced) instructing agy not to run shell commands; the API-level floor is `--sandbox`, which confines reads/writes to the granted `--add-dir` paths — a directory granted via `--add-dir` is exposed to the provider and is writable under `--type implement`. Model names are validated at startup against a list fetched from agy and cached for 60 minutes at `~/.cache/agy-bridge-models`. `--add-dir` refuses `/` and `$HOME` (exact resolved match) with exit 2 by default, overridable with `AGY_ALLOW_BROAD_GRANT=1`; this is a speed bump against the two broadest accidental grants, not a containment boundary — it does not stop, for example, a symlink under a granted subdirectory that points back at `$HOME`.
 
-The installer (`scripts/install.sh`) and uninstaller run with `set -euo pipefail`, refuse to run as root, write only under `~/.local/bin`, `~` (rc backups), `~/.config/agy-delegate`, and `~/.gemini`, and never touch the repo. The generated launcher wrappers exec a **pinned absolute path**: that exec target is never a user-writable cache glob and never a per-invocation `claude plugin list`. Wrappers fail loud if that path is missing. They also compare their pinned version against the version Claude Code records in `~/.claude/plugins/installed_plugins.json` (honouring `CLAUDE_CONFIG_DIR`) and exit `127` rather than run a superseded copy; an absent or unparseable registry is silence, so dev installs keep working. That read is **comparison-only**: the registry contributes a version string and nothing else — the exec target is never derived from it, the registry key is matched exactly so a lookalike plugin from another marketplace cannot match, and the repin command printed is constructed from install-time literals, never from a registry-supplied path.
+The installer (`scripts/install.sh`) and uninstaller run with `set -euo pipefail`, refuse to run as root, write only under `~/.local/bin`, `~` (rc backups), `~/.config/agy-delegate`, and `~/.gemini`, and never touch the repo. The generated launcher wrappers exec a **pinned absolute path**: that exec target is never a user-writable cache glob and never a per-invocation `claude plugin list`. Wrappers fail loud if that path is missing. If a newer sibling version directory exists alongside the pinned one (a stale plugin-cache leftover after `claude plugin update`), the wrapper still execs only the pinned literal and additionally prints a single stderr warning naming the newer version — the exec target itself is never derived from that check.
 
 ## Drop-in gemini CLI replacement
 
@@ -338,15 +329,6 @@ config/policies/               — GEMINI.md tool restriction policies (one file
 ```
 
 ## Changelog
-
-### 1.6.2
-
-- `agy-bridge` no longer hangs when agy does. Both agy invocations now escalate to `SIGKILL`: the model fetch via `timeout -k 3 $AGY_MODELS_TIMEOUT` (default 20s) and the delegation call via `timeout -k 5 $TIMEOUT`. agy ignores `SIGTERM`, so plain `timeout` sent the signal and then blocked forever — the delegation call outlived even its own 600s bound. A failed fetch now falls back to the stale cached list with a warning instead of hard-failing while a usable list sits on disk.
-- A failed `agy models` surfaces agy's own stderr instead of discarding it. That text is the only diagnostic when the real fault is auth or the network.
-- A model list carrying no `gemini-` ids reports a degraded/unauthenticated agy rather than blaming the `--type` the user picked.
-- An agy killed by something other than its own timeout — an OOM killer, an external `kill -9`, a container preemption — is now named as such rather than surfacing as a bare `agy exit 137`. A 137 arriving before the bound elapsed cannot be the bridge's own `-k` escalation, so it is reported distinctly and the 137 exit status is preserved.
-- Both pinned launchers (`agy-bridge` and the `gemini` shim) refuse to run (exit 127) when Claude Code's install registry reports a different active version, naming both versions; each prints the exact repin command when the active version is numeric and the constructed installer path exists on disk, otherwise a generic pointer to `/agy-setup`. Previously a superseded pin only warned on stderr and kept running the stale copy, so a shipped fix could sit installed-but-never-executed. Replaces the newer-sibling directory scan.
-- `/agy-setup` leads with a readable two-step install (print the path, run it) instead of the 9-line resolve-and-validate pipeline; the pipeline remains as a fallback where no registry file exists.
 
 ### 1.6.1
 

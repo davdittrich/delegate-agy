@@ -277,59 +277,6 @@ else
     bad "R3d unknown --model still exits 2 after tab normalization" "rc=$RC out=$OUT"
 fi
 
-# R5: a hung `agy models` must not hang the bridge. fake-agy traps SIGTERM in
-# hang mode (real agy ignores it too), so this also proves `timeout -k` is what
-# does the killing -- plain `timeout` would never return.
-_R5_CACHE="$HOME/.cache/agy-bridge-models"
-rm -f "$_R5_CACHE"
-_R5_START=$(date +%s)
-FAKE_AGY_MODELS_HANG=1 AGY_MODELS_TIMEOUT=2 _run OUT RC bash "$BRIDGE" --type code -- "hang check"
-_R5_ELAPSED=$(( $(date +%s) - _R5_START ))
-if [[ "$RC" -eq 2 && "$_R5_ELAPSED" -lt 30 && "$OUT" == *"timed out"* ]]; then
-    ok "R5 hung 'agy models' is killed and reported, does not hang the bridge"
-else
-    bad "R5 hung 'agy models' is killed and reported, does not hang the bridge" \
-        "rc=$RC elapsed=${_R5_ELAPSED}s out=$OUT"
-fi
-
-# R6: a stale cache is USED (with a warning) when the live fetch fails, rather
-# than the bridge hard-failing while a perfectly usable list sits on disk.
-_R6_CACHE="$HOME/.cache/agy-bridge-models"
-mkdir -p "$(dirname "$_R6_CACHE")"
-printf '%s\t%s\n' "gemini-3.1-pro-high" "Gemini 3.1 Pro (High)" > "$_R6_CACHE"
-touch -d '2 hours ago' "$_R6_CACHE"
-FAKE_AGY_MODELS_FAIL=1 FAKE_AGY_STDOUT="ok" _run OUT RC bash "$BRIDGE" --type code --verbose -- "stale fallback"
-if [[ "$RC" -eq 0 && "$OUT" == *"model=gemini-3.1-pro-high"* && "$OUT" == *"WARNING"* ]]; then
-    ok "R6 failed fetch falls back to stale cache with a warning"
-else
-    bad "R6 failed fetch falls back to stale cache with a warning" "rc=$RC out=$OUT"
-fi
-rm -f "$_R6_CACHE"
-
-# R7: with NO cache to fall back to, the failure is fatal AND agy's own stderr
-# is surfaced -- that text is the only diagnostic for an auth/network fault.
-rm -f "$HOME/.cache/agy-bridge-models"
-FAKE_AGY_MODELS_FAIL=1 _run OUT RC bash "$BRIDGE" --type code -- "no cache"
-if [[ "$RC" -eq 2 && "$OUT" == *"FAKE-AGY-AUTH-FAILURE"* ]]; then
-    ok "R7 fetch failure with no cache exits 2 and surfaces agy's stderr"
-else
-    bad "R7 fetch failure with no cache exits 2 and surfaces agy's stderr" "rc=$RC out=$OUT"
-fi
-
-# R8: a list with NO gemini ids at all is a degraded/unauthenticated agy, not a
-# bad --type. It must say so rather than blaming the type the user picked.
-rm -f "$HOME/.cache/agy-bridge-models"
-FAKE_AGY_MODELS_GARBAGE=1 _run OUT RC bash "$BRIDGE" --type code -- "garbage list"
-if [[ "$RC" -eq 2 && "$OUT" == *"no 'gemini-' ids"* && "$OUT" != *"for --type"* ]]; then
-    ok "R8 model list with no gemini ids reports a degraded list, not a bad --type"
-else
-    bad "R8 model list with no gemini ids reports a degraded list, not a bad --type" "rc=$RC out=$OUT"
-fi
-# The garbage fetch above exits 0, so the bridge caches it (same shared $HOME
-# as every other test in this run). Clear it so later tests still see a full
-# model list on their next fetch -- same pattern as R3/R3c/R6.
-rm -f "$HOME/.cache/agy-bridge-models"
-
 # R4: gemini_shim.sh -m flash still maps to "Gemini 3.6 Flash (High)" post map-purge
 # (reuses the SH2 FAKE_AGY_DUMP_ARGV harness defined below, in the
 # "gemini_shim.sh: no stanza + --sandbox floor" section).
@@ -478,29 +425,6 @@ if [[ "$RC" -eq 2 && "$OUT" == *"ERROR: empty prompt"* ]] && ! grep -q -- '--pri
     ok "T3e --digest empty prompt rejected before digest output-contract append"
 else
     bad "T3e --digest empty prompt rejected before digest output-contract append" "rc=$RC out=$OUT"
-fi
-
-# T4: a SIGTERM-ignoring agy must not hang the delegation call. The bridge's own
-# --timeout has to escalate to SIGKILL, exactly as the model fetch does.
-_T4_START=$(date +%s)
-FAKE_AGY_PRINT_HANG=1 _run OUT RC bash "$BRIDGE" --type code --timeout 2 -- "delegation hang"
-_T4_ELAPSED=$(( $(date +%s) - _T4_START ))
-if [[ "$RC" -ne 0 && "$_T4_ELAPSED" -lt 40 && "$OUT" == *"timeout"* ]]; then
-    ok "T4 hung delegation call is killed and reported, does not hang the bridge"
-else
-    bad "T4 hung delegation call is killed and reported, does not hang the bridge" \
-        "rc=$RC elapsed=${_T4_ELAPSED}s out=$OUT"
-fi
-
-# T5: a 137 that lands well inside the bridge's own --timeout bound is NOT the
-# bridge's -k escalation (which can only fire at/after the bound) -- it's an
-# external kill (OOM killer, kill -9, cgroup preemption). Must be reported
-# distinctly from a timeout, not folded into the timeout message.
-FAKE_AGY_PRINT_KILL9=1 _run OUT RC bash "$BRIDGE" --type code --timeout 60 -- "oom check"
-if [[ "$RC" -eq 137 && "$OUT" == *"killed"* && "$OUT" != *"timeout after"* ]]; then
-    ok "T5 137 well inside --timeout bound reported as killed, not as a timeout"
-else
-    bad "T5 137 well inside --timeout bound reported as killed, not as a timeout" "rc=$RC out=$OUT"
 fi
 
 echo "== agy_bridge.sh --add-dir passthrough (delegate-agy-0i9.2) =="
@@ -1094,11 +1018,9 @@ else
     ok "I15 (skipped: no git repo) install/uninstall repo-untouched"
 fi
 
-# I16: a stale pin FAILS LOUD. The launcher compares its install-time pinned
-# version against the active version in Claude Code's install registry and
-# refuses to exec when they differ, naming the repin command. A missing or
-# unparseable registry degrades to silence (dev installs must keep working),
-# and the exec target stays the install-time literal in every case.
+# I16: newer sibling version dir -> stderr warning naming both versions;
+# stdout + exit code byte-identical to the no-sibling run; exec target stays
+# pinned to the install-time literal (no glob feeds exec). (delegate-agy-dsf)
 IH="$(_fresh_home)"
 VROOT="$(mktemp -d "$SANDBOX/vfake.XXXXXX")"
 mkdir -p "$VROOT/agy-delegate/1.0.0/scripts"
@@ -1107,208 +1029,31 @@ env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" \
     AGY_PLUGIN_DIR="$VROOT/agy-delegate/1.0.0" \
     bash "$INSTALL" > "$SANDBOX/last-install.log" 2>&1
 BW="$IH/.local/bin/agy-bridge"
-
-# (a) no registry at all -> silent, works normally
-OUT_NOREG="$(env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" bash "$BW" --types 2>"$SANDBOX/err-noreg.log")"
-RC_NOREG=$?
-ERR_NOREG="$(cat "$SANDBOX/err-noreg.log")"
-
-# install.sh derives the registry key "<plugin>@<marketplace>" from the cache
-# layout cache/<marketplace>/<plugin>/<version>, so under this fake root the
-# marketplace segment is $VROOT's own basename.
-REG_KEY="agy-delegate@$(basename "$VROOT")"
-# Every fixture carries a sentinel installPath. The launcher must never echo it:
-# a registry-supplied path in the repin hint would tell the user to bash an
-# attacker-controlled location.
-SENTINEL="/tmp/AGY-REGISTRY-PATH-SENTINEL"
-
-# (b) registry agreeing with the pin -> silent, byte-identical to (a)
-mkdir -p "$IH/.claude/plugins"
-cat > "$IH/.claude/plugins/installed_plugins.json" <<REGJSON
-{
-  "version": 2,
-  "plugins": {
-    "$REG_KEY": [
-      {
-        "scope": "user",
-        "installPath": "$SENTINEL",
-        "version": "1.0.0"
-      }
-    ]
-  }
-}
-REGJSON
-OUT_MATCH="$(env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" bash "$BW" --types 2>"$SANDBOX/err-match.log")"
-RC_MATCH=$?
-ERR_MATCH="$(cat "$SANDBOX/err-match.log")"
-
-# (c) registry naming a NEWER active version -> exit 127, names both versions
-#     and a CONSTRUCTED repin command, and produces no stdout. The 1.1.0 tree
-#     must exist for the constructed path to be printed.
+OUT_NOSIB="$(env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" bash "$BW" --types 2>"$SANDBOX/err-nosib.log")"
+RC_NOSIB=$?
+ERR_NOSIB="$(cat "$SANDBOX/err-nosib.log")"
 mkdir -p "$VROOT/agy-delegate/1.1.0/scripts"
-: > "$VROOT/agy-delegate/1.1.0/scripts/install.sh"
-cat > "$IH/.claude/plugins/installed_plugins.json" <<REGJSON
-{
-  "version": 2,
-  "plugins": {
-    "$REG_KEY": [
-      {
-        "scope": "user",
-        "installPath": "$SENTINEL",
-        "version": "1.1.0"
-      }
-    ]
-  }
-}
-REGJSON
-OUT_STALE="$(env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" bash "$BW" --types 2>"$SANDBOX/err-stale.log")"
-RC_STALE=$?
-ERR_STALE="$(cat "$SANDBOX/err-stale.log")"
-
-# (d) unparseable registry -> silent, still runs
-printf '%s' '{ this is not json' > "$IH/.claude/plugins/installed_plugins.json"
-OUT_BADJSON="$(env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" bash "$BW" --types 2>"$SANDBOX/err-badjson.log")"
-RC_BADJSON=$?
-ERR_BADJSON="$(cat "$SANDBOX/err-badjson.log")"
-
-# (e) a LOOKALIKE plugin from a different marketplace must not match. Same
-#     plugin name, different marketplace segment, listed first, claiming a much
-#     newer version. A prefix match on '"agy-delegate@' would fire on this and
-#     hand the user an attacker-chosen path; the exact-key match must ignore it.
-cat > "$IH/.claude/plugins/installed_plugins.json" <<REGJSON
-{
-  "version": 2,
-  "plugins": {
-    "agy-delegate@evil-marketplace": [
-      {
-        "scope": "user",
-        "installPath": "$SENTINEL",
-        "version": "9.9.9"
-      }
-    ]
-  }
-}
-REGJSON
-OUT_EVIL="$(env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" bash "$BW" --types 2>"$SANDBOX/err-evil.log")"
-RC_EVIL=$?
-ERR_EVIL="$(cat "$SANDBOX/err-evil.log")"
-
+OUT_SIB="$(env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" bash "$BW" --types 2>"$SANDBOX/err-sib.log")"
+RC_SIB=$?
+ERR_SIB="$(cat "$SANDBOX/err-sib.log")"
+rm -rf "$VROOT/agy-delegate/1.1.0"
+OUT_GONE="$(env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" bash "$BW" --types 2>"$SANDBOX/err-gone.log")"
+RC_GONE=$?
+ERR_GONE="$(cat "$SANDBOX/err-gone.log")"
 I16_OK=1
-[[ "$ERR_NOREG"   != *"ERROR"* ]]            || I16_OK=0
-[[ "$ERR_MATCH"   != *"ERROR"* ]]            || I16_OK=0
-[[ "$OUT_NOREG"   == "$OUT_MATCH" ]]         || I16_OK=0
-[[ "$RC_NOREG"    -eq "$RC_MATCH" ]]         || I16_OK=0
-[[ "$RC_STALE"    -eq 127 ]]                 || I16_OK=0
-[[ -z "$OUT_STALE" ]]                        || I16_OK=0
-case "$ERR_STALE" in *"1.0.0"*"1.1.0"*|*"1.1.0"*"1.0.0"*) :;; *) I16_OK=0;; esac
-# repin hint is CONSTRUCTED from the trusted versions root, never the registry's
-# own installPath -- the sentinel must not appear anywhere in the message
-[[ "$ERR_STALE"   == *"$VROOT/agy-delegate/1.1.0/scripts/install.sh"* ]] || I16_OK=0
-[[ "$ERR_STALE"   != *"$SENTINEL"* ]]        || I16_OK=0
-[[ "$ERR_BADJSON" != *"ERROR"* ]]            || I16_OK=0
-[[ "$RC_BADJSON"  -eq "$RC_NOREG" ]]         || I16_OK=0
-# lookalike from another marketplace is ignored entirely
-[[ "$ERR_EVIL"    != *"ERROR"* ]]            || I16_OK=0
-[[ "$ERR_EVIL"    != *"9.9.9"* ]]            || I16_OK=0
-[[ "$RC_EVIL"     -eq "$RC_NOREG" ]]         || I16_OK=0
+[[ "$ERR_NOSIB" != *"WARNING"* ]] || I16_OK=0
+case "$ERR_SIB" in *"1.0.0"*"1.1.0"*|*"1.1.0"*"1.0.0"*) :;; *) I16_OK=0;; esac
+[[ "$OUT_NOSIB" == "$OUT_SIB" ]] || I16_OK=0
+[[ "$RC_NOSIB" -eq "$RC_SIB" ]] || I16_OK=0
+[[ "$ERR_GONE" != *"WARNING"* ]] || I16_OK=0
 grep -qF "_AGY_TARGET='$VROOT/agy-delegate/1.0.0/scripts/agy_bridge.sh'" "$BW" || I16_OK=0
 [[ "$(grep -c '^_AGY_TARGET=' "$BW")" -eq 1 ]] || I16_OK=0
 grep -qE '^exec -a "[^"]+" bash "\$_AGY_TARGET" "\$@"$' "$BW" || I16_OK=0
 if [[ "$I16_OK" -eq 1 ]]; then
-    ok "I16 stale pin vs install registry -> exit 127; absent/bad registry silent; exec target pinned"
+    ok "I16 newer sibling version -> stderr warning, stdout/exit unchanged, exec target still pinned"
 else
-    bad "I16 stale pin vs install registry -> exit 127; absent/bad registry silent; exec target pinned" \
-        "rc_noreg=$RC_NOREG rc_match=$RC_MATCH rc_stale=$RC_STALE rc_badjson=$RC_BADJSON rc_evil=$RC_EVIL err_stale=${ERR_STALE:0:200}"
-fi
-
-# I17: the stale-pin extraction window is bounded to OUR OWN registry entry.
-# Two registry shapes mis-attribute a neighbouring plugin's version when the
-# window is a fixed line count and the version match is greedy/unanchored:
-#   (f) our key present but with an EMPTY array -- a `grep -A6` window runs
-#       past it into the next plugin's entry;
-#   (g) a COMPACT (single-line) registry -- an unanchored greedy `.*"version"`
-#       selects the LAST version in the whole file;
-#   (h) a SEMI-COMPACT registry -- the window matches but the entry body is one
-#       line, so only the line-start anchor stops the same greedy selection.
-# All three must stay SILENT and exec normally. Neither can reach exec or print an
-# attacker path, but a spurious exit 127 would break every caller on PATH,
-# because ~/.local/bin/gemini shadows the real gemini command.
-IH="$(_fresh_home)"
-VROOT2="$(mktemp -d "$SANDBOX/vfake2.XXXXXX")"
-mkdir -p "$VROOT2/agy-delegate/1.0.0/scripts"
-cp "$ROOT/scripts/agy_bridge.sh" "$ROOT/scripts/gemini_shim.sh" "$VROOT2/agy-delegate/1.0.0/scripts/"
-env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" \
-    AGY_PLUGIN_DIR="$VROOT2/agy-delegate/1.0.0" \
-    bash "$INSTALL" > "$SANDBOX/last-install.log" 2>&1
-BW="$IH/.local/bin/agy-bridge"
-REG_KEY2="agy-delegate@$(basename "$VROOT2")"
-NEIGHBOUR="/tmp/AGY-NEIGHBOUR-PATH-SENTINEL"
-
-# baseline: no registry file yet -> silent, works normally
-OUT_BASE="$(env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" bash "$BW" --types 2>"$SANDBOX/err-base.log")"
-RC_BASE=$?
-ERR_BASE="$(cat "$SANDBOX/err-base.log")"
-
-# (f) our key is an EMPTY array; a populated third-party entry follows it
-mkdir -p "$IH/.claude/plugins"
-cat > "$IH/.claude/plugins/installed_plugins.json" <<REGJSON
-{
-  "version": 2,
-  "plugins": {
-    "$REG_KEY2": [],
-    "other-plugin@other-marketplace": [
-      {
-        "scope": "user",
-        "installPath": "$NEIGHBOUR",
-        "version": "9.9.9"
-      }
-    ]
-  }
-}
-REGJSON
-OUT_EMPTY="$(env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" bash "$BW" --types 2>"$SANDBOX/err-empty.log")"
-RC_EMPTY=$?
-ERR_EMPTY="$(cat "$SANDBOX/err-empty.log")"
-
-# (g) COMPACT registry: our key first AT the pinned version, a third-party
-#     entry later on the SAME line carrying a different version
-printf '%s' "{\"version\":2,\"plugins\":{\"$REG_KEY2\":[{\"scope\":\"user\",\"installPath\":\"$NEIGHBOUR\",\"version\":\"1.0.0\"}],\"other-plugin@other-marketplace\":[{\"scope\":\"user\",\"installPath\":\"$NEIGHBOUR\",\"version\":\"9.9.9\"}]}}" \
-    > "$IH/.claude/plugins/installed_plugins.json"
-OUT_COMPACT="$(env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" bash "$BW" --types 2>"$SANDBOX/err-compact.log")"
-RC_COMPACT=$?
-ERR_COMPACT="$(cat "$SANDBOX/err-compact.log")"
-
-# (h) SEMI-COMPACT registry: our array opens on its own line, so the window
-#     DOES match, but the entry body is a single line carrying two version
-#     fields. Only the line-start anchor on the version match stops the greedy
-#     tail from selecting the neighbouring object's version.
-{
-    printf '%s\n' '{' '  "version": 2,' '  "plugins": {' "    \"$REG_KEY2\": ["
-    printf '%s\n' "{\"scope\":\"user\",\"installPath\":\"$NEIGHBOUR\",\"version\":\"1.0.0\"},{\"scope\":\"user\",\"installPath\":\"$NEIGHBOUR\",\"version\":\"9.9.9\"}"
-    printf '%s\n' '    ]' '  }' '}'
-} > "$IH/.claude/plugins/installed_plugins.json"
-OUT_SEMI="$(env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" bash "$BW" --types 2>"$SANDBOX/err-semi.log")"
-RC_SEMI=$?
-ERR_SEMI="$(cat "$SANDBOX/err-semi.log")"
-
-I17_OK=1
-[[ "$ERR_EMPTY"   != *"ERROR"* ]]       || I17_OK=0
-[[ "$ERR_EMPTY"   != *"9.9.9"* ]]       || I17_OK=0
-[[ "$RC_EMPTY"    -eq "$RC_BASE" ]]     || I17_OK=0
-[[ "$OUT_EMPTY"   == "$OUT_BASE" ]]     || I17_OK=0
-[[ "$ERR_COMPACT" != *"ERROR"* ]]       || I17_OK=0
-[[ "$ERR_COMPACT" != *"9.9.9"* ]]       || I17_OK=0
-[[ "$RC_COMPACT"  -eq "$RC_BASE" ]]     || I17_OK=0
-[[ "$OUT_COMPACT" == "$OUT_BASE" ]]     || I17_OK=0
-[[ "$ERR_SEMI"    != *"ERROR"* ]]       || I17_OK=0
-[[ "$ERR_SEMI"    != *"9.9.9"* ]]       || I17_OK=0
-[[ "$RC_SEMI"     -eq "$RC_BASE" ]]     || I17_OK=0
-[[ "$OUT_SEMI"    == "$OUT_BASE" ]]     || I17_OK=0
-if [[ "$I17_OK" -eq 1 ]]; then
-    ok "I17 registry window bounded to our entry (empty/compact/semi-compact -> silent)"
-else
-    bad "I17 registry window bounded to our entry (empty/compact/semi-compact -> silent)" \
-        "rc_base=$RC_BASE rc_empty=$RC_EMPTY rc_compact=$RC_COMPACT rc_semi=$RC_SEMI err_empty=${ERR_EMPTY:0:120} err_compact=${ERR_COMPACT:0:120} err_semi=${ERR_SEMI:0:120}"
+    bad "I16 newer sibling version -> stderr warning, stdout/exit unchanged, exec target still pinned" \
+        "rc_nosib=$RC_NOSIB rc_sib=$RC_SIB err_sib=${ERR_SIB:0:200} err_gone=${ERR_GONE:0:200}"
 fi
 
 echo
