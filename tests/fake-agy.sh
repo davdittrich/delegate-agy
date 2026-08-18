@@ -30,6 +30,10 @@
 #   FAKE_AGY_PRINT_HANG   same as FAKE_AGY_MODELS_HANG but on the --print
 #                         (delegation) path. Traps SIGTERM and sleeps 300s;
 #                         only `timeout -k` (SIGKILL) ends it.
+#   FAKE_AGY_VERSION_HANG same as FAKE_AGY_MODELS_HANG but on the --version
+#                         path. Traps SIGTERM and sleeps 300s; only
+#                         `timeout -k` (SIGKILL) ends it. Ignored outside
+#                         `--version`.
 #   FAKE_AGY_PRINT_KILL9  the --print (delegation) path exits 137 quickly,
 #                         well inside any --timeout bound -- emulating an
 #                         external SIGKILL (OOM killer, manual `kill -9`,
@@ -86,6 +90,11 @@ case "${1:-}" in
             "gemini-3.1-pro-low" "Gemini 3.1 Pro (Low)"
         exit 0 ;;
     --version)
+        if [[ -n "${FAKE_AGY_VERSION_HANG:-}" ]]; then
+            trap '' TERM
+            sleep 300
+            exit 0
+        fi
         echo "agy 0.0.0-fake"; exit 0 ;;
 esac
 

@@ -780,6 +780,32 @@ else
     bad "SH3 shim --version still exits 0 + prints version" "rc=$RC out=$OUT"
 fi
 
+echo "== gemini_shim.sh: unbounded agy calls (delegate-agy-pgx) =="
+
+# SH4: a SIGTERM-ignoring agy must not hang the shim's main --print call. The
+# shim's own timeout has to escalate to SIGKILL, exactly as the bridge's does.
+_SH4_START=$(date +%s)
+FAKE_AGY_PRINT_HANG=1 GEMINI_SHIM_TIMEOUT=2 _run OUT RC bash "$SHIM" -p "hang check"
+_SH4_ELAPSED=$(( $(date +%s) - _SH4_START ))
+if [[ "$RC" -ne 0 && "$_SH4_ELAPSED" -lt 40 && "$OUT" == *"timeout"* ]]; then
+    ok "SH4 hung shim main call is killed and reported, does not hang the shim"
+else
+    bad "SH4 hung shim main call is killed and reported, does not hang the shim" \
+        "rc=$RC elapsed=${_SH4_ELAPSED}s out=$OUT"
+fi
+
+# SH5: a SIGTERM-ignoring agy must not hang `gemini --version` either --
+# gemini_shim.sh:94 was the shim's other unbounded agy call site.
+_SH5_START=$(date +%s)
+FAKE_AGY_VERSION_HANG=1 _run OUT RC bash "$SHIM" --version
+_SH5_ELAPSED=$(( $(date +%s) - _SH5_START ))
+if [[ "$RC" -ne 0 && "$_SH5_ELAPSED" -lt 40 && "$OUT" == *"timeout"* ]]; then
+    ok "SH5 hung --version is killed and reported, does not hang the shim"
+else
+    bad "SH5 hung --version is killed and reported, does not hang the shim" \
+        "rc=$RC elapsed=${_SH5_ELAPSED}s out=$OUT"
+fi
+
 echo "== install.sh / uninstall.sh (vfn.11) =="
 
 _MARKER='# agy-delegate-wrapper'

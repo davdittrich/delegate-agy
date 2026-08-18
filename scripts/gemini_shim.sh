@@ -33,6 +33,16 @@ STDIN_TIMEOUT="${GEMINI_SHIM_STDIN_TIMEOUT:-30}"
     echo "ERROR: GEMINI_SHIM_STDIN_TIMEOUT must be a positive integer (got '$STDIN_TIMEOUT')" >&2
     exit 2
 }
+# Bound on the main agy call (gemini_shim.sh's --version call gets its own
+# short, non-configurable 10s bound — see below). agy ignores SIGTERM
+# (observed, see scripts/agy_bridge.sh), so every bounded call below escalates
+# via `-k 5` to SIGKILL; plain `timeout` would send the signal and then block
+# forever waiting for a child that never dies.
+SHIM_TIMEOUT="${GEMINI_SHIM_TIMEOUT:-600}"
+[[ "$SHIM_TIMEOUT" =~ ^[1-9][0-9]*$ ]] || {
+    echo "ERROR: GEMINI_SHIM_TIMEOUT must be a positive integer (got '$SHIM_TIMEOUT')" >&2
+    exit 2
+}
 
 # ── Model name mapping ────────────────────────────────────────────────────────
 # Maps gemini CLI model names/aliases → agy model names.
@@ -91,7 +101,17 @@ while [[ $# -gt 0 ]]; do
                 [[ $# -ge 1 && "${1:-}" == "" ]] && shift || true
             fi ;;
         --print)              PRINT_FLAG=1; shift ;;
-        --version)            "$AGY_BIN" --version; exit 0 ;;
+        --version)
+            _V_RC=0
+            if [[ -n "$TIMEOUT_BIN" ]]; then
+                "$TIMEOUT_BIN" -k 5 10 "$AGY_BIN" --version || _V_RC=$?
+            else
+                "$AGY_BIN" --version || _V_RC=$?
+            fi
+            if [[ "$_V_RC" -eq 124 || "$_V_RC" -eq 137 ]]; then
+                echo "ERROR: agy --version timeout after 10s" >&2
+            fi
+            exit "$_V_RC" ;;
         --help|-h)
             cat <<'HELP'
 gemini (agy shim) — drop-in Gemini CLI backed by agy (Antigravity CLI)
@@ -206,16 +226,26 @@ done
 START=$SECONDS
 EXIT_CODE=0
 set +e
-"$AGY_BIN" "${AGY_ARGS[@]}" \
-    > "$STDOUT_FILE" \
-    2> "$STDERR_FILE" \
-    < /dev/null
+if [[ -n "$TIMEOUT_BIN" ]]; then
+    "$TIMEOUT_BIN" -k 5 "$SHIM_TIMEOUT" "$AGY_BIN" "${AGY_ARGS[@]}" \
+        > "$STDOUT_FILE" \
+        2> "$STDERR_FILE" \
+        < /dev/null
+else
+    "$AGY_BIN" "${AGY_ARGS[@]}" \
+        > "$STDOUT_FILE" \
+        2> "$STDERR_FILE" \
+        < /dev/null
+fi
 EXIT_CODE=$?
 set -e
 DURATION=$(( SECONDS - START ))
 
 # ── Handle errors ─────────────────────────────────────────────────────────────
-if [[ "$EXIT_CODE" -ne 0 ]]; then
+if [[ "$EXIT_CODE" -eq 124 || "$EXIT_CODE" -eq 137 ]]; then
+    echo "ERROR: agy timeout after ${SHIM_TIMEOUT}s" >&2
+    exit 124
+elif [[ "$EXIT_CODE" -ne 0 ]]; then
     cat "$STDERR_FILE" >&2
     exit "$EXIT_CODE"
 fi
