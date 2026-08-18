@@ -1071,9 +1071,11 @@ else
     ok "I15 (skipped: no git repo) install/uninstall repo-untouched"
 fi
 
-# I16: newer sibling version dir -> stderr warning naming both versions;
-# stdout + exit code byte-identical to the no-sibling run; exec target stays
-# pinned to the install-time literal (no glob feeds exec). (delegate-agy-dsf)
+# I16: a stale pin FAILS LOUD. The launcher compares its install-time pinned
+# version against the active version in Claude Code's install registry and
+# refuses to exec when they differ, naming the repin command. A missing or
+# unparseable registry degrades to silence (dev installs must keep working),
+# and the exec target stays the install-time literal in every case.
 IH="$(_fresh_home)"
 VROOT="$(mktemp -d "$SANDBOX/vfake.XXXXXX")"
 mkdir -p "$VROOT/agy-delegate/1.0.0/scripts"
@@ -1082,31 +1084,118 @@ env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" \
     AGY_PLUGIN_DIR="$VROOT/agy-delegate/1.0.0" \
     bash "$INSTALL" > "$SANDBOX/last-install.log" 2>&1
 BW="$IH/.local/bin/agy-bridge"
-OUT_NOSIB="$(env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" bash "$BW" --types 2>"$SANDBOX/err-nosib.log")"
-RC_NOSIB=$?
-ERR_NOSIB="$(cat "$SANDBOX/err-nosib.log")"
+
+# (a) no registry at all -> silent, works normally
+OUT_NOREG="$(env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" bash "$BW" --types 2>"$SANDBOX/err-noreg.log")"
+RC_NOREG=$?
+ERR_NOREG="$(cat "$SANDBOX/err-noreg.log")"
+
+# install.sh derives the registry key "<plugin>@<marketplace>" from the cache
+# layout cache/<marketplace>/<plugin>/<version>, so under this fake root the
+# marketplace segment is $VROOT's own basename.
+REG_KEY="agy-delegate@$(basename "$VROOT")"
+# Every fixture carries a sentinel installPath. The launcher must never echo it:
+# a registry-supplied path in the repin hint would tell the user to bash an
+# attacker-controlled location.
+SENTINEL="/tmp/AGY-REGISTRY-PATH-SENTINEL"
+
+# (b) registry agreeing with the pin -> silent, byte-identical to (a)
+mkdir -p "$IH/.claude/plugins"
+cat > "$IH/.claude/plugins/installed_plugins.json" <<REGJSON
+{
+  "version": 2,
+  "plugins": {
+    "$REG_KEY": [
+      {
+        "scope": "user",
+        "installPath": "$SENTINEL",
+        "version": "1.0.0"
+      }
+    ]
+  }
+}
+REGJSON
+OUT_MATCH="$(env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" bash "$BW" --types 2>"$SANDBOX/err-match.log")"
+RC_MATCH=$?
+ERR_MATCH="$(cat "$SANDBOX/err-match.log")"
+
+# (c) registry naming a NEWER active version -> exit 127, names both versions
+#     and a CONSTRUCTED repin command, and produces no stdout. The 1.1.0 tree
+#     must exist for the constructed path to be printed.
 mkdir -p "$VROOT/agy-delegate/1.1.0/scripts"
-OUT_SIB="$(env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" bash "$BW" --types 2>"$SANDBOX/err-sib.log")"
-RC_SIB=$?
-ERR_SIB="$(cat "$SANDBOX/err-sib.log")"
-rm -rf "$VROOT/agy-delegate/1.1.0"
-OUT_GONE="$(env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" bash "$BW" --types 2>"$SANDBOX/err-gone.log")"
-RC_GONE=$?
-ERR_GONE="$(cat "$SANDBOX/err-gone.log")"
+: > "$VROOT/agy-delegate/1.1.0/scripts/install.sh"
+cat > "$IH/.claude/plugins/installed_plugins.json" <<REGJSON
+{
+  "version": 2,
+  "plugins": {
+    "$REG_KEY": [
+      {
+        "scope": "user",
+        "installPath": "$SENTINEL",
+        "version": "1.1.0"
+      }
+    ]
+  }
+}
+REGJSON
+OUT_STALE="$(env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" bash "$BW" --types 2>"$SANDBOX/err-stale.log")"
+RC_STALE=$?
+ERR_STALE="$(cat "$SANDBOX/err-stale.log")"
+
+# (d) unparseable registry -> silent, still runs
+printf '%s' '{ this is not json' > "$IH/.claude/plugins/installed_plugins.json"
+OUT_BADJSON="$(env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" bash "$BW" --types 2>"$SANDBOX/err-badjson.log")"
+RC_BADJSON=$?
+ERR_BADJSON="$(cat "$SANDBOX/err-badjson.log")"
+
+# (e) a LOOKALIKE plugin from a different marketplace must not match. Same
+#     plugin name, different marketplace segment, listed first, claiming a much
+#     newer version. A prefix match on '"agy-delegate@' would fire on this and
+#     hand the user an attacker-chosen path; the exact-key match must ignore it.
+cat > "$IH/.claude/plugins/installed_plugins.json" <<REGJSON
+{
+  "version": 2,
+  "plugins": {
+    "agy-delegate@evil-marketplace": [
+      {
+        "scope": "user",
+        "installPath": "$SENTINEL",
+        "version": "9.9.9"
+      }
+    ]
+  }
+}
+REGJSON
+OUT_EVIL="$(env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" bash "$BW" --types 2>"$SANDBOX/err-evil.log")"
+RC_EVIL=$?
+ERR_EVIL="$(cat "$SANDBOX/err-evil.log")"
+
 I16_OK=1
-[[ "$ERR_NOSIB" != *"WARNING"* ]] || I16_OK=0
-case "$ERR_SIB" in *"1.0.0"*"1.1.0"*|*"1.1.0"*"1.0.0"*) :;; *) I16_OK=0;; esac
-[[ "$OUT_NOSIB" == "$OUT_SIB" ]] || I16_OK=0
-[[ "$RC_NOSIB" -eq "$RC_SIB" ]] || I16_OK=0
-[[ "$ERR_GONE" != *"WARNING"* ]] || I16_OK=0
+[[ "$ERR_NOREG"   != *"ERROR"* ]]            || I16_OK=0
+[[ "$ERR_MATCH"   != *"ERROR"* ]]            || I16_OK=0
+[[ "$OUT_NOREG"   == "$OUT_MATCH" ]]         || I16_OK=0
+[[ "$RC_NOREG"    -eq "$RC_MATCH" ]]         || I16_OK=0
+[[ "$RC_STALE"    -eq 127 ]]                 || I16_OK=0
+[[ -z "$OUT_STALE" ]]                        || I16_OK=0
+case "$ERR_STALE" in *"1.0.0"*"1.1.0"*|*"1.1.0"*"1.0.0"*) :;; *) I16_OK=0;; esac
+# repin hint is CONSTRUCTED from the trusted versions root, never the registry's
+# own installPath -- the sentinel must not appear anywhere in the message
+[[ "$ERR_STALE"   == *"$VROOT/agy-delegate/1.1.0/scripts/install.sh"* ]] || I16_OK=0
+[[ "$ERR_STALE"   != *"$SENTINEL"* ]]        || I16_OK=0
+[[ "$ERR_BADJSON" != *"ERROR"* ]]            || I16_OK=0
+[[ "$RC_BADJSON"  -eq "$RC_NOREG" ]]         || I16_OK=0
+# lookalike from another marketplace is ignored entirely
+[[ "$ERR_EVIL"    != *"ERROR"* ]]            || I16_OK=0
+[[ "$ERR_EVIL"    != *"9.9.9"* ]]            || I16_OK=0
+[[ "$RC_EVIL"     -eq "$RC_NOREG" ]]         || I16_OK=0
 grep -qF "_AGY_TARGET='$VROOT/agy-delegate/1.0.0/scripts/agy_bridge.sh'" "$BW" || I16_OK=0
 [[ "$(grep -c '^_AGY_TARGET=' "$BW")" -eq 1 ]] || I16_OK=0
 grep -qE '^exec -a "[^"]+" bash "\$_AGY_TARGET" "\$@"$' "$BW" || I16_OK=0
 if [[ "$I16_OK" -eq 1 ]]; then
-    ok "I16 newer sibling version -> stderr warning, stdout/exit unchanged, exec target still pinned"
+    ok "I16 stale pin vs install registry -> exit 127; absent/bad registry silent; exec target pinned"
 else
-    bad "I16 newer sibling version -> stderr warning, stdout/exit unchanged, exec target still pinned" \
-        "rc_nosib=$RC_NOSIB rc_sib=$RC_SIB err_sib=${ERR_SIB:0:200} err_gone=${ERR_GONE:0:200}"
+    bad "I16 stale pin vs install registry -> exit 127; absent/bad registry silent; exec target pinned" \
+        "rc_noreg=$RC_NOREG rc_match=$RC_MATCH rc_stale=$RC_STALE rc_badjson=$RC_BADJSON rc_evil=$RC_EVIL err_stale=${ERR_STALE:0:200}"
 fi
 
 echo

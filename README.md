@@ -100,9 +100,10 @@ path disappears and the wrapper **fails loud** with a "re-run the install"
 message and a non-zero exit. If instead the plugin is **updated** and Claude
 Code's cache leaves the old version directory in place alongside the new one
 (observed behavior — the stale copy is not deleted), the pinned path still
-resolves, so the wrapper keeps running the pinned copy and instead prints a
-**stderr warning** naming both versions; stdout and the exit code are
-unaffected. **Re-run `/agy-setup`'s install command after any plugin update**
+resolves, so the wrapper compares its pinned version against the version Claude
+Code reports as installed and **refuses to run**: it exits `127` naming both
+versions and the exact command to repin, rather than silently executing the
+stale copy. **Re-run `/agy-setup`'s install command after any plugin update**
 to repin the wrappers either way.
 
 > **Shadow blast radius.** `~/.local/bin/gemini` shadows the real `gemini`
@@ -215,7 +216,7 @@ The plugin installs a `SubagentStart` hook (`hooks/agy-subagent-policy.sh`, wire
 |-------|-----|
 | `agy-bridge: command not found` | Run `/agy-setup` and its printed install command to create the wrapper |
 | `agy-delegate moved or was updated` (wrapper fails loud) | The plugin was moved, or updated in a way that removed the pinned version dir — re-run `/agy-setup`'s install command to repin the wrappers |
-| `WARNING: agy-delegate ... is pinned but a newer version ... is also installed` | The plugin was updated but Claude Code left the old version dir in the cache; the wrapper keeps running the pinned (old) copy — re-run `/agy-setup`'s install command to repin the newer one |
+| `ERROR: agy-delegate ... is installed, but this launcher is pinned to ...` | The plugin was updated but the wrapper is still pinned to the old version; it refuses to run the stale copy (exit `127`) until you repin — run the command it prints, or re-run `/agy-setup`'s install command |
 | `agy: command not found` | Add `~/.local/bin` to `$PATH`: bash/zsh: `export PATH="$HOME/.local/bin:$PATH"` · fish: `fish_add_path ~/.local/bin` |
 | Response missing source URLs | Use `--type search` |
 | Model name rejected | Run `agy models`; exact string required |
@@ -227,7 +228,7 @@ The plugin installs a `SubagentStart` hook (`hooks/agy-subagent-policy.sh`, wire
 
 Don't pipe credentials, API keys, or PII through the bridge. The prompt is written to a 0600 per-run `GEMINI.md` (not passed on the command line), so it stays out of process listings. Per-type tool restrictions are prompt-advisory (not API-enforced) instructing agy not to run shell commands; the API-level floor is `--sandbox`, which confines reads/writes to the granted `--add-dir` paths — a directory granted via `--add-dir` is exposed to the provider and is writable under `--type implement`. Model names are validated at startup against a list fetched from agy and cached for 60 minutes at `~/.cache/agy-bridge-models`. `--add-dir` refuses `/` and `$HOME` (exact resolved match) with exit 2 by default, overridable with `AGY_ALLOW_BROAD_GRANT=1`; this is a speed bump against the two broadest accidental grants, not a containment boundary — it does not stop, for example, a symlink under a granted subdirectory that points back at `$HOME`.
 
-The installer (`scripts/install.sh`) and uninstaller run with `set -euo pipefail`, refuse to run as root, write only under `~/.local/bin`, `~` (rc backups), `~/.config/agy-delegate`, and `~/.gemini`, and never touch the repo. The generated launcher wrappers exec a **pinned absolute path**: that exec target is never a user-writable cache glob and never a per-invocation `claude plugin list`. Wrappers fail loud if that path is missing. If a newer sibling version directory exists alongside the pinned one (a stale plugin-cache leftover after `claude plugin update`), the wrapper still execs only the pinned literal and additionally prints a single stderr warning naming the newer version — the exec target itself is never derived from that check.
+The installer (`scripts/install.sh`) and uninstaller run with `set -euo pipefail`, refuse to run as root, write only under `~/.local/bin`, `~` (rc backups), `~/.config/agy-delegate`, and `~/.gemini`, and never touch the repo. The generated launcher wrappers exec a **pinned absolute path**: that exec target is never a user-writable cache glob and never a per-invocation `claude plugin list`. Wrappers fail loud if that path is missing. They also compare their pinned version against the version Claude Code records in `~/.claude/plugins/installed_plugins.json` (honouring `CLAUDE_CONFIG_DIR`) and exit `127` rather than run a superseded copy; an absent or unparseable registry is silence, so dev installs keep working. That read is **comparison-only**: the registry contributes a version string and nothing else — the exec target is never derived from it, the registry key is matched exactly so a lookalike plugin from another marketplace cannot match, and the repin command printed is constructed from install-time literals, never from a registry-supplied path.
 
 ## Drop-in gemini CLI replacement
 

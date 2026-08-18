@@ -20,10 +20,11 @@ invoke agy instead). It also writes `~/.local/bin/agy-bridge`. Both are pinned
 launchers that exec an absolute path recorded at install time; if the plugin is
 moved (pinned path gone) they fail loud and ask you to re-run this install. If
 the plugin is updated but Claude Code's cache leaves the old version directory
-in place too (observed behavior), the pinned path still resolves, so the
-wrapper keeps running the pinned (now stale) copy and prints a stderr warning
-naming both versions instead of failing — re-run this install to repin. To
-undo everything, run the uninstall command at the bottom.
+in place too (observed behavior), the pinned path still resolves — so the
+wrapper compares its pinned version against the version Claude Code reports as
+installed and refuses to run the stale copy, exiting `127` with both versions
+and the repin command. Re-run this install to repin. To undo everything, run
+the uninstall command at the bottom.
 
 ## Install (copy-paste this)
 
