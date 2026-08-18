@@ -1,0 +1,13 @@
+{
+  "source_path": "/home/dd/Gemini/delegate-agy/docs/superpowers/plans/2026-08-18-blocking-followups.md",
+  "type": "SPEC",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "1.6.2 Blocking Follow-Ups Implementation Plan",
+  "summary": "Implementation plan bounding agy shim calls and fixing correctness/docs defects blocking the delegate-agy 1.6.2 release.",
+  "scope": ["agy-bridge", "gemini_shim.sh", "agy CLI", "1.6.2 release", "timeout bounding", "model resolution"],
+  "cross_refs": ["scripts/gemini_shim.sh", "tests/fake-agy.sh", "tests/run-tests.sh", "tests/hooks/run-hook-tests.sh"],
+  "locked": false,
+  "precedence": 1,
+  "notes": "Live work plan, partially executed and amended mid-execution (task inserted, task renumbered, expected test counts corrected). 3 of 7 tasks committed with tickets closed; remaining tasks tracked as open bd tickets (delegate-agy-pgx, -62x, -b8x, -v5a, -6q1, -4vy). Treat this file's task list as a historical snapshot, not the current source of truth — bd issue tracker is authoritative for current pending work; do not encode this document's remaining task list into a roadmap as if still fully pending."
+}

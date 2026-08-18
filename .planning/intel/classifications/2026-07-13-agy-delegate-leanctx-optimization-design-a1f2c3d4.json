@@ -1,0 +1,13 @@
+{
+  "source_path": "/home/dd/Gemini/delegate-agy/docs/superpowers/specs/2026-07-13-agy-delegate-leanctx-optimization-design.md",
+  "type": "SPEC",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "Design: agy-delegate — lean-ctx/tokensave-first optimization for Claude Code",
+  "summary": "Design for making agy-delegate work in a lean-ctx/tokensave-enforced Claude Code host while degrading gracefully without them.",
+  "scope": ["agy-delegate", "lean-ctx", "tokensave", "agy-bridge", "gemini_shim.sh", "cc-websearch", "sandbox policies", "installer", "MCP tools"],
+  "cross_refs": [],
+  "locked": false,
+  "precedence": 1,
+  "notes": "No explicit filename/path reference to a companion spike-results document was found in the read portions (lines 1-260); the spike (WU0) is described inline in §3.0 but a separate 'spike-results' doc is not linked by path in this file."
+}

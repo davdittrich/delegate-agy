@@ -2,7 +2,9 @@
 
 **Analysis Date:** 2026-08-18
 
-Source: `bd list --status open` / `bd show <id>` against the live tracker (authoritative, 7 open issues as of this analysis), cross-checked against `scripts/*.sh` in the worktree `/home/dd/Gemini/delegate-agy/.worktrees/agy-1.6.2` (branch `fix/agy-bridge-resilience`, 13 commits ahead of `master`, at commit `56be103`).
+Source: `bd list --status open` / `bd show <id>` against the live tracker (authoritative, 7 open issues as of this analysis), cross-checked against `scripts/*.sh` in the worktree `/home/dd/Gemini/delegate-agy/.worktrees/agy-1.6.2` (branch `fix/agy-bridge-resilience` at commit `56be103`; 5 commits not yet in `master`'s history, though master's *content* lacks considerably more than that — see below).
+
+**Branch vs master, stated precisely:** master merged this work and then reverted its content at `a001d0e` rather than rewriting history. So master's commit graph contains most of these commits while master's files do not contain the fixes. Judge state by reading files, not by `git log`.
 
 **Caveat on this snapshot:** this document describes `fix/agy-bridge-resilience` at `56be103`. `master` itself sits at a deliberately reverted pre-release state (per the task brief), so anyone comparing this document against mainline will see a different, older codebase — re-check file paths and line numbers against the branch, not `master`.
 
