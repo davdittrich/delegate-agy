@@ -1558,6 +1558,51 @@ else
         "rc_base=$RC_BASE rc_empty=$RC_EMPTY rc_compact=$RC_COMPACT rc_semi=$RC_SEMI err_empty=${ERR_EMPTY:0:120} err_compact=${ERR_COMPACT:0:120} err_semi=${ERR_SEMI:0:120}"
 fi
 
+# I18: an apostrophe anywhere in the plugin cache path must not break the
+# generated wrapper. install.sh interpolates install-time values into
+# single-quoted contexts in the heredoc -- _AGY_TARGET, _AGY_VERSION,
+# _AGY_VERSIONS_ROOT, and reg_key_re inside a single-quoted sed script -- and
+# an unescaped apostrophe in any of them terminates the quoting early,
+# producing a syntactically broken wrapper. That wrapper shadows the real
+# `gemini` for every caller on PATH, so a broken quote breaks every one of
+# them, not just this install.
+IH="$(_fresh_home)"
+# Apostrophes in BOTH the marketplace segment (-> reg_key/reg_key_re, and via
+# the shared prefix _AGY_TARGET/_AGY_VERSIONS_ROOT) and the version segment
+# (-> _AGY_VERSION, otherwise unexercised since the marketplace apostrophe
+# alone already forces target/parent_dir to carry one) -- so a regression in
+# ANY single interpolation site is caught, not just the first one hit.
+VROOT3="$SANDBOX/dd's-plugins.$$"
+PDIR3="$VROOT3/agy-delegate/1.0.0's-beta"
+mkdir -p "$PDIR3/scripts"
+cp "$ROOT/scripts/agy_bridge.sh" "$ROOT/scripts/gemini_shim.sh" "$PDIR3/scripts/"
+env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" \
+    AGY_PLUGIN_DIR="$PDIR3" \
+    bash "$INSTALL" > "$SANDBOX/last-install.log" 2>&1
+BW="$IH/.local/bin/agy-bridge"
+
+# Expected wrapper-visible forms: the same '->'\'' escape the fix applies,
+# computed independently here so these assertions catch a missing/wrong
+# escape rather than just echoing install.sh's own output.
+TARGET_PATH="$PDIR3/scripts/agy_bridge.sh"
+TARGET_SQ="${TARGET_PATH//\'/\'\\\'\'}"
+VERSION_SQ="${PDIR3##*/}"; VERSION_SQ="${VERSION_SQ//\'/\'\\\'\'}"
+
+I18_OK=1
+bash -n "$BW" 2>"$SANDBOX/err-i18-syntax.log" || I18_OK=0
+grep -qF "_AGY_TARGET='$TARGET_SQ'" "$BW" || I18_OK=0
+grep -qF "_AGY_VERSION='$VERSION_SQ'" "$BW" || I18_OK=0
+[[ "$(grep -c '^_AGY_TARGET=' "$BW")" -eq 1 ]] || I18_OK=0
+grep -qE '^exec -a "[^"]+" bash "\$_AGY_TARGET" "\$@"$' "$BW" || I18_OK=0
+WOUT="$(env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" bash "$BW" --types 2>&1)"; WRC=$?
+[[ "$WRC" -eq 0 && "$WOUT" == *"model"* ]] || I18_OK=0
+if [[ "$I18_OK" -eq 1 ]]; then
+    ok "I18 apostrophe in plugin cache path does not break the generated wrapper"
+else
+    bad "I18 apostrophe in plugin cache path does not break the generated wrapper" \
+        "syntax_err=$(cat "$SANDBOX/err-i18-syntax.log") wrc=$WRC wout=${WOUT:0:200} log=$(tail -5 "$SANDBOX/last-install.log")"
+fi
+
 echo
 echo "PASS=$PASS FAIL=$FAIL"
 if [[ "$FAIL" -eq 0 ]]; then
