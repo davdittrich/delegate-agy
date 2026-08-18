@@ -142,6 +142,10 @@ if [[ -z "$VALID_MODELS" ]]; then
     VALID_MODELS=$(cat "$CACHE_FILE" 2>/dev/null) || true
 fi
 [[ -n "$VALID_MODELS" ]] || { echo "ERROR: failed to retrieve model list from agy" >&2; exit 2; }
+# agy models emits "id<TAB>display name". Keep only the id so the anchored
+# matches below (both '$'-anchored) still hold. Applied after the cache read too,
+# so caches written by an older bridge normalize on load. Tab-free lines pass through.
+VALID_MODELS=$(printf '%s\n' "$VALID_MODELS" | cut -f1)
 
 # ── Model auto-selection / validation ─────────────────────────────────────────
 if [[ -z "$MODEL" ]]; then

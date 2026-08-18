@@ -247,6 +247,36 @@ else
 fi
 rm -f "$_R3_CACHE"
 
+# R3b: explicit --model is validated against the "id<TAB>display name" list agy
+# emits — the id must match even though the line carries a trailing display name.
+FAKE_AGY_STDOUT="ok" _run OUT RC bash "$BRIDGE" --type code --model gemini-3.1-pro-high --verbose -- "explicit model"
+if [[ "$RC" -eq 0 && "$OUT" == *"model=gemini-3.1-pro-high"* ]]; then
+    ok "R3b explicit --model accepted against tab-separated agy models output"
+else
+    bad "R3b explicit --model accepted against tab-separated agy models output" "rc=$RC out=$OUT"
+fi
+
+# R3c: a stale cache written in the "id<TAB>display name" form normalizes on
+# load, so auto-select still resolves the id (not the whole tabbed line).
+_R3C_CACHE="$HOME/.cache/agy-bridge-models"
+mkdir -p "$(dirname "$_R3C_CACHE")"
+printf '%s\t%s\n' "gemini-3.1-pro-high" "Gemini 3.1 Pro (High)" > "$_R3C_CACHE"
+FAKE_AGY_STDOUT="ok" _run OUT RC bash "$BRIDGE" --type code --verbose -- "cached tabbed list"
+if [[ "$RC" -eq 0 && "$OUT" == *"model=gemini-3.1-pro-high"* ]]; then
+    ok "R3c tab-separated cache normalizes on load (auto-select gets the id)"
+else
+    bad "R3c tab-separated cache normalizes on load (auto-select gets the id)" "rc=$RC out=$OUT"
+fi
+rm -f "$_R3C_CACHE"
+
+# R3d: an unknown --model is still rejected (normalization must not loosen the check).
+FAKE_AGY_STDOUT="ok" _run OUT RC bash "$BRIDGE" --type code --model gemini-9.9-pro-high -- "bogus model"
+if [[ "$RC" -eq 2 && "$OUT" == *"unknown --model"* ]]; then
+    ok "R3d unknown --model still exits 2 after tab normalization"
+else
+    bad "R3d unknown --model still exits 2 after tab normalization" "rc=$RC out=$OUT"
+fi
+
 # R4: gemini_shim.sh -m flash still maps to "Gemini 3.6 Flash (High)" post map-purge
 # (reuses the SH2 FAKE_AGY_DUMP_ARGV harness defined below, in the
 # "gemini_shim.sh: no stanza + --sandbox floor" section).

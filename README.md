@@ -330,6 +330,11 @@ config/policies/               — GEMINI.md tool restriction policies (one file
 
 ## Changelog
 
+### 1.6.1
+
+- Fixed every bridge delegation failing on current agy: `agy models` now emits `id<TAB>display name` per line, so the bridge's `$`-anchored matchers found nothing — auto-select died with `no gemini model for --type`, and explicit `--model` died with `unknown --model`. The fetched list (and any stale cache written in the tabbed form) is now reduced to its id column before matching; the anchored patterns and the unknown-model rejection are unchanged.
+- `tests/fake-agy.sh` emits the real tab-separated `agy models` format, so the suite reproduces this class of drift instead of passing against a shape agy no longer produces.
+
 ### 1.6.0
 
 - `agy-bridge` gains repeatable `--add-dir PATH` passthrough, granting the delegated model read access to caller-chosen directories without inlining file bodies into the prompt.

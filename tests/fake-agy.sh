@@ -38,7 +38,16 @@ fi
 
 case "${1:-}" in
     models)
-        printf '%s\n' "gemini-3.6-flash-high" "gemini-3.6-flash-medium" "gemini-3.6-flash-low" "gemini-3.5-flash-high" "gemini-3.5-flash-medium" "gemini-3.5-flash-low" "gemini-3.1-pro-high" "gemini-3.1-pro-low"
+        # Real agy emits "id<TAB>display name" per line (header goes to stderr).
+        printf '%s\t%s\n' \
+            "gemini-3.6-flash-high" "Gemini 3.6 Flash (High)" \
+            "gemini-3.6-flash-medium" "Gemini 3.6 Flash (Medium)" \
+            "gemini-3.6-flash-low" "Gemini 3.6 Flash (Low)" \
+            "gemini-3.5-flash-high" "Gemini 3.5 Flash (High)" \
+            "gemini-3.5-flash-medium" "Gemini 3.5 Flash (Medium)" \
+            "gemini-3.5-flash-low" "Gemini 3.5 Flash (Low)" \
+            "gemini-3.1-pro-high" "Gemini 3.1 Pro (High)" \
+            "gemini-3.1-pro-low" "Gemini 3.1 Pro (Low)"
         exit 0 ;;
     --version)
         echo "agy 0.0.0-fake"; exit 0 ;;
