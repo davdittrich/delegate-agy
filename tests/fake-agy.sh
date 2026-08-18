@@ -27,6 +27,9 @@
 #   FAKE_AGY_MODELS_HANG  `agy models` traps SIGTERM and sleeps 300s, emulating
 #                         the observed real-agy hang. Only `timeout -k`
 #                         (SIGKILL) ends it. Ignored outside `models`.
+#   FAKE_AGY_PRINT_HANG   same as FAKE_AGY_MODELS_HANG but on the --print
+#                         (delegation) path. Traps SIGTERM and sleeps 300s;
+#                         only `timeout -k` (SIGKILL) ends it.
 #   FAKE_AGY_MODELS_FAIL  `agy models` exits 1 with a FAKE-AGY-AUTH-FAILURE
 #                         diagnostic on stderr, simulating an auth/network
 #                         fault. Ignored outside `models`.
@@ -80,6 +83,15 @@ case "${1:-}" in
     --version)
         echo "agy 0.0.0-fake"; exit 0 ;;
 esac
+
+# Delegation hang mode: same shape as FAKE_AGY_MODELS_HANG, but on the --print
+# path. Traps SIGTERM and sleeps, emulating agy ignoring the signal, so only a
+# `timeout -k` escalation can end it.
+if [[ -n "${FAKE_AGY_PRINT_HANG:-}" ]]; then
+    trap '' TERM
+    sleep 300
+    exit 0
+fi
 
 # Otherwise this is a real --print run. Parse the real agy flag set:
 #   --print <value> --sandbox --model <value> --add-dir <dir> (repeatable)

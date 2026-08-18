@@ -337,7 +337,9 @@ if [[ "${AGY_SKIP_PERMISSIONS:-0}" == "1" ]]; then
     echo "WARNING: AGY_SKIP_PERMISSIONS=1 — running with --dangerously-skip-permissions" >&2
     AGY_FLAGS+=(--dangerously-skip-permissions)
 fi
-( cd "$WORK_DIR" && "$TIMEOUT_BIN" "$TIMEOUT" "$AGY_BIN" \
+# -k 5: agy ignores SIGTERM (observed), so plain `timeout` would send the
+# signal and then block forever waiting for a child that never dies.
+( cd "$WORK_DIR" && "$TIMEOUT_BIN" -k 5 "$TIMEOUT" "$AGY_BIN" \
     "${AGY_FLAGS[@]}" \
     > "$STDOUT_FILE" \
     2> "$STDERR_FILE" \
@@ -347,7 +349,7 @@ set -e
 DURATION=$(( SECONDS - START ))
 
 # ── Handle errors ─────────────────────────────────────────────────────────────
-if [[ "$EXIT_CODE" -eq 124 ]]; then
+if [[ "$EXIT_CODE" -eq 124 || "$EXIT_CODE" -eq 137 ]]; then
     if [[ "$JSON_OUTPUT" -eq 1 ]]; then
         python3 -c "
 import json, sys

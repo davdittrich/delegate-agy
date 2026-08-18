@@ -480,6 +480,18 @@ else
     bad "T3e --digest empty prompt rejected before digest output-contract append" "rc=$RC out=$OUT"
 fi
 
+# T4: a SIGTERM-ignoring agy must not hang the delegation call. The bridge's own
+# --timeout has to escalate to SIGKILL, exactly as the model fetch does.
+_T4_START=$(date +%s)
+FAKE_AGY_PRINT_HANG=1 _run OUT RC bash "$BRIDGE" --type code --timeout 2 -- "delegation hang"
+_T4_ELAPSED=$(( $(date +%s) - _T4_START ))
+if [[ "$RC" -ne 0 && "$_T4_ELAPSED" -lt 40 && "$OUT" == *"timeout"* ]]; then
+    ok "T4 hung delegation call is killed and reported, does not hang the bridge"
+else
+    bad "T4 hung delegation call is killed and reported, does not hang the bridge" \
+        "rc=$RC elapsed=${_T4_ELAPSED}s out=$OUT"
+fi
+
 echo "== agy_bridge.sh --add-dir passthrough (delegate-agy-0i9.2) =="
 
 # AD1: caller --add-dir reaches agy AND stays before the trailing WORK_DIR
