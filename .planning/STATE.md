@@ -6,7 +6,7 @@ current_phase: 1
 current_phase_name: The missing-`timeout` decision
 status: planning
 stopped_at: Phase 1 context gathered
-last_updated: "2026-08-18T23:04:55.060Z"
+last_updated: "2026-08-18T23:19:55.036Z"
 last_activity: 2026-08-19
 last_activity_desc: Roadmap created from REQUIREMENTS.md; 9 requirements mapped across 7 phases, all 7 open bd tickets absorbed
 progress:
@@ -73,10 +73,15 @@ None yet.
 
 ### Blockers/Concerns
 
-- **S5 is externally blocked.** `agy` is unresponsive and returns 124 on every call, `agy models` included. Do not invoke it. Phase 7's deliverable is the harness and its honest "unverified" verdict, not a green run.
 - **Master's files lag its history.** `master` merged 1.6.2 at `1a0051c` then content-reverted at `a001d0e`. `git log` shows the fixes; `git show HEAD:file` does not. Completed work lives on `fix/agy-bridge-resilience` at `56be103`, worktree `.worktrees/agy-1.6.2`. Judge state by reading files.
 - **The shim's blast radius is box-wide.** `~/.local/bin/gemini` shadows the real binary for interactive shells, Octopus, and Metaswarm. Weight any shim defect above an equivalent bridge defect.
-- **`delegate-agy-62x` is closed but was never verified** — whether `agy --model` accepts ids, display names, or both remains a hypothesis. Test R4 asserts the display-name mapping, so the suite would not catch it being wrong.
+- **The per-run GEMINI.md policy may not be authoritative.** A probe from a throwaway CWD had agy answer that it found `GEMINI.md` in five unrelated projects, so agy discovers context outside its working directory. `agy_bridge.sh`'s per-type tool restriction assumes its own GEMINI.md binds. Not yet reproduced through the bridge, which also passes `--sandbox` and `--add-dir` (`delegate-agy-xfa`, P1, Phase 1.5).
+- **R6's empty-success case is real, not hypothetical.** The same probe saw agy exit rc=0 with completely empty stdout when a tool hit a headless permission gate (`jetski: no output produced -- a tool required the "command" permission ... auto-denied`). Phase 3's exit-3 requirement is grounded in observed behavior.
+- **agy is live; the docs that said otherwise are corrected, the phases are not yet re-read.** Verified 2026-08-19 against agy 1.1.13: `--version` and `agy models` both return in seconds, and a real `--type review` delegation returned 4721 bytes. `agy --model` accepts BOTH ids and display names; a bogus name gives rc=1 with an `Available models:` list rendered in display names. PROJECT.md and ROADMAP.md are corrected and Phase 7 moved to Phase 1.5; `delegate-agy-9qp` stays open until Phase 1.5 lands the fixtures and the README statement. **Not established:** whether agy ignores SIGTERM -- every probe call returned on its own, so no bound fired and the `-k` rationale rests on its original observation, untested.
+
+### Roadmap Evolution
+
+- Phase 1.5 changed: re-scoped and moved from Phase 7 to Phase 1.5 (decimal insertion). Its blocking premise -- agy unresponsive, live check unachievable -- was disproven by a bounded read-only probe on 2026-08-19: agy 1.1.13 answers, 'agy models' returns 14 lines of id<TAB>display-name in under 30s, and --model accepts BOTH ids and display names, settling delegate-agy-62x which was closed unverified. Criterion 4 inverted from 'README states the assumption is unverified' to 'README states the verified fact with the agy version and date'. Criterion 2's unverified-verdict path stays mandatory but is no longer the expected outcome. Phase 2 now depends on 1.5's fixtures; Phases 5 and 6 gained it as a dependency. Evidence: delegate-agy-9qp.
 
 ## Deferred Items
 

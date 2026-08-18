@@ -2,7 +2,9 @@
 
 ## Overview
 
-This is brownfield. 1.6.1 ships and works; 1.6.2 is written, sits on `fix/agy-bridge-resilience`, and was content-reverted from `master` at `a001d0e` pending the follow-ups it surfaced. The roadmap therefore has two halves. Phases 1–4 close the seven open tracker tickets and finish the four v1.6.2 requirements against the branch — four independent code surfaces (the `TIMEOUT_BIN` branches, the shared model cache, the bridge's error output, the installer and launcher). Phase 5 converts those four now-settled failure modes into a stated, tested contract for the `gemini` shim, which is the only thing in this project with box-wide reach. Phase 6 is the release gate: 1.6.2 ships only when nothing it surfaced is still open. Phase 7 builds the check that would have caught the originating bug — it cannot pass today, because `agy` is unresponsive, so the harness is the deliverable and "unverified" is a legitimate verdict.
+This is brownfield. 1.6.1 ships and works; 1.6.2 is written, sits on `fix/agy-bridge-resilience`, and was content-reverted from `master` at `a001d0e` pending the follow-ups it surfaced. The roadmap therefore has two halves. Phases 1–4 close the open tracker tickets and finish the four v1.6.2 requirements against the branch — four independent code surfaces (the `TIMEOUT_BIN` branches, the shared model cache, the bridge's error output, the installer and launcher). Phase 5 converts those four now-settled failure modes into a stated, tested contract for the `gemini` shim, which is the only thing in this project with box-wide reach. Phase 6 is the release gate: 1.6.2 ships only when nothing it surfaced is still open.
+
+**Phase 1.5 was Phase 7 until 2026-08-19.** It builds the check that would have caught the originating bug, and it was roadmapped last because `agy` was believed unresponsive — the harness was the deliverable and "unverified" was the expected verdict. A bounded probe that day disproved the premise: agy 1.1.13 answers, `agy models` returns in under 30s, and `--model` demonstrably accepts both ids and display names. The check therefore runs **before** the phases that reason about agy's output rather than after the release meant to validate them, so Phases 2 and 5 work from recorded fixtures instead of a hypothesis. It is an insertion under the decimal convention below, not a renumbering.
 
 **Judge state by reading files, never by the commit graph.** `master`'s history contains the 1.6.2 commits; `master`'s files do not.
 
@@ -15,12 +17,12 @@ This is brownfield. 1.6.1 ships and works; 1.6.2 is written, sits on `fix/agy-br
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [ ] **Phase 1: The missing-`timeout` decision** - Settle whether the shim degrades or refuses when no `timeout` binary exists, then say so in both scripts
+- [ ] **Phase 1.5: Contract check against a real agy** (INSERTED 2026-08-19, was Phase 7) - Ask the real binary which assumptions hold and record the answers as fixtures the later phases build on
 - [ ] **Phase 2: Model-list handling, end to end** - No crash on a bare environment, no poisoned shared cache, no misattributed blame for a degraded agy
 - [ ] **Phase 3: The exit-code contract** - Every documented code reachable, distinct, and quoted in the docs as the code actually prints it
 - [ ] **Phase 4: Installer and launcher surface** - Registry read stays comparison-only; no install path aborts halfway
 - [ ] **Phase 5: The shim's failure-mode contract** - One table stating what `gemini` does to a caller that never heard of agy, one test per row
 - [ ] **Phase 6: Ship 1.6.2** - The held release lands on master with every follow-up it surfaced already closed
-- [ ] **Phase 7: Contract check against a real agy** - Ask the real binary which assumptions hold, or report honestly that it could not be asked
 
 ## Phase Details
 
@@ -40,9 +42,23 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 **Why criterion 4 is an invariant rather than a list.** The count of `agy` call sites has been stated wrong three times in three different ways: the original plan said two, a whole-branch review corrected it to four, and it is now five — the last because this project's own dynamic-model-resolution work added one to the shim. A criterion naming a number is correct only until the next commit and then silently goes stale, which is precisely the failure mode that let an unbounded call survive a release built to eliminate unbounded calls. Assert the property over the file instead: any new call site must justify itself against the test, not against someone's memory of how many there were.
 
+### Phase 1.5: Contract check against a real agy
+**Goal**: An operator can ask the real binary which assumptions hold and get either a recorded answer or an honest "could not ask" — and the later phases build on the recorded answers rather than on hypotheses.
+**Depends on**: Nothing (read-only against the installed `agy`; independent of Phase 1)
+**Requirements**: S5
+**Tickets**: `delegate-agy-xfa` (P1). `delegate-agy-9qp` (P2) carries the probe evidence that motivated this phase's move and closes when its doc corrections land. `delegate-agy-62x`, which raised the id-vs-display-name question and was closed without ever being verified, is answered by criterion 1.
+**Success Criteria** (what must be TRUE):
+  1. One command, separate from the unit suite and never invoked by it, exercises the real `agy` and reports which assumptions hold — at minimum what `agy models` emits, whether `--model` accepts ids, display names, or both, and whether a per-run `GEMINI.md` in the working directory actually binds when agy can also see `GEMINI.md` files in other projects (`delegate-agy-xfa`).
+  2. Run against an `agy` that hangs or is absent, the check exits within its own `-k` bound with a distinct "unverified" status, names the assumption it could not settle, and never reports pass — it does not hang the operator who ran it. This path is required and must be tested; it is no longer the expected outcome.
+  3. Its captured output lands in `tests/` fixtures in a form the fake agy can be regenerated from, so the suite's fake tracks real output instead of a hypothesis. At minimum the fixtures carry the `id<TAB>display name` model list, the invalid-model rejection (which renders its "Available models:" list in display names), and the rc=0-with-empty-stdout response that R6 exists to catch.
+  4. README states the verified behavior as fact — that `--model` accepts both ids and display names — carrying the `agy` version and the date it was verified against, and the check re-confirms it rather than the docs disclaiming it. No document may claim the assumption is unverified.
+**Plans**: TBD
+
+**Note**: this phase was Phase 7 until 2026-08-19 and depended on Phase 6. It moved because its blocking premise was disproven, not because its scope shrank. The "could not ask" path in criterion 2 stays mandatory — agy was unreachable last week and may be again — but the phase now has to produce a real verdict, and Phases 2 and 5 consume its fixtures. Verified so far against agy 1.1.13: `agy models` returns 14 lines of `id<TAB>display name` in under 30s; live ids carry a third segment (`gemini-3.1-pro-high`, `gemini-3.7-flash-medium`), so both scripts' anchored matchers and `config/model-map.json`'s `pro-high`/`flash-high` class values still hold.
+
 ### Phase 2: Model-list handling, end to end
 **Goal**: A bare environment cannot crash the bridge, and one bad `agy models` reply cannot degrade the other tool or blame the user for it.
-**Depends on**: Nothing (independent of Phase 1 — different code region in the same two files)
+**Depends on**: Phase 1.5 (its fixtures are what criterion 4's "byte-identical to what shipped" is checked against; independent of Phase 1 — different code region in the same two files)
 **Requirements**: S1, S4
 **Tickets**: `delegate-agy-30m` (P1), `delegate-agy-8ph` (P2)
 **Success Criteria** (what must be TRUE):
@@ -82,7 +98,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 ### Phase 5: The shim's failure-mode contract
 **Goal**: An operator can read exactly what `gemini` does to a caller that has never heard of agy, for every way this plugin fails.
-**Depends on**: Phases 1, 2, 3, 4 (each settles one of the four failure modes this phase pins down)
+**Depends on**: Phases 1, 1.5, 2, 3, 4 (each settles one of the four failure modes this phase pins down; 1.5 supplies the real-agy behavior the "hung agy" and "unparseable model list" rows are written against)
 **Requirements**: S3
 **Tickets**: none open — this phase states the contract the earlier phases make true
 **Success Criteria** (what must be TRUE):
@@ -94,8 +110,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 ### Phase 6: Ship 1.6.2
 **Goal**: The held release lands on master with every follow-up it surfaced already closed.
-**Depends on**: Phases 1, 2, 3, 4, 5
-**Requirements**: none directly — this phase is the release gate for R5, R6, R8, R11, S1, S2, S3, S4
+**Depends on**: Phases 1, 1.5, 2, 3, 4, 5
+**Requirements**: none directly — this phase is the release gate for R5, R6, R8, R11, S1, S2, S3, S4, S5
 **Tickets**: none at plan time; the gate is that none exist at ship time
 **Success Criteria** (what must be TRUE):
   1. `bd list --status open` contains no ticket discovered or caused by 1.6.2 work, including any opened during Phases 1–5; anything not fixed is deferred with a recorded reason before the tag is cut.
@@ -104,36 +120,22 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. The release notes name each defect 1.6.2 closes and state plainly that every existing installation must re-run the installer, because the pin only points forward.
 **Plans**: TBD
 
-### Phase 7: Contract check against a real agy
-**Goal**: An operator can ask the real binary which assumptions hold and get either an answer or an honest "could not ask".
-**Depends on**: Phase 6
-**Requirements**: S5
-**Tickets**: none open (`delegate-agy-62x`, which raised the id-vs-display-name question, is closed without ever being verified)
-**Success Criteria** (what must be TRUE):
-  1. One command, separate from the unit suite and never invoked by it, exercises the real `agy` and reports which assumptions hold — at minimum whether `--model` accepts ids, display names, or both, and what `agy models` actually emits.
-  2. Run against today's unresponsive agy, the check exits within its own `-k` bound with a distinct "unverified" status, names the assumption it could not settle, and never reports pass — it does not hang the operator who ran it.
-  3. Its captured output lands in `tests/` fixtures in a form the fake agy can be regenerated from, so the suite's fake tracks real output instead of a hypothesis.
-  4. README states that the id-vs-display-name assumption is unverified until this check has run green against a live agy.
-**Plans**: TBD
-
-**Note**: `agy` currently hangs and returns 124 on every call, `agy models` included. Do not invoke it while building this phase. The deliverable is the harness and its honest blocked verdict; a green run is not a success criterion, because it is not achievable on this machine.
-
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
+Phases execute in numeric order: 1 → 1.5 → 2 → 3 → 4 → 5 → 6
 
-Phases 1–4 have no dependencies on each other and may be planned or executed concurrently. They touch overlapping files (`agy_bridge.sh`, `gemini_shim.sh`), so concurrent execution trades merge friction for wall-clock, and that tradeoff is the planner's call.
+Phases 1, 1.5, 3, and 4 have no dependencies on each other and may be planned or executed concurrently; Phase 2 waits on 1.5's fixtures. Phases 1–4 touch overlapping files (`agy_bridge.sh`, `gemini_shim.sh`), so concurrent execution trades merge friction for wall-clock, and that tradeoff is the planner's call. Phase 1.5 touches no shipped script — it adds a check and fixtures — so it merges cleanly alongside any of them.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. The missing-`timeout` decision | 0/TBD | Not started | - |
+| 1.5. Contract check against a real agy | 0/TBD | Not started | - |
 | 2. Model-list handling, end to end | 0/TBD | Not started | - |
 | 3. The exit-code contract | 0/TBD | Not started | - |
 | 4. Installer and launcher surface | 0/TBD | Not started | - |
 | 5. The shim's failure-mode contract | 0/TBD | Not started | - |
 | 6. Ship 1.6.2 | 0/TBD | Not started | - |
-| 7. Contract check against a real agy | 0/TBD | Not started | - |
 
 ## Requirement Coverage
 
@@ -147,8 +149,8 @@ Phases 1–4 have no dependencies on each other and may be planned or executed c
 | S2 — Survive a Claude Code registry schema change | Phase 4 | — |
 | S3 — Shim defects must not escape into PATH callers | Phase 5 | — |
 | S4 — Shared model cache safe under two writers | Phase 2 | `8ph` |
-| S5 — Verifiable against a real `agy` | Phase 7 | — (externally blocked) |
+| S5 — Verifiable against a real `agy` | Phase 1.5 | `xfa` |
 
 9/9 requirements mapped, each to exactly one phase. No orphans, no duplicates.
 
-All 7 open tickets are absorbed: `cy5` → Phase 1; `30m`, `8ph` → Phase 2; `6q1`, `v5a` → Phase 3; `4vy`, `4xn` → Phase 4. `delegate-agy-30m` carries no requirement mapping — it is a release-blocking crash surfaced by 1.6.2 work, and Phase 6's gate covers it.
+All 10 open tickets are absorbed: `cy5` → Phase 1; `xfa`, `9qp` → Phase 1.5; `30m`, `8ph` → Phase 2; `6q1`, `v5a` → Phase 3; `4vy`, `4xn`, `lkg` → Phase 4. `delegate-agy-30m` carries no requirement mapping — it is a release-blocking crash surfaced by 1.6.2 work, and Phase 6's gate covers it. `lkg` (installer live-verify can block ~600s) and `9qp` (the stale "agy is unresponsive" blocker in STATE.md and PROJECT.md) were filed on 2026-08-19 during Phase 1's discussion; `xfa` (does the per-run `GEMINI.md` policy actually bind?) came out of the probe that disproved `9qp`'s premise.

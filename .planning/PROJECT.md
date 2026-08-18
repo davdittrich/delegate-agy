@@ -58,7 +58,9 @@ Pure bash: 9 shell scripts, an ~89-test hand-rolled harness (`tests/run-tests.sh
 
 **Current state.** `master` merged 1.6.2 and then reverted its *content* at `a001d0e`; the commits are in master's history but the code is not. Completed work sits on `fix/agy-bridge-resilience`. Judge state by reading files, never by the commit graph.
 
-**agy is presently unresponsive** — it ignores SIGTERM and hangs, which is why every bound needs `-k`, and why S5 (contract testing against a real agy) cannot currently be satisfied on this machine.
+**agy responds as of 2026-08-19** (version 1.1.13), reversing the note that stood here. A bounded read-only probe that day got `--version` and `agy models` back in seconds and a real `--type review` delegation back in 4721 bytes; `agy models` emits 14 lines of `id<TAB>display name`, and `--model` accepts **both** ids and display names — settling `delegate-agy-62x`, which was closed without ever being verified. S5 is therefore no longer externally blocked, and its phase moved from 7 to 1.5 so the phases reasoning about agy's output build on fixtures instead of hypotheses.
+
+What the probe did **not** establish: whether agy ignores SIGTERM. Every call returned on its own, so no bound ever fired. That observation (`timeout 25 agy models` still running after 3+ minutes, recorded in `agy_bridge.sh`) stands unretested, and every bound keeps its `-k` escalation on its original evidence.
 
 ## Constraints
 
