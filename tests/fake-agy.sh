@@ -30,6 +30,11 @@
 #   FAKE_AGY_PRINT_HANG   same as FAKE_AGY_MODELS_HANG but on the --print
 #                         (delegation) path. Traps SIGTERM and sleeps 300s;
 #                         only `timeout -k` (SIGKILL) ends it.
+#   FAKE_AGY_PRINT_KILL9  the --print (delegation) path exits 137 quickly,
+#                         well inside any --timeout bound -- emulating an
+#                         external SIGKILL (OOM killer, manual `kill -9`,
+#                         cgroup/container preemption) unrelated to the
+#                         bridge's own `-k` escalation.
 #   FAKE_AGY_MODELS_FAIL  `agy models` exits 1 with a FAKE-AGY-AUTH-FAILURE
 #                         diagnostic on stderr, simulating an auth/network
 #                         fault. Ignored outside `models`.
@@ -91,6 +96,13 @@ if [[ -n "${FAKE_AGY_PRINT_HANG:-}" ]]; then
     trap '' TERM
     sleep 300
     exit 0
+fi
+
+# Delegation "killed early" mode: exits 137 quickly, well inside any --timeout
+# bound, emulating an external SIGKILL that has nothing to do with the
+# bridge's own -k escalation (which can only fire at/after the bound).
+if [[ -n "${FAKE_AGY_PRINT_KILL9:-}" ]]; then
+    exit 137
 fi
 
 # Otherwise this is a real --print run. Parse the real agy flag set:

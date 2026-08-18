@@ -349,7 +349,21 @@ set -e
 DURATION=$(( SECONDS - START ))
 
 # ── Handle errors ─────────────────────────────────────────────────────────────
-if [[ "$EXIT_CODE" -eq 124 || "$EXIT_CODE" -eq 137 ]]; then
+if [[ "$EXIT_CODE" -eq 137 && "$DURATION" -lt "$TIMEOUT" ]]; then
+    # A 137 (SIGKILL) landing BEFORE our own $TIMEOUT bound cannot be the -k
+    # escalation above -- that can only fire at/after $TIMEOUT elapses. It's an
+    # external kill (OOM killer, `kill -9`, cgroup/container preemption).
+    # Report it distinctly: "raise --timeout" is useless advice against an OOM.
+    if [[ "$JSON_OUTPUT" -eq 1 ]]; then
+        python3 -c "
+import json, sys
+print(json.dumps({'success':False,'model_used':sys.argv[1],'type':sys.argv[2],'duration_seconds':int(sys.argv[3]),'error':sys.argv[4]}))
+" "$MODEL" "$TYPE" "$DURATION" "Killed (signal 9) after ${DURATION}s, before its ${TIMEOUT}s bound -- possible OOM or external kill"
+    else
+        printf 'ERROR: agy killed (signal 9) after %ds, before its %ds bound -- possible OOM or external kill\n' "$DURATION" "$TIMEOUT" >&2
+    fi
+    exit "$EXIT_CODE"
+elif [[ "$EXIT_CODE" -eq 124 || "$EXIT_CODE" -eq 137 ]]; then
     if [[ "$JSON_OUTPUT" -eq 1 ]]; then
         python3 -c "
 import json, sys

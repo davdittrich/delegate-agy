@@ -492,6 +492,17 @@ else
         "rc=$RC elapsed=${_T4_ELAPSED}s out=$OUT"
 fi
 
+# T5: a 137 that lands well inside the bridge's own --timeout bound is NOT the
+# bridge's -k escalation (which can only fire at/after the bound) -- it's an
+# external kill (OOM killer, kill -9, cgroup preemption). Must be reported
+# distinctly from a timeout, not folded into the timeout message.
+FAKE_AGY_PRINT_KILL9=1 _run OUT RC bash "$BRIDGE" --type code --timeout 60 -- "oom check"
+if [[ "$RC" -eq 137 && "$OUT" == *"killed"* && "$OUT" != *"timeout after"* ]]; then
+    ok "T5 137 well inside --timeout bound reported as killed, not as a timeout"
+else
+    bad "T5 137 well inside --timeout bound reported as killed, not as a timeout" "rc=$RC out=$OUT"
+fi
+
 echo "== agy_bridge.sh --add-dir passthrough (delegate-agy-0i9.2) =="
 
 # AD1: caller --add-dir reaches agy AND stays before the trailing WORK_DIR
