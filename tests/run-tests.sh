@@ -806,6 +806,17 @@ else
         "rc=$RC elapsed=${_SH5_ELAPSED}s out=$OUT"
 fi
 
+# SH6: a 137 that lands well inside the shim's own $GEMINI_SHIM_TIMEOUT bound is
+# NOT the shim's -k escalation (which can only fire at/after the bound) -- it's
+# an external kill (OOM killer, kill -9, cgroup preemption). Must be reported
+# distinctly from a timeout, not folded into the timeout message.
+FAKE_AGY_PRINT_KILL9=1 GEMINI_SHIM_TIMEOUT=60 _run OUT RC bash "$SHIM" -p "oom check"
+if [[ "$RC" -eq 137 && "$OUT" == *"killed"* && "$OUT" != *"timeout after"* ]]; then
+    ok "SH6 137 well inside GEMINI_SHIM_TIMEOUT bound reported as killed, not as a timeout"
+else
+    bad "SH6 137 well inside GEMINI_SHIM_TIMEOUT bound reported as killed, not as a timeout" "rc=$RC out=$OUT"
+fi
+
 echo "== install.sh / uninstall.sh (vfn.11) =="
 
 _MARKER='# agy-delegate-wrapper'
