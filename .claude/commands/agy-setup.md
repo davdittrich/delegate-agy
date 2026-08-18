@@ -79,7 +79,9 @@ AGY_SETUP_PATCH_ALIASES=1 bash <that-path>/scripts/install.sh
 ```
 
 (Both flags can be combined. `<that-path>` is the install path you printed
-above; if you used the CLI fallback, use `"$RESOLVED"` instead.)
+above; if you used the CLI fallback, replace the whole
+`<that-path>/scripts/install.sh` in each command above with `"$RESOLVED"` —
+e.g. `AGY_SETUP_REGISTER_TOKENSAVE=1 bash "$RESOLVED"`.)
 
 ## Uninstall
 
@@ -90,3 +92,8 @@ tokensave and removes the availability hint.
 ```bash
 bash <that-path>/scripts/uninstall.sh
 ```
+
+(`<that-path>` is the install path from the Install section above. If the
+registry file was missing there and you used the CLI fallback instead, run
+`/agy-uninstall` — it resolves and validates the uninstaller path the same
+way.)

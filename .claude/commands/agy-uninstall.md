@@ -61,4 +61,5 @@ AGY_UNINSTALL_TOKENSAVE=1 bash <that-path>/scripts/uninstall.sh
 ```
 
 (`<that-path>` is the uninstall path you printed above; if you used the CLI
-fallback, use `"$RESOLVED"` instead.)
+fallback, replace `<that-path>/scripts/uninstall.sh` with `"$RESOLVED"` —
+e.g. `AGY_UNINSTALL_TOKENSAVE=1 bash "$RESOLVED"`.)
