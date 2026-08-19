@@ -257,6 +257,14 @@ run_bounded() {
         # on a run that exited 0 in under a second. The redirection is
         # command-local, so the writes to >&9 below are unaffected.
         "$TIMEOUT_BIN" -k "$kill_after" "$secs" "$@" 9>&- || rc=$?
+        # rc goes back UNCHANGED, 137 included. "Returns 124 if and only if
+        # RUN_BOUNDED_KILLED is 1" is a property of the WATCHDOG arm below and
+        # never of this helper -- this arm sets the flag on either code and
+        # returns whichever it got, and has done since the block was written.
+        # Normalising 137 to 124 here would delete the input to both hosts'
+        # external-kill discriminator (137 with DURATION < the bound is an OOM
+        # or an outside `kill -9`, not our escalation), so the single 124 the
+        # CALLER is owed is produced at the call sites, not here.
         if [[ "$rc" -eq 124 || "$rc" -eq 137 ]]; then RUN_BOUNDED_KILLED=1; fi
         return "$rc"
     fi
