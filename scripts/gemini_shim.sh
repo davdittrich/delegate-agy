@@ -238,16 +238,12 @@ LIVE_MODELS=""
 load_models() {
     local raw=""
     if [[ ! -s "$MODELS_CACHE" ]] || [[ -n "$(find "$MODELS_CACHE" -mmin +60 2>/dev/null)" ]]; then
-        # Third agy call site in this script, bounded like the other two. agy
-        # ignores SIGTERM (observed, see scripts/agy_bridge.sh), so `-k`
-        # escalates to SIGKILL; a plain `timeout` would hand the shim the very
-        # hang this release exists to fix. AGY_MODELS_TIMEOUT is guaranteed a
-        # positive integer by the check above.
-        if [[ -n "$TIMEOUT_BIN" ]]; then
-            raw=$("$TIMEOUT_BIN" -k 3 "$AGY_MODELS_TIMEOUT" "$AGY_BIN" models </dev/null 2>/dev/null) || raw=""
-        else
-            raw=$("$AGY_BIN" models </dev/null 2>/dev/null) || raw=""
-        fi
+        # Third agy call site in this script, bounded like the other three. agy
+        # ignores SIGTERM (observed, see scripts/agy_bridge.sh), so the second
+        # bound escalates to SIGKILL; a bound without that escalation would hand
+        # the shim the very hang this release exists to fix. AGY_MODELS_TIMEOUT
+        # is guaranteed a positive integer by the check above.
+        raw=$(run_bounded "$AGY_MODELS_TIMEOUT" 3 -- "$AGY_BIN" models </dev/null 2>/dev/null) || raw=""
         if [[ -n "$raw" ]]; then
             # stderr suppressed across the whole write: an unwritable cache dir
             # (HOME unset, read-only FS) otherwise makes bash print the failed
@@ -344,11 +340,7 @@ while [[ $# -gt 0 ]]; do
         --print)              PRINT_FLAG=1; shift ;;
         --version)
             _V_RC=0
-            if [[ -n "$TIMEOUT_BIN" ]]; then
-                "$TIMEOUT_BIN" -k 5 10 "$AGY_BIN" --version || _V_RC=$?
-            else
-                "$AGY_BIN" --version || _V_RC=$?
-            fi
+            run_bounded 10 5 -- "$AGY_BIN" --version || _V_RC=$?
             if [[ "$_V_RC" -eq 124 || "$_V_RC" -eq 137 ]]; then
                 echo "ERROR: agy --version timeout after 10s" >&2
                 exit 124
@@ -417,13 +409,16 @@ cat "$_SHIM_POLICY" > "$WORK_DIR/GEMINI.md" \
 if [[ ${#PROMPT_ARGS[@]} -gt 0 ]]; then
     printf '%s\n' "${PROMPT_ARGS[@]}" > "$PROMPT_FILE"
 elif [[ ! -t 0 ]]; then
-    if [[ -n "$TIMEOUT_BIN" ]]; then
-        "$TIMEOUT_BIN" "$STDIN_TIMEOUT" cat > "$PROMPT_FILE" || {
-            echo "ERROR: stdin read timed out after ${STDIN_TIMEOUT}s" >&2; exit 2
-        }
-    else
-        cat > "$PROMPT_FILE"
-    fi
+    # An explicit POSITIVE kill_after, not the zero that would mirror the bare
+    # `timeout <secs> cat` this replaces: one validation rule then covers every
+    # bounded site, so none of them can pass a value the coreutils binary reads
+    # as "no timeout". `cat` never needs the escalation, so admitting it changes
+    # nothing observable -- it only removes the one shape that needed an
+    # exception. This path is guarded by `! -t 0`, so `cat` never reads a TTY and
+    # backgrounding it in its own process group cannot stop on SIGTTIN.
+    run_bounded "$STDIN_TIMEOUT" 5 -- cat > "$PROMPT_FILE" || {
+        echo "ERROR: stdin read timed out after ${STDIN_TIMEOUT}s" >&2; exit 2
+    }
 else
     echo "ERROR: no prompt (no stdin and no positional args)" >&2; exit 2
 fi
