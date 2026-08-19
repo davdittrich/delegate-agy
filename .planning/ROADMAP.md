@@ -83,11 +83,28 @@ Plans:
 **Plans**: 6 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 01.5-01-PLAN.md — Tracer: `tests/contract-check.sh` exists, bounds one real `agy --version` call with a third verbatim `run_bounded` copy, prints a provenance-carrying ledger with disjoint exit codes, captures its first fixture; RB02 widened to three files; CC01 pins the absent-binary "could not ask" path
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 01.5-02-PLAN.md — CC02 pins the SIGTERM-ignoring hang path under an external `timeout 30`; CC03/CC03m enforce D-02's isolation invariant with an occurrence floor and four mutation probes
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 01.5-03-PLAN.md — D-13's preflight plus the three free probes: what `agy models` emits, whether the anchored matchers exclude the non-`gemini-` rows, and the live invalid-model rejection; captures `agy-models.tsv` and `invalid-model.txt`
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 01.5-04-PLAN.md — The fake reads the captured list through D-14a's tiered lookup and fails loudly when no tier resolves; fixtures plumbed to all five copy sites; R2/R4 derive their expected id from the fixture; CC04a-c and CC06 pin the tiers and the derivation's edges
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 01.5-05-PLAN.md — The billed probes: whether the per-run policy binds and whether the headless gate produces R6's shape (one shared delegation), and whether agy ignores SIGTERM while `--model` takes a display name (one more); the ledger completed and its gaps stated as gaps
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
 - [ ] 01.5-06-PLAN.md — README states the recorded fact with version and date, names and prices the check, documents its exit codes; CC05 holds the document to the fixture headers; REQUIREMENTS.md's two stale S5 claims corrected and Phase 6's un-widened gate recorded
 
 **Note**: this phase was Phase 7 until 2026-08-19 and depended on Phase 6. It moved because its blocking premise was disproven, not because its scope shrank. The "could not ask" path in criterion 2 stays mandatory — agy was unreachable last week and may be again — but the phase now has to produce a real verdict, and Phases 2 and 5 consume its fixtures. Verified so far against agy 1.1.13: `agy models` returns 14 lines of `id<TAB>display name` in under 30s; live ids carry a third segment (`gemini-3.1-pro-high`, `gemini-3.7-flash-medium`), so both scripts' anchored matchers and `config/model-map.json`'s `pro-high`/`flash-high` class values still hold.
