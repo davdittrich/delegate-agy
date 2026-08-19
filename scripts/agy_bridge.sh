@@ -26,7 +26,15 @@ if command -v timeout &>/dev/null; then
 elif command -v gtimeout &>/dev/null; then
     TIMEOUT_BIN="gtimeout"
 else
-    echo "ERROR: timeout/gtimeout not found in PATH (install coreutils)" >&2; exit 2
+    TIMEOUT_BIN=""
+    # Announced here and nowhere else: this probe runs once per invocation, while
+    # run_bounded runs three times in a delegating run, so a warning living in
+    # the helper would repeat per call. Plain stderr, not fd 9 -- the probe runs
+    # before any call site has redirected anything, which is also what puts this
+    # line ahead of every bounded call's output. Held in a variable because README
+    # quotes these bytes verbatim and the suite pins them.
+    RB_NO_TIMEOUT_WARN='WARNING: timeout/gtimeout not found -- bounding agy with the bash watchdog fallback; install coreutils for process-group kill'
+    echo "$RB_NO_TIMEOUT_WARN" >&2
 fi
 
 # Bound on the `agy models` fetch. Separate from --timeout (which bounds the
