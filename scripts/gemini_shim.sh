@@ -188,9 +188,13 @@ _rb_start_timer() {
 # ignoring agy is unbounded -- the same hang this helper exists to prevent,
 # reached by the cancellation path instead of the timeout path.
 #
-# The status is the relay's own, 143 or 130. A caller-interrupted call is NOT a
-# call the bound killed, so it is never relabelled 124 and RUN_BOUNDED_KILLED
-# stays untouched -- that flag is set only by the branch that fired the bound.
+# The status is the relay's own -- 143, 130 or 129, each the conventional
+# 128 + signum. A caller-interrupted call is NOT a call the bound killed, so it
+# is never relabelled 124 and RUN_BOUNDED_KILLED stays untouched -- that flag is
+# set only by the branch that fired the bound. The exit here is also what keeps
+# the host's cleanup honest on a relayed HUP: the host's own HUP handler does
+# not exit, but our exit runs its EXIT trap, so the work directory is removed
+# either way.
 _rb_relay() {
     _rb_cancel_timer "$timer" "$timer_pgid"
     _rb_start_timer 0 "$1"
@@ -232,6 +236,7 @@ run_bounded() {
 
     # ── bash watchdog fallback: no external binary at all ────────────────────
     local self_pgid child child_pgid kill_pgid="" restore_m=0 timer="" timer_pgid=""
+    local rb_trap_term rb_trap_int rb_trap_hup
     # $BASHPID, never $$: inside a command substitution $$ still reports the
     # top-level shell, which would make the comparison below meaningless.
     self_pgid=$(_rb_pgid_of "$BASHPID")
@@ -277,13 +282,40 @@ run_bounded() {
     # deliberate, because the reverse order would leave a window where a signal
     # kills the shell outright and leaks the whole timer instead of just the narrow
     # fork-to-assignment gap inside _rb_start_timer.
+    #
+    # HUP is relayed for a reason the other two do not have. Both hosts trap it
+    # with a cleanup handler that DOES NOT EXIT, so bash returns from the wait
+    # below with 129 the instant one arrives; the cancel then removes the only
+    # thing that would still have killed the child, 129 is neither 143 nor 137 so
+    # nothing escalates, and a SIGTERM-ignoring agy is left running with no bound
+    # on it at all -- while the coreutils arm, which forwards whatever it was
+    # sent, reaps. Measured before this line existed: hup-watchdog left both the
+    # child and its fork alive 8s past a 3+2 bound, hup-coreutils left neither.
+    # SIGQUIT is trapped by both hosts too and was probed the same way 5x; it
+    # does not interrupt this wait on this bash, so it is deliberately not
+    # relayed. The set is what was demonstrated, not what was imagined.
+    #
+    # Saved and restored, never cleared: `trap -` resets to DEFAULT disposition,
+    # which DELETES the host's own handlers rather than giving them back -- and
+    # since both hosts install their cleanup trap before the first bounded call,
+    # clearing meant every later Ctrl-C killed the script with its temp directory,
+    # holding the user's full prompt, still on disk. `trap -p` output is already
+    # requoted by bash for re-eval and is the host's own string, never caller
+    # data. The save is unconditional so an absent host trap restores as absent.
+    rb_trap_term="$(trap -p TERM)"
+    rb_trap_int="$(trap -p INT)"
+    rb_trap_hup="$(trap -p HUP)"
     trap '_rb_relay TERM 143' TERM
     trap '_rb_relay INT 130' INT
+    trap '_rb_relay HUP 129' HUP
 
     _rb_start_timer "$secs" TERM
     wait "$child" 2>/dev/null || rc=$?
     _rb_cancel_timer "$timer" "$timer_pgid"
-    trap - TERM INT
+    trap - TERM INT HUP
+    eval "${rb_trap_term:-}"
+    eval "${rb_trap_int:-}"
+    eval "${rb_trap_hup:-}"
 
     # Authoritative, never inferred from elapsed time: this branch is the one
     # that fired, so it is the one that says so. Deriving the fact from
