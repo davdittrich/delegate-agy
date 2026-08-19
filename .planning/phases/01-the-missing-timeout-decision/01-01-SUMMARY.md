@@ -238,6 +238,13 @@ Ready for the rest of the phase. Specifically:
 
 **Concern to carry forward:** the external-SIGKILL-vs-own-escalation ambiguity on the watchdog path (see Decisions Made) is the seam with Phase 3's exit-code contract. Phase 3 should confirm that the shim's duration-based discriminator at its error branch still behaves as documented when the watchdog, rather than coreutils, produced the 124.
 
+## Self-Check: PASSED
+
+- Files claimed created/modified: all 4 FOUND on disk
+- Commits claimed: `4986fdf`, `8c54aa4`, `079d787` FOUND on `fix/agy-bridge-resilience`; `1df079e` FOUND on `master`
+- `bash tests/run-tests.sh` → `PASS=92 FAIL=0`
+- Main tree `scripts/`, `tests/`, `docs/`, `README.md`: unmodified
+
 ---
 *Phase: 01-the-missing-timeout-decision*
 *Completed: 2026-08-19*
