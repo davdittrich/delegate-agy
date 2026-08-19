@@ -67,10 +67,22 @@ SHIM_TIMEOUT="${GEMINI_SHIM_TIMEOUT:-600}"
 # piped stdin all keep exactly the capture semantics they had before.
 #
 # Everything between these two markers is duplicated BYTE-FOR-BYTE into
-# scripts/agy_bridge.sh and depends on exactly two things from its host script:
-# $TIMEOUT_BIN (set by the probe above) and file descriptor 9 (the script's own
-# original stderr, opened at the top). Add no third dependency, and never edit
-# one copy alone -- the two blocks are pinned byte-identical by the suite.
+# scripts/agy_bridge.sh and never edited in one copy alone -- the two blocks are
+# pinned byte-identical by the suite. What it takes from its host script, stated
+# in full because the earlier "exactly two things" claim was not true and the
+# gap is where three defects lived:
+#   $TIMEOUT_BIN  set by the probe above; chooses the mechanism.
+#   fd 9          the script's own original stderr, opened at the top. Written
+#                 to, never handed on: it is closed for the bounded command.
+#   fd 8          borrowed on the watchdog arm to restore the child's stderr
+#                 across the job-control redirect, then CLOSED -- a caller that
+#                 passed fd 8 in loses it after the first watchdog-arm call.
+#   $TERM/$INT/$HUP traps  borrowed for the length of a bounded call and given
+#                 back exactly as found.
+#   ps            ONLY where /proc is unreadable, i.e. macOS. The procfs path
+#                 needs no external binary at all.
+# Add no sixth. The two-item version of this list was written when it was true
+# and never revisited, which is precisely how an undeclared dependency ships.
 # Duplicated rather than sourced for the same reason the model-mapping code
 # below is: this script installs as ~/.local/bin/gemini and shadows the real
 # gemini for every caller on PATH, so a missing helper would break `gemini`
@@ -90,20 +102,35 @@ RUN_BOUNDED_KILLED=0
 # rather than degrading, so this body swallows its own failures and the caller
 # checks for an empty result instead.
 _rb_pgid_of() {
-    local p="$1" v=""
+    local p="$1" v="" line=""
     if [[ -r "/proc/$p/stat" ]]; then
-        v=$(awk '{print $5}' "/proc/$p/stat" 2>/dev/null) || v=""
+        # Read in bash, not through awk. Two reasons, and the second is why the
+        # first one matters. /proc/<pid>/stat is
+        # `pid (comm) state ppid pgrp ...` and comm may contain BOTH spaces and
+        # `)`, so whitespace-splitting to field 5 yields the pgrp only for a
+        # single-token comm -- for a two-word comm it yields the PPID, a number
+        # that survives the sanitiser below, differs from our own group, and is
+        # therefore installed as a `kill -- -<pgid>` operand aimed at somebody
+        # else's process group. Splitting after the LAST `") "` is correct for
+        # every comm, because no field after comm can contain one. And doing it
+        # here removes the external binary: without awk and without ps this
+        # lookup used to return empty, the escalation degraded to a pid-only
+        # kill, and the bound still reported 124 while everything agy forked
+        # survived it -- silent, in the `env -i` / systemd / container contexts
+        # this script's own comments name as the ones it must survive.
+        read -r line < "/proc/$p/stat" 2>/dev/null || line=""
+        line="${line##*') '}"
+        v="${line#* }"; v="${v#* }"; v="${v%% *}"
     else
+        # No procfs: macOS, and the only remaining external dependency. Declared
+        # in the block header rather than left implicit.
         v=$(ps -o pgid= -p "$p" 2>/dev/null) || v=""
     fi
-    # One normalisation point, deliberately at the single exit: `ps -o pgid='
-    # right-pads its one-row output and procfs field 5 does not. A padded value
-    # fails OPEN twice over -- the self-group comparison below stops matching,
-    # and the same value lands as a process-group kill operand whose embedded
-    # blank makes the target invalid, a rejection the kill's own
-    # failure-tolerant suffix swallows. The result would be a reported kill that
-    # never happened, on the one platform without procfs, which is exactly the
-    # platform this path exists for.
+    # `ps -o pgid=` right-pads its one-row output; a padded value would fail
+    # OPEN, both stopping the self-group comparison from matching and landing as
+    # a kill operand whose embedded blank makes the target invalid -- a
+    # rejection the kill's failure-tolerant suffix swallows. It also fails the
+    # procfs branch closed rather than open if that branch is ever wrong again.
     v="${v//[![:digit:]]/}"
     if [[ -n "$v" ]]; then printf '%s' "$v"; fi
     return 0
