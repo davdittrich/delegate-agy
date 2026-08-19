@@ -1856,6 +1856,245 @@ for _rb13_entry in bridge shim; do
         "$RB13_RC" "$_RB13_ELAPSED" "$RB13_PPF" "$RB13_CPF" "$(cat "$RB13_CAP")"
 done
 
+echo "== the guarantee holds with and without a controlling terminal (RB06) =="
+
+# Job control degrades in a terminal-less runner, so a suite that only ever runs
+# under a developer's terminal can pass locally and pass vacuously in CI. RESEARCH
+# found that on THIS host job control does allocate a distinct process group even
+# inside a command substitution with no terminal, which makes the guard's fallback
+# a rare edge rather than the common path -- but "rare on this host" is not "never
+# anywhere", and D-14a is explicit that where isolation fails, the guard's
+# degradation is what must be asserted rather than a green tick. Both outcomes are
+# named assertions inside _rb_assert_reaped; neither is an untested branch.
+#
+# The with-terminal half only means something because the forking fake ignores
+# SIGHUP: allocating a pseudo-terminal means the kernel HUPs the session when the
+# terminal goes away, which reaps the fake and its fork for a reason that has
+# nothing to do with the bounding mechanism. Measured before the fixture was
+# hardened -- a shim mutated to kill by pid alone left the fork alive in the
+# terminal-LESS half and was reaped anyway in the with-terminal half, so this case
+# passed while asserting nothing. See tests/fake-agy.sh's FAKE_AGY_FORK_HANG note.
+#
+# Resolved from the harness's OWN PATH, before any replacement PATH applies --
+# the same discipline $_TIMEOUT_NET follows, and for the same reason: the
+# sanitized PATH deliberately resolves almost nothing.
+_PTY_BIN="$(command -v script 2>/dev/null)" || _PTY_BIN=""
+# Flavour probed from the BINARY, never from `uname`. The util-linux build takes
+# the command through an option; the BSD build macOS ships takes it as trailing
+# operands after the typescript file. Handing one build the other's form is not
+# reliably loud: a mis-parsed form can run the command with NO terminal at all and
+# report the D-14a half green on exactly the platform this phase's fallback exists
+# for. `uname` was rejected against a feature probe because it misreads a Mac
+# carrying a brew-installed util-linux `script` earlier on PATH -- what decides the
+# argv is a property of the binary that will actually run, not of the OS.
+_PTY_FLAVOUR=""
+if [[ -n "$_PTY_BIN" ]]; then
+    _PTY_FLAVOUR="$("$_PTY_BIN" --version 2>&1)" || _PTY_FLAVOUR=""
+fi
+
+# _rb_pty_argv FLAVOUR TYPESCRIPT CMDSTRING -> fills _RB_PTY_ARGV.
+# Both builds are handed the command as ONE string, which is what lets the two
+# branches be compared against each other on a single host.
+_rb_pty_argv() {
+    if [[ "$1" == *util-linux* ]]; then
+        _RB_PTY_ARGV=(-q -c "$3" "$2")
+    else
+        _RB_PTY_ARGV=(-q "$2" bash -c "$3")
+    fi
+}
+
+# RB06a: both flavour branches pinned HERE, on this one host, by driving the
+# selector with a stubbed probe result rather than with the real tool. The branch
+# this host cannot execute is exactly the branch the portability finding is about,
+# so leaving it to be discovered on a Mac is the failure being closed.
+RB06A_OK=1
+RB06A_DETAIL=""
+_RB_PTY_ARGV=()
+_rb_pty_argv 'script from util-linux 2.42.2' /dev/null 'true'
+[[ "${_RB_PTY_ARGV[*]}" == "-q -c true /dev/null" ]] \
+    || { RB06A_OK=0; RB06A_DETAIL="$RB06A_DETAIL util_linux=[${_RB_PTY_ARGV[*]}]"; }
+_rb_pty_argv 'usage: script [-adfkpqr] [file]' /dev/null 'true'
+[[ "${_RB_PTY_ARGV[*]}" == "-q /dev/null bash -c true" ]] \
+    || { RB06A_OK=0; RB06A_DETAIL="$RB06A_DETAIL bsd=[${_RB_PTY_ARGV[*]}]"; }
+if [[ "$RB06A_OK" -eq 1 ]]; then
+    ok "RB06a the PTY allocator's argument form is chosen by flavour probe, both branches pinned"
+else
+    bad "RB06a the PTY allocator's argument form is chosen by flavour probe, both branches pinned" \
+        "detail=$RB06A_DETAIL"
+fi
+
+# The command both halves run. Written to a file rather than squeezed into a
+# quoted string so the two invocation forms differ ONLY in how the allocator
+# takes the command. It records whether it saw stdout on a tty before doing
+# anything else, and its own exit code afterwards -- read from files because
+# the two `script` builds do not agree on propagating the command's status.
+RB06_RUNNER="$SANDBOX/rb06-run.sh"
+cat > "$RB06_RUNNER" <<'RB06EOF'
+#!/usr/bin/env bash
+# $1=replacement PATH $2=shim $3=parent pid file $4=child pid file
+# $5=the shim's own stderr $6=tty flag file $7=rc file
+if [ -t 1 ]; then printf 'tty\n' > "$6"; else printf 'notty\n' > "$6"; fi
+PATH="$1" FAKE_AGY_FORK_HANG=1 FAKE_AGY_PID_FILE="$3" FAKE_AGY_CHILD_PID_FILE="$4" \
+    GEMINI_SHIM_TIMEOUT=3 bash "$2" -p "do a thing" >/dev/null 2>"$5"
+printf '%s\n' "$?" > "$7"
+RB06EOF
+
+_RB06_BIN="$(_purebin)"
+RB06_TTY_OK=1
+RB06_TTY_DETAIL=""
+for _rb06_mode in plain pty; do
+    RB06_PPF="$SANDBOX/rb06-$_rb06_mode-parent.pid"
+    RB06_CPF="$SANDBOX/rb06-$_rb06_mode-child.pid"
+    RB06_ERR="$SANDBOX/rb06-$_rb06_mode-stderr.log"
+    RB06_TTYF="$SANDBOX/rb06-$_rb06_mode-tty.flag"
+    RB06_RCF="$SANDBOX/rb06-$_rb06_mode-rc"
+    rm -f "$RB06_PPF" "$RB06_CPF" "$RB06_ERR" "$RB06_TTYF" "$RB06_RCF"
+
+    if [[ "$_rb06_mode" == "pty" && -z "$_PTY_BIN" ]]; then
+        # An environment that cannot make this assertion has not made it. No skip
+        # that reads as a pass, and the tool is named.
+        bad "RB06c the descendant guarantee holds with a controlling terminal" \
+            "the PTY allocator 'script' is not on PATH, so the D-14a with-terminal half could not be asserted"
+        RB06_TTY_OK=0
+        RB06_TTY_DETAIL="$RB06_TTY_DETAIL pty:allocator_missing(script)"
+        continue
+    fi
+
+    _RB06_START=$(date +%s)
+    if [[ "$_rb06_mode" == "plain" ]]; then
+        "$_TIMEOUT_NET" --foreground -k 5 30 \
+            bash "$RB06_RUNNER" "$_RB06_BIN" "$SHIM" "$RB06_PPF" "$RB06_CPF" \
+            "$RB06_ERR" "$RB06_TTYF" "$RB06_RCF" >/dev/null 2>&1
+    else
+        _RB_PTY_ARGV=()
+        _rb_pty_argv "$_PTY_FLAVOUR" "$SANDBOX/rb06.typescript" \
+            "bash '$RB06_RUNNER' '$_RB06_BIN' '$SHIM' '$RB06_PPF' '$RB06_CPF' '$RB06_ERR' '$RB06_TTYF' '$RB06_RCF'"
+        "$_TIMEOUT_NET" --foreground -k 5 30 \
+            "$_PTY_BIN" "${_RB_PTY_ARGV[@]}" >/dev/null 2>&1
+    fi
+    _RB06_ELAPSED=$(( $(date +%s) - _RB06_START ))
+    RB06_RC="$(cat "$RB06_RCF" 2>/dev/null)" || RB06_RC=""
+    [[ "$RB06_RC" =~ ^[0-9]+$ ]] || RB06_RC=-1
+    RB06_SAW="$(cat "$RB06_TTYF" 2>/dev/null)" || RB06_SAW=""
+
+    # The terminal state is asserted, never inferred from a zero exit status: an
+    # allocator invocation that silently degraded to no terminal would otherwise
+    # report the with-terminal half green without ever having allocated one.
+    if [[ "$_rb06_mode" == "plain" ]]; then
+        [[ "$RB06_SAW" == "notty" ]] \
+            || { RB06_TTY_OK=0; RB06_TTY_DETAIL="$RB06_TTY_DETAIL plain:saw='$RB06_SAW'(want notty)"; }
+    else
+        [[ "$RB06_SAW" == "tty" ]] \
+            || { RB06_TTY_OK=0; RB06_TTY_DETAIL="$RB06_TTY_DETAIL pty:saw='$RB06_SAW'(want tty)"; }
+    fi
+
+    if [[ "$_rb06_mode" == "plain" ]]; then
+        _rb06_label="RB06b the descendant guarantee holds with no controlling terminal"
+    else
+        _rb06_label="RB06c the descendant guarantee holds with a controlling terminal"
+    fi
+    _rb_assert_reaped "$_rb06_label" "$RB06_RC" "$_RB06_ELAPSED" \
+        "$RB06_PPF" "$RB06_CPF" "$(cat "$RB06_ERR" 2>/dev/null)"
+done
+if [[ "$RB06_TTY_OK" -eq 1 ]]; then
+    ok "RB06d the two halves genuinely ran without and with a terminal (notty then tty)"
+else
+    bad "RB06d the two halves genuinely ran without and with a terminal (notty then tty)" \
+        "detail=$RB06_TTY_DETAIL"
+fi
+rm -f "$SANDBOX/rb06.typescript"
+
+echo "== the helper's diagnostics never reach the caller's payload (RB09) =="
+
+# RB09 is the assertion that justifies the separate descriptor run_bounded writes
+# its diagnostics to. Four of the six bounded sites have already redirected the
+# process's stderr by the time the helper runs, and at the DELEGATION site that
+# redirection target is what the bridge interpolates into both its plain-text
+# error and its JSON `error` value -- so a marker on plain stderr would land
+# inside a payload Phase 3 is freezing in this same release.
+
+# RB09a, end to end: what the CALLER actually received from a watchdog-killed
+# delegation. stdout and stderr are captured SEPARATELY -- merging them would
+# make the whole case meaningless, since the marker legitimately belongs on one
+# and must never appear on the other.
+RB09_PPF="$SANDBOX/rb09-parent.pid"
+RB09_CPF="$SANDBOX/rb09-child.pid"
+RB09_OUTF="$SANDBOX/rb09-stdout.json"
+RB09_ERRF="$SANDBOX/rb09-stderr.log"
+rm -f "$RB09_PPF" "$RB09_CPF" "$RB09_OUTF" "$RB09_ERRF"
+_RB09_BIN="$(_purebin)"
+PATH="$_RB09_BIN" FAKE_AGY_FORK_HANG=1 FAKE_AGY_PID_FILE="$RB09_PPF" \
+    FAKE_AGY_CHILD_PID_FILE="$RB09_CPF" \
+    "$_TIMEOUT_NET" --foreground -k 5 30 \
+    bash "$BRIDGE" --type code --timeout 3 --json -- "do a thing" \
+    > "$RB09_OUTF" 2> "$RB09_ERRF"
+RB09_RC=$?
+RB09_OK=1
+RB09_DETAIL=""
+# Without this the absence assertions below could all hold on a run that never
+# reached a bounded call at all.
+[[ "$RB09_RC" -eq 124 ]] || { RB09_OK=0; RB09_DETAIL="$RB09_DETAIL not_a_bounded_kill(rc=$RB09_RC)"; }
+# Nothing the helper says may reach the caller's stdout, which on --json is the
+# entire machine-readable payload.
+for _rb09_s in "$_RB_NOTE_LITERAL" "$_RB_GUARD_MSG" "$_RB_WARN_LITERAL"; do
+    grep -qF "$_rb09_s" "$RB09_OUTF" && { RB09_OK=0; RB09_DETAIL="$RB09_DETAIL diagnostic_in_payload"; }
+done
+# The payload's key set is asserted, not just its text: this phase adds no key to
+# the envelope, and a case that only grepped for strings would not notice one.
+RB09_KEYS="$(python3 -c 'import json,sys; print(",".join(sorted(json.load(open(sys.argv[1])).keys())))' "$RB09_OUTF" 2>/dev/null)" || RB09_KEYS="UNPARSEABLE"
+[[ "$RB09_KEYS" == "duration_seconds,error,model_used,success,type" ]] \
+    || { RB09_OK=0; RB09_DETAIL="$RB09_DETAIL keys=[$RB09_KEYS]"; }
+# And the marker WAS emitted, on the entry point's own stderr. Without this half a
+# run in which the marker was never produced at all would pass every absence
+# assertion above -- absence-by-silence, which is the way this case could rot.
+grep -qF "$_RB_NOTE_LITERAL" "$RB09_ERRF" \
+    || { RB09_OK=0; RB09_DETAIL="$RB09_DETAIL marker_never_emitted(stderr=$(head -c 200 "$RB09_ERRF"))"; }
+if [[ "$RB09_OK" -eq 1 ]]; then
+    ok "RB09a a watchdog-killed delegation: no helper diagnostic in the JSON payload, unchanged key set, marker on the entry point's own stderr"
+else
+    bad "RB09a a watchdog-killed delegation: no helper diagnostic in the JSON payload, unchanged key set, marker on the entry point's own stderr" \
+        "detail=$RB09_DETAIL"
+fi
+kill -KILL "$(cat "$RB09_PPF" 2>/dev/null)" 2>/dev/null
+kill -KILL "$(cat "$RB09_CPF" 2>/dev/null)" 2>/dev/null
+
+# RB09b: the captured-stderr half. Stated ceiling rather than hidden: the bridge
+# unlinks its work directory from an EXIT trap, so the real $STDERR_FILE cannot be
+# read after the run. What CAN be pinned exactly is the property that file's
+# cleanliness depends on -- so the delegation site's redirect shape is reproduced
+# against the extracted block, and the two descriptors the bridge would later
+# interpolate are asserted clean while fd 9 carries the marker. The child ignores
+# SIGTERM (`trap "" TERM` survives `exec`), so the escalation genuinely fires and
+# the marker genuinely has to be emitted somewhere.
+RB09B_FD9="$SANDBOX/rb09b-fd9.log"
+RB09B_OUT="$SANDBOX/rb09b-stdout.log"
+RB09B_ERR="$SANDBOX/rb09b-stderr.log"
+: > "$RB09B_FD9"; : > "$RB09B_OUT"; : > "$RB09B_ERR"
+bash -c '
+    set -euo pipefail
+    exec 9>"$2"
+    TIMEOUT_BIN=""
+    . "$1"
+    run_bounded 2 1 -- bash -c "trap \"\" TERM; exec sleep 30" > "$3" 2> "$4" < /dev/null || true
+' _ "$_RB_BLOCK" "$RB09B_FD9" "$RB09B_OUT" "$RB09B_ERR"; RB09B_RC=$?
+RB09B_OK=1
+RB09B_DETAIL=""
+[[ "$RB09B_RC" -eq 0 ]] || { RB09B_OK=0; RB09B_DETAIL="$RB09B_DETAIL driver_rc=$RB09B_RC"; }
+grep -qF "$_RB_NOTE_LITERAL" "$RB09B_FD9" \
+    || { RB09B_OK=0; RB09B_DETAIL="$RB09B_DETAIL marker_never_emitted(fd9=$(head -c 200 "$RB09B_FD9"))"; }
+for _rb09b_f in "$RB09B_OUT" "$RB09B_ERR"; do
+    for _rb09b_s in "$_RB_NOTE_LITERAL" "$_RB_GUARD_MSG"; do
+        grep -qF "$_rb09b_s" "$_rb09b_f" \
+            && { RB09B_OK=0; RB09B_DETAIL="$RB09B_DETAIL diagnostic_in_${_rb09b_f##*/}"; }
+    done
+done
+if [[ "$RB09B_OK" -eq 1 ]]; then
+    ok "RB09b at the delegation site's redirect shape, the bounded call's own stdout and stderr stay free of helper diagnostics while fd 9 carries the marker"
+else
+    bad "RB09b at the delegation site's redirect shape, the bounded call's own stdout and stderr stay free of helper diagnostics while fd 9 carries the marker" \
+        "detail=$RB09B_DETAIL"
+fi
+
 echo "== install.sh / uninstall.sh (vfn.11) =="
 
 _MARKER='# agy-delegate-wrapper'

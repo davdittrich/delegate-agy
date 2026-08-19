@@ -36,7 +36,10 @@
 #                         survivor; only a kill that reaches the whole process
 #                         group ends both. Both PIDs are recorded (see the two
 #                         vars below) before either process blocks, so a reader
-#                         can never race it. Ignored outside --print.
+#                         can never race it. SIGHUP is ignored alongside SIGTERM
+#                         so that a test running this under an allocated pseudo-
+#                         terminal measures the caller's process-group kill and
+#                         not the session's hangup. Ignored outside --print.
 #   FAKE_AGY_PID_FILE     if set to a path, FAKE_AGY_FORK_HANG writes this
 #                         process's own PID there. Purely observational.
 #   FAKE_AGY_CHILD_PID_FILE
@@ -127,9 +130,19 @@ fi
 # The child's stdio goes to /dev/null so it never holds a caller's capture pipe
 # open, and this process blocks in `wait` rather than in a `sleep`, so no third
 # process exists to be orphaned when the pair is reaped.
+#
+# SIGHUP is ignored alongside SIGTERM, and that is load-bearing rather than
+# belt-and-braces. Under an allocated pseudo-terminal the kernel HUPs the
+# session when the terminal goes away, which reaps this pair for a reason that
+# has nothing to do with the caller's process-group kill -- measured: the
+# with-terminal descendant assertion passed even against a shim mutated to kill
+# by pid alone, so it was vacuous. Ignoring HUP makes the with-terminal case
+# measure the same mechanism the terminal-less one does. Note `trap ''` sets
+# SIG_IGN and an ignored disposition SURVIVES `exec`, which is what keeps the
+# replacement `sleep` immune too.
 if [[ -n "${FAKE_AGY_FORK_HANG:-}" ]]; then
-    trap '' TERM
-    bash -c 'trap "" TERM; exec sleep 300' </dev/null >/dev/null 2>&1 &
+    trap '' TERM HUP
+    bash -c 'trap "" TERM HUP; exec sleep 300' </dev/null >/dev/null 2>&1 &
     _fake_child=$!
     [[ -n "${FAKE_AGY_CHILD_PID_FILE:-}" ]] && printf '%s\n' "$_fake_child" > "$FAKE_AGY_CHILD_PID_FILE"
     [[ -n "${FAKE_AGY_PID_FILE:-}" ]] && printf '%s\n' "$$" > "$FAKE_AGY_PID_FILE"
