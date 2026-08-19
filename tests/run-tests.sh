@@ -1307,6 +1307,63 @@ kill -KILL "$RB20B_SHIM" 2>/dev/null
 _rb_reap_sentinels
 rm -f "$RB20B_FIFO" "$_SHIM_CACHE"
 
+echo "== self-kill guard warns only about a LIVE child (RB21) =="
+
+# Both RB21 cases drive the marker-delimited block directly rather than the whole
+# shim. Two reasons, and neither is convenience: the false warning is
+# deterministic only for a child that exits before its PGID can be read, which
+# end to end is a race; and the genuine branch is reachable only by making the
+# child's group match the shell's, which the shipped block offers no switch for
+# and must not grow one (it installs as ~/.local/bin/gemini and shadows the real
+# gemini for every PATH caller). Extracting with the same sed marker range plan
+# 01-03 copies with also keeps the region's self-containment honest -- its only
+# host dependencies are $TIMEOUT_BIN and fd 9.
+_RB_BLOCK="$SANDBOX/run_bounded.block.sh"
+sed -n '/# --- BEGIN run_bounded ---/,/# --- END run_bounded ---/p' "$SHIM" > "$_RB_BLOCK"
+_RB_GUARD_MSG='has no process group of its own'
+
+# RB21a: a fast SUCCESSFUL bounded call must say nothing on fd 9. Ten instant
+# children, because one could pass by luck; the warning was measured firing 10/10
+# before the fix.
+_RB21A_FD9="$SANDBOX/rb21a-fd9.log"
+: > "$_RB21A_FD9"
+bash -c '
+    set -euo pipefail
+    exec 9>"$2"
+    TIMEOUT_BIN=""
+    . "$1"
+    for _i in 1 2 3 4 5 6 7 8 9 10; do run_bounded 5 2 -- true || true; done
+' _ "$_RB_BLOCK" "$_RB21A_FD9"; RB21A_RC=$?
+RB21A_FD9_BYTES="$(wc -c < "$_RB21A_FD9" | tr -d ' ')"
+if [[ "$RB21A_RC" -eq 0 && "$RB21A_FD9_BYTES" -eq 0 ]]; then
+    ok "RB21a ten fast successful bounded calls write nothing to fd 9"
+else
+    bad "RB21a ten fast successful bounded calls write nothing to fd 9" \
+        "rc=$RB21A_RC fd9=$(head -c 300 "$_RB21A_FD9")"
+fi
+
+# RB21b: the genuine case must stay loud. The stub reports the SAME group for the
+# shell and for the child, which is exactly what a host whose job control did not
+# give the child a group of its own would report -- and the child here is alive
+# for a full second, so descendants really could survive a pid-only kill. The
+# override lives in this driver, never in the shipped block.
+_RB21B_FD9="$SANDBOX/rb21b-fd9.log"
+: > "$_RB21B_FD9"
+bash -c '
+    set -euo pipefail
+    exec 9>"$2"
+    TIMEOUT_BIN=""
+    . "$1"
+    _rb_pgid_of() { printf "%s" 4242; }
+    run_bounded 5 2 -- sleep 1 || true
+' _ "$_RB_BLOCK" "$_RB21B_FD9"; RB21B_RC=$?
+if [[ "$RB21B_RC" -eq 0 ]] && grep -qF "$_RB_GUARD_MSG" "$_RB21B_FD9"; then
+    ok "RB21b a live child with no group of its own still warns on fd 9"
+else
+    bad "RB21b a live child with no group of its own still warns on fd 9" \
+        "rc=$RB21B_RC fd9=$(head -c 300 "$_RB21B_FD9")"
+fi
+
 echo "== install.sh / uninstall.sh (vfn.11) =="
 
 _MARKER='# agy-delegate-wrapper'
