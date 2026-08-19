@@ -3396,6 +3396,87 @@ else
         "done=$RB28_DONE elapsed=${RB28_ELAPSED}s limit=${RB28_LIMIT}s rc=$RB28_RC agy_pid=${RB28_AGY_PID:-none} log=$(tail -4 "$RB28_LOG" 2>/dev/null)"
 fi
 
+echo "== the GENERATED wrapper survives a bare environment (RB29) =="
+
+# RB27 hardened the bridge itself, but users never invoke the bridge: they
+# invoke the wrapper install.sh generates, which carries its own
+# `set -euo pipefail` and, in front of every exec, an unguarded $HOME inside the
+# registry path's `:-` default. With CLAUDE_CONFIG_DIR unset bash expands that
+# default word, so an unset HOME aborts the wrapper before it reaches the
+# guarded bridge -- nullifying RB27 on the only path an installed user has.
+#
+# The suite's blind spot was that every other case drives the SCRIPTS, or drives
+# the wrapper with HOME set; nothing exercised the GENERATED ARTIFACT bare. This
+# case does, and asserts both halves: the wrapper runs with HOME and
+# CLAUDE_CONFIG_DIR both unset, AND the version-pin check it feeds still refuses
+# a stale pin when the registry is readable -- so the guard cannot be "fixed" by
+# quietly disabling the lookup.
+RB29_IH="$(_fresh_home)"
+RB29_VROOT="$(mktemp -d "$SANDBOX/rb29root.XXXXXX")"
+mkdir -p "$RB29_VROOT/agy-delegate/1.0.0/scripts"
+cp "$ROOT/scripts/agy_bridge.sh" "$ROOT/scripts/gemini_shim.sh" "$RB29_VROOT/agy-delegate/1.0.0/scripts/"
+env -i HOME="$RB29_IH" PATH="$RB29_IH/bin:$RB29_IH/.local/bin:/usr/bin:/bin" \
+    AGY_PLUGIN_DIR="$RB29_VROOT/agy-delegate/1.0.0" \
+    bash "$INSTALL" > "$SANDBOX/rb29-install.log" 2>&1
+RB29_BW="$RB29_IH/.local/bin/agy-bridge"
+RB29_BARE_PATH="$RB29_IH/bin:/usr/bin:/bin"
+
+# (a) bare env: neither HOME nor CLAUDE_CONFIG_DIR set.
+RB29_OUT="$(env -i PATH="$RB29_BARE_PATH" bash "$RB29_BW" --types 2>"$SANDBOX/rb29-bare.err")" \
+    && RB29_RC=0 || RB29_RC=$?
+RB29_ERR="$(cat "$SANDBOX/rb29-bare.err" 2>/dev/null || true)"
+
+# (b) registry readable via CLAUDE_CONFIG_DIR, still with HOME unset, naming a
+#     NEWER active version -> the pin check must still fire. A fix that made the
+#     wrapper survive by dropping the lookup would pass (a) and fail here.
+RB29_CFG="$(mktemp -d "$SANDBOX/rb29cfg.XXXXXX")"
+mkdir -p "$RB29_CFG/plugins"
+RB29_KEY="agy-delegate@$(basename "$RB29_VROOT")"
+cat > "$RB29_CFG/plugins/installed_plugins.json" <<REGJSON
+{
+  "version": 2,
+  "plugins": {
+    "$RB29_KEY": [
+      {
+        "scope": "user",
+        "installPath": "/tmp/AGY-REGISTRY-PATH-SENTINEL",
+        "version": "1.1.0"
+      }
+    ]
+  }
+}
+REGJSON
+RB29_SOUT="$(env -i PATH="$RB29_BARE_PATH" CLAUDE_CONFIG_DIR="$RB29_CFG" \
+    bash "$RB29_BW" --types 2>"$SANDBOX/rb29-stale.err")" && RB29_SRC=0 || RB29_SRC=$?
+RB29_SERR="$(cat "$SANDBOX/rb29-stale.err" 2>/dev/null || true)"
+
+RB29_OK=1
+[[ "$RB29_RC" -eq 0 ]]                    || RB29_OK=0
+# Non-vacuity: the wrapper really execed the bridge, so a pass cannot come from
+# it exiting 0 somewhere earlier.
+[[ "$RB29_OUT" == *"model"* ]]            || RB29_OK=0
+[[ "$RB29_ERR" != *"unbound variable"* ]] || RB29_OK=0
+# The pin check still works when the registry IS readable.
+[[ "$RB29_SRC" -eq 127 ]]                 || RB29_OK=0
+[[ -z "$RB29_SOUT" ]]                     || RB29_OK=0
+case "$RB29_SERR" in *"1.0.0"*"1.1.0"*|*"1.1.0"*"1.0.0"*) :;; *) RB29_OK=0;; esac
+# The guard must expand at WRAPPER RUN TIME. Getting the heredoc escaping
+# backwards would bake the installing user's HOME into every wrapper -- a worse
+# bug than the crash, and one that (a) and (b) both pass.
+grep -q '\${HOME:-' "$RB29_BW"             || RB29_OK=0
+grep -qF "$RB29_IH/.claude" "$RB29_BW"    && RB29_OK=0
+# Per-site, on the GENERATED artifacts: any $HOME used as a path prefix in
+# either emitted wrapper must carry a fallback, including one added later.
+RB29_UNGUARDED="$(grep -n '\$HOME/' "$RB29_BW" "$RB29_IH/.local/bin/gemini" 2>/dev/null | grep -v '\${HOME:-' || true)"
+[[ -z "$RB29_UNGUARDED" ]]                || RB29_OK=0
+
+if [[ "$RB29_OK" -eq 1 ]]; then
+    ok "RB29 generated wrapper runs with HOME and CLAUDE_CONFIG_DIR unset, and still refuses a stale pin"
+else
+    bad "RB29 generated wrapper runs with HOME and CLAUDE_CONFIG_DIR unset, and still refuses a stale pin" \
+        "rc=$RB29_RC out=${RB29_OUT:0:80} err=${RB29_ERR:0:200} stale_rc=$RB29_SRC stale_err=${RB29_SERR:0:200} unguarded=${RB29_UNGUARDED:0:200}"
+fi
+
 echo
 echo "PASS=$PASS FAIL=$FAIL"
 if [[ "$FAIL" -eq 0 ]]; then
