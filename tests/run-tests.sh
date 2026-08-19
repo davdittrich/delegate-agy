@@ -1436,6 +1436,115 @@ kill -KILL "$RB22_PPID" 2>/dev/null
 kill -KILL "$RB22_CPID" 2>/dev/null
 _rb_reap_sentinels
 
+echo "== the bounding invariant, asserted over the files (RB01) =="
+
+# RB01 is the only case in this suite that asserts something about code nobody
+# has written yet. Every other case drives a path and checks what came back; a
+# call site added six months from now is on no path, so no behavioural test can
+# see it -- and an unbounded call site is exactly what survived the last release
+# and hangs the box. So the property is asserted over the FILE: every expansion
+# of the agy binary in either script is an argument to run_bounded.
+#
+# No count is asserted. The number of call sites has been stated wrong three
+# times (two, then four, now five, the last because this project's own work
+# added one), so a criterion naming a number is correct only until the next
+# commit. The only number below is a floor of one occurrence, which exists so
+# that renaming the variable turns this case red instead of silently green.
+#
+# Zero exceptions, by design: no allowlist, no skip list, no escape-hatch
+# comment. run_bounded takes its command as arguments and never names the agy
+# binary itself, so nothing legitimate needs an exception today; a site that
+# genuinely cannot be bounded has to change this rule in the open. An inline
+# escape hatch is cheaper to add than a decision is to revisit, which is how the
+# unbounded call survived the release built to eliminate unbounded calls.
+#
+# Known ceiling: a line that merely MENTIONS the variable outside a run_bounded
+# call -- printing it in a diagnostic, say -- is reported as a violation. That
+# is deliberate rather than an oversight; separating "invokes" from "mentions"
+# needs a shell parser, and the cheap approximation errs toward failing loudly.
+
+# Comment-only lines dropped first (a comment naming the variable is neither an
+# occurrence nor a violation), then backslash-continued lines joined into one
+# logical line each. The join is load-bearing, not tidiness: the bridge's
+# delegation call puts `run_bounded` on one physical line and the invocation on
+# the next, so a per-physical-line scan reports a false violation -- and the
+# cheapest way to silence a false violation is to invent the allowlist this case
+# forbids.
+_rb_logical_lines() {
+    sed -e 's/[[:space:]]*$//' "$1" \
+        | grep -v '^[[:space:]]*#' \
+        | sed -e :a -e '/\\$/{N; s/\\\n[[:space:]]*/ /; ta' -e '}'
+}
+
+# _rb_agy_scan FILE -> "<violations> <occurrences>". An occurrence is any
+# expansion of AGY_BIN in any form -- "$AGY_BIN", "${AGY_BIN}", or bare
+# $AGY_BIN. Matching only the doubly-quoted form would let a brace or an
+# unquoted rewrite walk straight past a scan that still reported zero
+# violations, which is the one way this case could fail silently. The
+# assignment line (`AGY_BIN=...`) carries no `$` and is not an occurrence.
+_rb_agy_scan() {
+    local lines occ viol
+    lines="$(_rb_logical_lines "$1")"
+    occ="$(printf '%s\n' "$lines" | grep -cE '\$\{?AGY_BIN\}?')" || occ=0
+    viol="$(printf '%s\n' "$lines" | grep -E '\$\{?AGY_BIN\}?' \
+            | grep -cvE 'run_bounded[[:space:]].*[[:space:]]--[[:space:]].*\$\{?AGY_BIN\}?')" || viol=0
+    printf '%s %s' "$viol" "$occ"
+}
+
+# RB01: the real scripts. `bash -n` first -- a file that does not parse cannot
+# be scanned meaningfully, and a scan of an unparseable file would report zero
+# violations for the wrong reason.
+RB01_OK=1
+RB01_DETAIL=""
+RB01_TOTAL=0
+for _rb01_f in "$BRIDGE" "$SHIM"; do
+    if ! bash -n "$_rb01_f" 2>"$SANDBOX/rb01-syntax.log"; then
+        RB01_OK=0
+        RB01_DETAIL="$RB01_DETAIL ${_rb01_f##*/}:unparseable"
+        continue
+    fi
+    read -r _rb01_v _rb01_o <<<"$(_rb_agy_scan "$_rb01_f")"
+    RB01_TOTAL=$(( RB01_TOTAL + _rb01_o ))
+    if [[ "$_rb01_v" -ne 0 ]]; then
+        RB01_OK=0
+        RB01_DETAIL="$RB01_DETAIL ${_rb01_f##*/}:${_rb01_v}_unbounded_of_${_rb01_o}"
+        RB01_DETAIL="$RB01_DETAIL[$(_rb_logical_lines "$_rb01_f" | grep -E '\$\{?AGY_BIN\}?' \
+            | grep -vE 'run_bounded[[:space:]].*[[:space:]]--[[:space:]].*\$\{?AGY_BIN\}?' | head -3 | tr '\n' ';')]"
+    fi
+done
+if [[ "$RB01_TOTAL" -lt 1 ]]; then
+    RB01_OK=0
+    RB01_DETAIL="$RB01_DETAIL no-occurrence-at-all(scan matched nothing; a rename would empty it)"
+fi
+if [[ "$RB01_OK" -eq 1 ]]; then
+    ok "RB01 every agy invocation in both scripts is a run_bounded argument, no exceptions"
+else
+    bad "RB01 every agy invocation in both scripts is a run_bounded argument, no exceptions" \
+        "occurrences=$RB01_TOTAL detail=$RB01_DETAIL"
+fi
+
+# RB01m: the scan is proven capable of failing before it is trusted. A copy of
+# the shim gains one directly-invoked agy line -- on a path no test drives,
+# which is the whole point -- and the SAME helper must report it. A scan never
+# shown to fail is a scan that passes forever.
+RB01M_DIR="$SANDBOX/rb01m"
+mkdir -p "$RB01M_DIR"
+cp "$SHIM" "$RB01M_DIR/mutated.sh"
+printf '%s\n' 'if [[ "${RB01M_NEVER:-0}" == "1" ]]; then "$AGY_BIN" --version; fi' >> "$RB01M_DIR/mutated.sh"
+read -r RB01M_V RB01M_O <<<"$(_rb_agy_scan "$RB01M_DIR/mutated.sh")"
+# And a copy whose only addition is a COMMENT naming the variable must stay
+# clean, so the scan's own noise floor is pinned alongside its sensitivity.
+cp "$SHIM" "$RB01M_DIR/commented.sh"
+printf '%s\n' '# a comment mentioning "$AGY_BIN" is not a call site' >> "$RB01M_DIR/commented.sh"
+read -r RB01M_CV RB01M_CO <<<"$(_rb_agy_scan "$RB01M_DIR/commented.sh")"
+if [[ "$RB01M_V" -ge 1 && "$RB01M_CV" -eq 0 && "$RB01M_CO" -ge 1 ]]; then
+    ok "RB01m the scan reports an injected unbounded call site and ignores a comment"
+else
+    bad "RB01m the scan reports an injected unbounded call site and ignores a comment" \
+        "mutated=${RB01M_V}/${RB01M_O} commented=${RB01M_CV}/${RB01M_CO}"
+fi
+rm -rf "$RB01M_DIR"
+
 echo "== install.sh / uninstall.sh (vfn.11) =="
 
 _MARKER='# agy-delegate-wrapper'
