@@ -1204,6 +1204,109 @@ fi
 kill -KILL "$RB04_PPID" 2>/dev/null
 kill -KILL "$RB04_CPID" 2>/dev/null
 
+echo "== watchdog timer leaves nothing behind (RB20) =="
+
+# Case ids: RB01-RB14 are claimed by plans 01-03 through 01-06 and RB00a/RB00b by
+# 01-01, so these two defect regressions take RB20/RB21 -- above both ranges,
+# leaving RB15-RB19 free as headroom inside the planned series.
+
+# Counts processes whose ENTIRE command line is `sleep <bound>`. Exact-match
+# (grep -x) rather than substring is load-bearing: `pgrep -f "sleep 4242"` also
+# matches the process carrying the pattern, so a substring counter counts itself
+# and a substring pkill kills itself. The bounds below are sentinels, not tuning
+# -- values nothing else on the box sleeps for -- so a survivor is unambiguously
+# the call under test's, and the default matches all three configurable bounds at
+# once so a leak from ANY of the shim's bounded call sites is caught.
+_RB_SENTINELS='4242|4243|4244'
+_rb_sleepers() {
+    ps -A -o args= 2>/dev/null | grep -cxE "sleep (${1:-$_RB_SENTINELS})" || true
+}
+_rb_reap_sentinels() {
+    local b
+    for b in 4242 4243 4244; do pkill -x -f "sleep $b" 2>/dev/null; done
+    return 0
+}
+
+# RB20a: the EARLY-RETURN path -- the bounded child finishes on its own and the
+# watchdog timer is cancelled. Cancelling the timer must reap the `sleep` it
+# forked, not just the subshell that forked it: the subshell's in-flight sleep is
+# a separate process, so a kill aimed at the subshell pid alone orphans it to
+# init for the FULL length of the bound. On the shim's real defaults that is one
+# resident `sleep 600` per delegation on every coreutils-less host.
+#
+# The success assertions are not decoration: without them a run where the
+# watchdog path never executed a single bounded call would report zero survivors
+# and pass vacuously.
+_rb_reap_sentinels
+_RB20A_BEFORE="$(_rb_sleepers)"
+FAKE_AGY_STDOUT="rb20a ok" GEMINI_SHIM_TIMEOUT=4242 AGY_MODELS_TIMEOUT=4243 \
+    GEMINI_SHIM_STDIN_TIMEOUT=4244 \
+    _run_sanitized RB20A_OUT RB20A_RC bash "$SHIM" -p "do a thing"
+sleep 1
+_RB20A_AFTER="$(_rb_sleepers)"
+if [[ "$RB20A_RC" -eq 0 && "$RB20A_OUT" == *"rb20a ok"* \
+      && "$_RB20A_BEFORE" -eq 0 && "$_RB20A_AFTER" -eq 0 ]]; then
+    ok "RB20a a completed bounded call leaves no watchdog sleep behind"
+else
+    bad "RB20a a completed bounded call leaves no watchdog sleep behind" \
+        "rc=$RB20A_RC before=$_RB20A_BEFORE after=$_RB20A_AFTER out=${RB20A_OUT:0:200}"
+fi
+_rb_reap_sentinels
+
+# RB20b: the SIGNAL-RELAY path -- the shim is signalled while a bounded call is
+# still in flight, so the TERM trap tears down instead of the normal return. The
+# trap must cancel the timer as well; relaying to the child and exiting while
+# leaving the timer running leaks the same sleep by a second route.
+#
+# Driven through the stdin-read call site, not the delegation one, because the
+# bounded command there is `cat` -- it must be a child that DIES on the relayed
+# SIGTERM. The forking fake used by RB04 deliberately ignores SIGTERM (as the
+# real agy does), which would leave the trap's own `wait` blocked and measure the
+# harness rather than the fix. A fifo held open by the harness is what keeps
+# `cat` blocked: an explicit `<fifo` is also required because bash redirects an
+# asynchronous command's stdin from /dev/null otherwise, and an EOF on stdin
+# would end the bounded call before the signal could arrive. The fifo is opened
+# READ-WRITE (`<>`), not write-only: opening a fifo for writing blocks until a
+# reader appears, which would deadlock the suite here rather than the shim.
+mkdir -p "$(dirname "$_SHIM_CACHE")"
+printf '%s\t%s\n' \
+    "gemini-9.9-flash-high" "Gemini 9.9 Flash (High)" \
+    "gemini-9.9-pro-high"   "Gemini 9.9 Pro (High)" > "$_SHIM_CACHE"
+_RB20B_BIN="$(_purebin)"
+RB20B_FIFO="$SANDBOX/rb20b.fifo"
+rm -f "$RB20B_FIFO"
+mkfifo "$RB20B_FIFO"
+exec 7<>"$RB20B_FIFO"
+PATH="$_RB20B_BIN" GEMINI_SHIM_TIMEOUT=4242 AGY_MODELS_TIMEOUT=4243 \
+    GEMINI_SHIM_STDIN_TIMEOUT=4244 \
+    bash "$SHIM" <"$RB20B_FIFO" >/dev/null 2>&1 &
+RB20B_SHIM=$!
+# Drop it from the job table: the harness signals it deliberately below, and an
+# async-job death notice on the suite's own stdout is noise, not a result.
+disown $RB20B_SHIM 2>/dev/null || true
+RB20B_SEEN=0
+for _rb20b_i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24; do
+    if [[ "$(_rb_sleepers 4244)" -gt 0 ]]; then RB20B_SEEN=1; break; fi
+    sleep 0.25
+done
+kill -TERM "$RB20B_SHIM" 2>/dev/null
+RB20B_EXITED=0
+for _rb20b_j in 1 2 3 4 5 6 7 8 9 10 11 12; do
+    if ! kill -0 "$RB20B_SHIM" 2>/dev/null; then RB20B_EXITED=1; break; fi
+    sleep 0.25
+done
+_RB20B_AFTER="$(_rb_sleepers)"
+exec 7>&-
+if [[ "$RB20B_SEEN" -eq 1 && "$RB20B_EXITED" -eq 1 && "$_RB20B_AFTER" -eq 0 ]]; then
+    ok "RB20b the TERM relay trap cancels the timer, leaving no watchdog sleep behind"
+else
+    bad "RB20b the TERM relay trap cancels the timer, leaving no watchdog sleep behind" \
+        "timer_seen=$RB20B_SEEN shim_exited=$RB20B_EXITED survivors=$_RB20B_AFTER"
+fi
+kill -KILL "$RB20B_SHIM" 2>/dev/null
+_rb_reap_sentinels
+rm -f "$RB20B_FIFO" "$_SHIM_CACHE"
+
 echo "== install.sh / uninstall.sh (vfn.11) =="
 
 _MARKER='# agy-delegate-wrapper'
