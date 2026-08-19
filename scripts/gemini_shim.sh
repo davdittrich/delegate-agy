@@ -120,6 +120,20 @@ _rb_signal() {
     fi
 }
 
+# $1=timer pid, EMPTY before the timer has started (a no-op) $2=the timer's own
+# process group id, or EMPTY when it could not be confirmed distinct from ours.
+# Cancelling the timer has to reap what the timer FORKED, not just the timer: the
+# `sleep` it is blocked on is a separate process, so a kill aimed at the subshell
+# pid alone leaves that sleep reparented to init for the rest of the bound. Both
+# exits from the wait below cancel through here -- the normal return and the
+# signal-relay traps -- because a timer left running past either one leaks the
+# same process.
+_rb_cancel_timer() {
+    if [[ -z "$1" ]]; then return 0; fi
+    _rb_signal TERM "$1" "$2"
+    wait "$1" 2>/dev/null || true
+}
+
 # run_bounded <secs> <kill_after> -- cmd args...
 run_bounded() {
     RUN_BOUNDED_KILLED=0
@@ -146,7 +160,7 @@ run_bounded() {
     fi
 
     # ── bash watchdog fallback: no external binary at all ────────────────────
-    local self_pgid child child_pgid kill_pgid="" restore_m=0 timer
+    local self_pgid child child_pgid kill_pgid="" restore_m=0 timer="" timer_pgid=""
     # $BASHPID, never $$: inside a command substitution $$ still reports the
     # top-level shell, which would make the comparison below meaningless.
     self_pgid=$(_rb_pgid_of "$BASHPID")
@@ -176,22 +190,43 @@ run_bounded() {
 
     # Relay a signal we receive ourselves to the same target the timer would
     # use, matching the coreutils binary's own forwarding contract: without this
-    # a Ctrl-C leaves the child alive in a group detached from the terminal.
-    trap '_rb_signal TERM "$child" "$kill_pgid"; wait "$child" 2>/dev/null || true; exit 143' TERM
-    trap '_rb_signal INT "$child" "$kill_pgid"; wait "$child" 2>/dev/null || true; exit 130' INT
+    # a Ctrl-C leaves the child alive in a group detached from the terminal. The
+    # timer is cancelled FIRST so it cannot fire its own TERM/KILL at the child
+    # midway through this teardown. $timer is still empty while these traps are
+    # installed, which _rb_cancel_timer reads as "nothing to cancel"; installing
+    # them before the timer starts is deliberate, because the reverse order would
+    # leave a window where a signal kills the shell outright and leaks the whole
+    # timer instead of just the narrow fork-to-assignment gap below.
+    trap '_rb_cancel_timer "$timer" "$timer_pgid"; _rb_signal TERM "$child" "$kill_pgid"; wait "$child" 2>/dev/null || true; exit 143' TERM
+    trap '_rb_cancel_timer "$timer" "$timer_pgid"; _rb_signal INT "$child" "$kill_pgid"; wait "$child" 2>/dev/null || true; exit 130' INT
 
-    # The timer's stdio is detached on purpose. Cancelling it below kills the
-    # subshell but orphans its current `sleep`, and an orphan holding the
+    # The timer's stdio is detached on purpose: an orphaned `sleep` holding the
     # caller's stdout open would block a caller that captured it for the rest of
     # the bound -- a 600s hang in a script that shadows `gemini` box-wide.
-    ( sleep "$secs";       _rb_signal TERM "$child" "$kill_pgid"
-      sleep "$kill_after"; _rb_signal KILL "$child" "$kill_pgid"
-    ) </dev/null >/dev/null 2>&1 9>&- &
-    timer=$!
+    #
+    # Backgrounded under `set -m` for exactly the reason the child above is, and
+    # against the same failure: job control makes the subshell a process-group
+    # leader, so the `sleep` it forks inherits that group and cancelling the timer
+    # reaps BOTH. Without it the subshell shares this script's group, the cancel
+    # reaches the subshell alone, and every bounded call leaks one `sleep <bound>`
+    # to init for the full length of its bound.
+    {
+        set -m
+        ( sleep "$secs";       _rb_signal TERM "$child" "$kill_pgid"
+          sleep "$kill_after"; _rb_signal KILL "$child" "$kill_pgid"
+        ) </dev/null >/dev/null 2>&1 9>&- &
+        timer=$!
+        if [[ "$restore_m" -eq 1 ]]; then set +m; fi
+    } 2>/dev/null
+    # The child's self-kill guard, applied to the timer for the same reason: an
+    # unconfirmed or shared group must never become a `kill -- -<pgid>` operand.
+    # Empty degrades _rb_cancel_timer to the direct-pid kill this line replaced,
+    # which still cancels the subshell -- it just cannot reap the sleep.
+    timer_pgid=$(_rb_pgid_of "$timer")
+    if [[ "$timer_pgid" == "$self_pgid" ]]; then timer_pgid=""; fi
 
     wait "$child" 2>/dev/null || rc=$?
-    kill "$timer" 2>/dev/null || true
-    wait "$timer" 2>/dev/null || true
+    _rb_cancel_timer "$timer" "$timer_pgid"
     trap - TERM INT
 
     # Authoritative, never inferred from elapsed time: this branch is the one
