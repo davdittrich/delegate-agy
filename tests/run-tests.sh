@@ -1545,6 +1545,109 @@ else
 fi
 rm -rf "$RB01M_DIR"
 
+echo "== the helper is one artifact in two files (RB02) =="
+
+# RB02: run_bounded is duplicated verbatim into both scripts on purpose -- each
+# is installed as a standalone launcher and neither may source the other -- so
+# the two copies are one artifact living in two files. Three defects were found
+# inside that helper AFTER it was first written; the hazard this case guards is
+# the fourth being fixed in one copy and not the other, which nothing else in
+# the suite would notice. Same one-sided-fix hazard delegate-agy-8ph names for
+# the two model-cache writers.
+_rb_extract() {
+    sed -n '/^# --- BEGIN run_bounded ---$/,/^# --- END run_bounded ---$/p' "$1"
+}
+
+RB02_B="$(_rb_extract "$BRIDGE")"
+RB02_S="$(_rb_extract "$SHIM")"
+# Both ranges must be non-empty AND must actually contain the definition, so two
+# absent or two truncated blocks cannot pass trivially by both being nothing.
+if [[ -n "$RB02_B" && -n "$RB02_S" \
+      && "$RB02_B" == *"run_bounded() {"* && "$RB02_S" == *"run_bounded() {"* \
+      && "$RB02_B" == "$RB02_S" ]]; then
+    ok "RB02 the two run_bounded blocks are byte-identical and non-empty"
+else
+    bad "RB02 the two run_bounded blocks are byte-identical and non-empty" \
+        "bridge_lines=$(printf '%s' "$RB02_B" | grep -c '' ) shim_lines=$(printf '%s' "$RB02_S" | grep -c '') diff=$(diff <(printf '%s\n' "$RB02_B") <(printf '%s\n' "$RB02_S") | head -6 | tr '\n' ';')"
+fi
+
+# RB02m: prove the comparison can fail before trusting it. One character changed
+# inside a copy of the bridge's block must be reported, and an empty block must
+# not compare equal to a real one.
+RB02M_DIR="$SANDBOX/rb02m"
+mkdir -p "$RB02M_DIR"
+sed 's/^# Bounded invocation, redirect-transparent:/# bounded invocation, redirect-transparent:/' \
+    "$BRIDGE" > "$RB02M_DIR/mutated.sh"
+RB02M_M="$(_rb_extract "$RB02M_DIR/mutated.sh")"
+printf 'echo no markers here\n' > "$RB02M_DIR/empty.sh"
+RB02M_E="$(_rb_extract "$RB02M_DIR/empty.sh")"
+if [[ -n "$RB02M_M" && "$RB02M_M" != "$RB02_B" && -z "$RB02M_E" ]]; then
+    ok "RB02m a one-character edit inside a copied block is reported, and a markerless file extracts nothing"
+else
+    bad "RB02m a one-character edit inside a copied block is reported, and a markerless file extracts nothing" \
+        "mutated_empty=$([[ -z "$RB02M_M" ]] && echo yes) mutated_equal=$([[ "$RB02M_M" == "$RB02_B" ]] && echo yes) markerless_len=${#RB02M_E}"
+fi
+rm -rf "$RB02M_DIR"
+
+echo "== the strings an operator actually sees (RB03) =="
+
+# RB03: README's troubleshooting table is matched by hand against real output,
+# so a paraphrase there is a defect even though nothing crashes. The expected
+# bytes are written HERE, not extracted from one file and grepped for in
+# another -- extracting from the source and searching the source with it is a
+# tautology that passes whatever the strings become. Fixed-string matching
+# throughout, so a drifted hyphen, quote or semicolon is caught; note the `--`,
+# which is not an em dash.
+_RB_WARN_LITERAL='WARNING: timeout/gtimeout not found -- bounding agy with the bash watchdog fallback; install coreutils for process-group kill'
+_RB_NOTE_LITERAL='NOTICE: bash watchdog fallback killed the bounded call after its bound (exit 124)'
+# The startup fatal the bridge used to print before this phase decided to
+# degrade instead of refuse. It must not come back anywhere that ships.
+_RB_DEAD_FATAL='ERROR: timeout/gtimeout not found in PATH (install coreutils)'
+_RB_README="$ROOT/README.md"
+
+RB03_OK=1
+RB03_DETAIL=""
+# Defined exactly once per script, with the same bytes in both. Comment lines
+# are filtered out before counting so a comment naming the constant cannot
+# inflate the count.
+for _rb03_f in "$BRIDGE" "$SHIM"; do
+    _rb03_n="$(grep -v '^[[:space:]]*#' "$_rb03_f" | grep -cF "RB_NO_TIMEOUT_WARN='$_RB_WARN_LITERAL'")" || _rb03_n=0
+    [[ "$_rb03_n" -eq 1 ]] || { RB03_OK=0; RB03_DETAIL="$RB03_DETAIL ${_rb03_f##*/}:defines_${_rb03_n}"; }
+done
+# README quotes both literals verbatim.
+grep -qF "$_RB_WARN_LITERAL" "$_RB_README" || { RB03_OK=0; RB03_DETAIL="$RB03_DETAIL readme:warning_missing"; }
+grep -qF "$_RB_NOTE_LITERAL" "$_RB_README" || { RB03_OK=0; RB03_DETAIL="$RB03_DETAIL readme:notice_missing"; }
+# Negative half (delegate-agy-6f6). Every other assertion in this phase is
+# positive, so a stale sentence reintroduced BESIDE a correct one would keep the
+# suite green. Two absences are pinned:
+#
+#  - the deleted startup fatal, in either shipped script and in README. It is a
+#    fixed string that named a behaviour this phase reversed, so any reappearance
+#    is stale by construction.
+#  - the word "unbounded" in README. Ceiling, stated rather than hidden: the
+#    property worth pinning is "no present-tense claim that either entry point
+#    runs agy unbounded", and that is not mechanically separable from a
+#    legitimate historical or contrast mention. README carries zero occurrences
+#    today, so the blanket form is what can be pinned exactly; a future
+#    legitimate mention has to change this rule in the open. The two scripts are
+#    deliberately NOT subject to it -- they use the word correctly in three
+#    hazard comments, which is precisely the case that cannot be separated.
+#
+# Scope is what ships: README and the two scripts. .planning/PROJECT.md and
+# .planning/REQUIREMENTS.md are checked by neither, because they live in the
+# main tree while this suite runs from the worktree and must also pass from a
+# release tarball that contains no .planning/ at all.
+for _rb03_f in "$BRIDGE" "$SHIM" "$_RB_README"; do
+    grep -qF "$_RB_DEAD_FATAL" "$_rb03_f" && { RB03_OK=0; RB03_DETAIL="$RB03_DETAIL ${_rb03_f##*/}:deleted_fatal_returned"; }
+done
+grep -qiF 'unbounded' "$_RB_README" && { RB03_OK=0; RB03_DETAIL="$RB03_DETAIL readme:unbounded_claim($(grep -niF unbounded "$_RB_README" | head -2 | tr '\n' ';'))"; }
+if [[ "$RB03_OK" -eq 1 ]]; then
+    ok "RB03 both scripts define the warning once, README quotes both literals, and the reversed claims are gone"
+else
+    bad "RB03 both scripts define the warning once, README quotes both literals, and the reversed claims are gone" \
+        "detail=$RB03_DETAIL"
+fi
+
 echo "== install.sh / uninstall.sh (vfn.11) =="
 
 _MARKER='# agy-delegate-wrapper'
