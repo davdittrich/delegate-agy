@@ -1364,6 +1364,72 @@ else
         "rc=$RB21B_RC fd9=$(head -c 300 "$_RB21B_FD9")"
 fi
 
+echo "== a relayed signal escalates like the bound does (RB22) =="
+
+# RB22: continues the gap-fix range RB20/RB21 opened -- above RB01-RB14 (plans
+# 01-03 through 01-06) and clear of RB15-RB19, which stays headroom inside the
+# planned series.
+#
+# One real shim delegation on a PATH with no timeout/gtimeout, against an agy that
+# IGNORES SIGTERM and has forked a SIGTERM-ignoring child, interrupted by a
+# SIGTERM at the shim itself. The relay must reach the same end state the coreutils
+# arm reaches for a forwarded signal: forward, escalate to SIGKILL after the same
+# kill_after, then return. An unescalated `wait` hangs for as long as the child
+# chooses to live -- 300s here, unbounded in the field.
+#
+# The bound is set far out of reach (4242s) on purpose: nothing but the relay can
+# end this call, so a pass cannot be the watchdog bound firing by luck. The
+# assertions that carry the weight are the two PID checks and the elapsed cap, not
+# the exit code -- a shim that tore down by some other route would still exit 143.
+# The cap is derived, not tuned: kill_after at the delegation site is 5s, so a
+# working escalation is done inside ~6s; 15s of polling is 3x that, and the 20s
+# elapsed assertion is the one RB04 already uses. The PIDs are required NON-EMPTY
+# so a run where the fake never started cannot report both processes "gone".
+RB22_PPF="$SANDBOX/rb22-parent.pid"
+RB22_CPF="$SANDBOX/rb22-child.pid"
+rm -f "$RB22_PPF" "$RB22_CPF"
+_rb_reap_sentinels
+_RB22_BIN="$(_purebin)"
+_RB22_START=$(date +%s)
+PATH="$_RB22_BIN" FAKE_AGY_FORK_HANG=1 FAKE_AGY_PID_FILE="$RB22_PPF" \
+    FAKE_AGY_CHILD_PID_FILE="$RB22_CPF" GEMINI_SHIM_TIMEOUT=4242 \
+    AGY_MODELS_TIMEOUT=4243 GEMINI_SHIM_STDIN_TIMEOUT=4244 \
+    bash "$SHIM" -p "do a thing" >/dev/null 2>&1 &
+RB22_SHIM=$!
+for _rb22_i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24; do
+    [[ -s "$RB22_PPF" && -s "$RB22_CPF" ]] && break
+    sleep 0.25
+done
+kill -TERM "$RB22_SHIM" 2>/dev/null
+RB22_EXITED=0
+for ((_rb22_j = 0; _rb22_j < 60; _rb22_j++)); do
+    if ! kill -0 "$RB22_SHIM" 2>/dev/null; then RB22_EXITED=1; break; fi
+    sleep 0.25
+done
+_RB22_ELAPSED=$(( $(date +%s) - _RB22_START ))
+RB22_RC=""
+if [[ "$RB22_EXITED" -eq 1 ]]; then wait "$RB22_SHIM" 2>/dev/null; RB22_RC=$?; fi
+RB22_PPID="$(cat "$RB22_PPF" 2>/dev/null)" || RB22_PPID=""
+RB22_CPID="$(cat "$RB22_CPF" 2>/dev/null)" || RB22_CPID=""
+RB22_PARENT_GONE=1
+RB22_CHILD_GONE=1
+[[ "$RB22_PPID" =~ ^[0-9]+$ ]] && kill -0 "$RB22_PPID" 2>/dev/null && RB22_PARENT_GONE=0
+[[ "$RB22_CPID" =~ ^[0-9]+$ ]] && kill -0 "$RB22_CPID" 2>/dev/null && RB22_CHILD_GONE=0
+_RB22_SLEEPERS="$(_rb_sleepers)"
+if [[ "$RB22_EXITED" -eq 1 && "$RB22_RC" -eq 143 && "$_RB22_ELAPSED" -lt 20 \
+      && "$RB22_PPID" =~ ^[0-9]+$ && "$RB22_CPID" =~ ^[0-9]+$ \
+      && "$RB22_PARENT_GONE" -eq 1 && "$RB22_CHILD_GONE" -eq 1 \
+      && "$_RB22_SLEEPERS" -eq 0 ]]; then
+    ok "RB22 a relayed SIGTERM escalates to SIGKILL and returns 143 instead of waiting out the child"
+else
+    bad "RB22 a relayed SIGTERM escalates to SIGKILL and returns 143 instead of waiting out the child" \
+        "exited=$RB22_EXITED rc=$RB22_RC elapsed=${_RB22_ELAPSED}s parent=$RB22_PPID parent_gone=$RB22_PARENT_GONE child=$RB22_CPID child_gone=$RB22_CHILD_GONE sleepers=$_RB22_SLEEPERS"
+fi
+kill -KILL "$RB22_SHIM" 2>/dev/null
+kill -KILL "$RB22_PPID" 2>/dev/null
+kill -KILL "$RB22_CPID" 2>/dev/null
+_rb_reap_sentinels
+
 echo "== install.sh / uninstall.sh (vfn.11) =="
 
 _MARKER='# agy-delegate-wrapper'
