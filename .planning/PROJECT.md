@@ -28,7 +28,7 @@ A Claude Code plugin that routes tasks to `agy` (Google's Antigravity CLI), givi
 
 **Finish 1.6.2** — the release is written and reverted from `master` pending these:
 
-- [ ] R11 — every `agy` invocation bounded with `timeout -k`; agy ignores SIGTERM, so a plain `timeout` blocks forever
+- [ ] R11 — every `agy` invocation bounded through `run_bounded`, with or without a coreutils binary; agy ignores SIGTERM, so every bound escalates to SIGKILL
 - [ ] R5 — exit codes are a contract: 2, 3, 124, 127, 137 each mean exactly one thing and say so
 - [ ] R6 — never report empty success; agy exiting 0 with no stdout is a failure
 - [ ] R8 — registry read is comparison-only: exact key match, repin path built from install-time literals
@@ -45,7 +45,7 @@ A Claude Code plugin that routes tasks to `agy` (Google's Antigravity CLI), givi
 
 - **Replacing `grep`/`sed` parsing with a real JSON parser everywhere** — `python3` is already a dependency, but the exec-target invariant means the installer's registry read must stay minimal and auditable. Bounded, evidence-backed parsing is the goal, not a parser rewrite.
 - **Making the shim a full Gemini CLI** — it maps the flags Octopus and Metaswarm actually use. Chasing full parity invites drift against a CLI Google is retiring.
-- **Removing the unbounded fallback when no `timeout` binary exists** — documented deliberately: an optional knob must not stop a `gemini` that shadows the system binary. Open question is only whether the bridge and shim should still diverge here.
+- **Matching coreutils' process-group kill where bash cannot** — as of Phase 1 every agy call is bounded on every host, so this is a question of *which* kill, not whether one happens. The bash watchdog reaps the child's process group through job control; where job control cannot give the child a group of its own it kills the direct process only, so something agy forked can survive. Installing coreutils closes that gap. Chasing it further in bash does not.
 - **Supporting non-OAuth agy auth** — agy owns its auth; the plugin observes the result.
 
 ## Context
@@ -66,7 +66,7 @@ What the probe did **not** establish: whether agy ignores SIGTERM. Every call re
 
 - **Compatibility**: The `gemini` shim shadows the system binary for all PATH callers — Octopus, Metaswarm, interactive shells. Any change that fails where it previously succeeded breaks unrelated tooling.
 - **Security**: The launcher's exec target is an install-time literal. No glob, registry value, or command output may ever feed it, and no registry-supplied string may be printed as a command to run.
-- **Dependencies**: bash 4+, coreutils (`timeout`/`gtimeout`), `python3` 3.6+. No package manager, so dependencies are checked at runtime, not resolved.
+- **Dependencies**: bash 4+ and `python3` 3.6+ are required; coreutils (`timeout`/`gtimeout`) is optional as of Phase 1 — it buys a process-group kill, not the bound itself. No package manager, so dependencies are checked at runtime, not resolved.
 - **Tech stack**: Pure bash by design. The test harness is hand-rolled — no framework, `set -u` without `set -e`, one shared sandboxed `HOME`.
 - **External**: `agy` and Claude Code both own formats this plugin reads and neither is versioned for consumers.
 
@@ -77,7 +77,8 @@ What the probe did **not** establish: whether agy ignores SIGTERM. Every call re
 | Resolve models from the live list, never a frozen map | A pinned name drifts the moment agy ships a version; that drift caused the 1.6.1 bug | ✓ Good — extended to the shim in 1.6.2 |
 | Pin the launcher's exec target at install time | Prevents a planted cache directory from hijacking `gemini` for every PATH caller | ✓ Good — but forces a repin on every plugin update |
 | Refuse to run a superseded pin (exit 127) | Silent stale execution let a shipped fix sit unused; a warning had already failed to be noticed | ⚠️ Revisit — hard-breaks `gemini` box-wide until repinned |
-| Shim degrades silently, bridge fails loud | The shim must never break a PATH caller; the bridge is explicitly invoked and can be strict | ⚠️ Revisit — the two now diverge on the missing-`timeout` case with no stated rationale |
+| Shim degrades silently, bridge fails loud | The shim must never break a PATH caller; the bridge is explicitly invoked and can be strict | ✗ Superseded by the row below — Phase 1 dissolved the missing-`timeout` divergence instead of documenting it |
+| Every agy call is bounded on every host, by coreutils `timeout` where it exists and a native bash watchdog where it does not | `delegate-agy-cy5` asked whether the bridge should hard-fail, degrade with a warning, or refuse only the delegation call. Each of the three buys either a call with no bound or a caller broken at startup, and the core value forbids both — a `gemini` that refuses to run is the same failure as one that hangs, moved one step earlier. Bash bounds a call natively with no external binary, so the premise that a missing binary forces the trade is what was rejected; the recorded decision is *always bounded*, none of the three | ✓ Good — both entry points now warn once per run and proceed bounded; the bridge's startup fatal is deleted (Phase 1) |
 | Follow-ups discovered during work block the release | A release shipping known defects it surfaced itself misrepresents what it fixes | — Pending — first applied to 1.6.2 |
 
 ---

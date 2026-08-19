@@ -33,11 +33,11 @@ The launcher compares its pinned version against Claude Code's install registry 
 
 ### R11 — Bounded execution
 
-Every `agy` invocation is wrapped in `timeout` **with `-k`**. agy ignores SIGTERM, so a plain `timeout` signals and then blocks forever.
+Every `agy` invocation is bounded, on every host. agy ignores SIGTERM, so every bound escalates to SIGKILL; a missing `timeout`/`gtimeout` binary changes which mechanism enforces the bound, never whether one exists.
 
-- Acceptance, stated as an invariant rather than a list: **every** `"$AGY_BIN"` occurrence in `scripts/agy_bridge.sh` and `scripts/gemini_shim.sh` is either wrapped in `"$TIMEOUT_BIN" -k …` or sits in a `TIMEOUT_BIN`-empty fallback that the recorded decision permits, enforced by a test that reads the scripts. Where no `timeout`/`gtimeout` binary exists the call is unbounded **by documented decision**, and that decision is stated identically in both scripts.
+- Acceptance, stated as an invariant rather than a list: **every** `"$AGY_BIN"` occurrence in `scripts/agy_bridge.sh` and `scripts/gemini_shim.sh` is an argument to `run_bounded` — no permitted-fallback clause and no exceptions — enforced by a test that reads the scripts; plus a runtime proof per entry point, on both mechanisms, that nothing outlives its bound.
 - Do not restate this as a count. It has been wrong three times — two, then four, now five — most recently because this project's own work added a call site. A number decays; the invariant does not.
-- Open question, not yet decided: the bridge treats a missing `timeout` binary as fatal while the shim degrades. Both behaviors are defensible; the divergence is currently undocumented. Resolve before close.
+- Decided in Phase 1, recorded in `PROJECT.md` §Key Decisions as *always bounded*: the bridge/shim divergence this requirement once flagged is dissolved rather than documented. Both entry points warn once per run when no bounding binary is found and then proceed bounded; the bridge's startup fatal is deleted.
 - Evidence: `README.md` §Environment variables; `tests/run-tests.sh` R5/R6/R7, T4/T5, SH4/SH5/SH6.
 
 ---
@@ -85,7 +85,7 @@ An output-format change must fail loudly and diagnosably, never silently resolve
 | R5 | Phase 3 | `6q1`, `v5a` | partial — 137 discrimination shipped on branch; docs and empty-stderr suffix still wrong |
 | R6 | Phase 3 | — | shipped on branch, needs regression coverage |
 | R8 | Phase 4 | — | shipped on branch, reviewed |
-| R11 | Phase 1 | `cy5` | partial — both scripts are now converted: the shim's four sites as of plan 01-02, the bridge's three as of plan 01-03, all through `run_bounded`, all bounded on a host with no `timeout`/`gtimeout`. The divergence this requirement flagged as an open question is resolved in the shim's favour and the bridge's startup fatal is deleted (bound always, warn once per run, never fatal), so R11's line 38 clause "the call is unbounded **by documented decision**" and its line 40 open question are both obsolete — plan 01-05 owns rewording them alongside RB03's README quote. Stays open only for the enforcement half of the acceptance: "a test that reads the scripts" is case RB01, plan 01-05. No count stated deliberately: see R11's acceptance |
+| R11 | Phase 1 | `cy5` | partial — both scripts are now converted: the shim's sites as of plan 01-02, the bridge's as of plan 01-03, all through `run_bounded`, all bounded on a host with no `timeout`/`gtimeout`. The divergence this requirement flagged as an open question is dissolved rather than documented (bound always, warn once per run, never fatal); the decision is recorded in `PROJECT.md` §Key Decisions and R11's acceptance is rewritten to match, as of plan 01-04. Stays open only for the enforcement half of the acceptance: the test that reads the scripts is case RB01, plan 01-05, and the runtime proof per entry point is plan 01-06. No count stated deliberately: see R11's acceptance |
 | S1 | Phase 2 | — | partial — tab normalization shipped 1.6.1; degraded-list reporting not yet distinct from an unmatched `--type` |
 | S2 | Phase 4 | — | shipped on branch |
 | S3 | Phase 5 | `cy5` (shared with R11) | open — contract table and per-mode tests not written |
