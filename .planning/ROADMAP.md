@@ -42,7 +42,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. A reader of README's environment-variable section finds both behaviors stated side by side, with the reason they do or do not differ.
   4. On either mechanism, no `agy` invocation anywhere in the scripts can outlive its bound against a SIGTERM-ignoring fake. This is enforced as an **invariant, not a count**: a test asserts that every `"$AGY_BIN"` occurrence in `scripts/agy_bridge.sh` and `scripts/gemini_shim.sh` is an argument to `run_bounded`, with zero exceptions — so a call site added later fails the suite instead of slipping through unbounded.
 
-**Plans**: 5/6 plans executed
+**Plans**: 6/6 plans executed
 
 Plans:
 **Wave 1**
@@ -61,7 +61,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 01-06-PLAN.md — Runtime proof per entry point, on both mechanisms, with and without a controlling terminal
+- [x] 01-06-PLAN.md — Runtime proof per entry point, on both mechanisms, with and without a controlling terminal
 
 **Note**: the ticket names three candidate designs and states that the choice, not just the implementation, is open. This phase is not done when code changes; it is done when the choice is written down.
 
@@ -180,7 +180,7 @@ Phases 1, 1.5, 3, and 4 have no dependencies on each other and may be planned or
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. The missing-`timeout` decision | 5/6 | In Progress|  |
+| 1. The missing-`timeout` decision | 6/6 | In Progress|  |
 | 1.5. Contract check against a real agy | 0/TBD | Not started | - |
 | 2. Model-list handling, end to end | 0/TBD | Not started | - |
 | 3. The exit-code contract | 0/TBD | Not started | - |

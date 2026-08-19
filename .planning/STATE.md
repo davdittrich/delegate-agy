@@ -4,16 +4,16 @@ milestone: v1.6.2
 milestone_name: milestone
 current_phase: 01
 current_phase_name: the-missing-timeout-decision
-status: executing
-stopped_at: Completed 01-05-PLAN.md
-last_updated: "2026-08-19T12:10:38.923Z"
+status: verifying
+stopped_at: Completed 01-06-PLAN.md
+last_updated: "2026-08-19T14:44:38.922Z"
 last_activity: 2026-08-19
 last_activity_desc: Roadmap created from REQUIREMENTS.md; 9 requirements mapped across 7 phases, all 7 open bd tickets absorbed
 progress:
   total_phases: 1
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 6
-  completed_plans: 5
+  completed_plans: 6
 ---
 
 # Project State
@@ -29,10 +29,10 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 
 Phase: 01 (the-missing-timeout-decision) — EXECUTING
 Plan: 6 of 6
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-08-19 — Phase 01 execution started
 
-Progress: [████████░░] 83%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -63,6 +63,7 @@ Progress: [████████░░] 83%
 | Phase 01 P03 | 35m | 3 tasks | 1 files |
 | Phase 01 P04 | 18min | 3 tasks | 3 files |
 | Phase 01 P05 | 50min | 3 tasks | 1 files |
+| Phase 01 P06 | 4h 40m | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -84,6 +85,10 @@ Recent decisions affecting current work:
 - [Phase ?]: coreutils demoted from dependency to recommendation in README and PROJECT.md; it buys process-group kill, not the bound
 - [Phase ?]: 01-05: criterion 4 enforced as a static invariant over both scripts (RB01), with committed mutation cases wherever the scan logic could go vacuous
 - [Phase ?]: 01-05: RB08 drives its prompt via stdin -- an argument-driven version was a proven false negative because the fetch and delegation sites redirect stderr into files
+- [Phase ?]: 01-06: RB13 asserts 124 at the entry point, not at the mechanism: coreutils timeout -k measurably returns 137 against a SIGTERM-ignoring child because its own SIGKILL to its process group reaches itself; both entry points map it to 124, so unify-124 is a property of what the caller sees
+- [Phase ?]: 01-06: Runtime descendant cases capture into files, not command substitutions: each script's fd 9 is inherited by agy and its forks, so under a command substitution a failing descendant assertion blocks for the fake's full 300s instead of failing
+- [Phase ?]: 01-06: The forking fake ignores SIGHUP as well as SIGTERM: without it the pty session's hangup reaps the pair and the with-terminal descendant assertion passes while asserting nothing
+- [Phase ?]: 01-06: The PTY allocator's argv form is chosen by probing script --version, never by uname, with both flavour branches pinned on one host via a stubbed probe result
 
 ### Pending Todos
 
@@ -113,6 +118,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-19T12:10:38.775Z
-Stopped at: Completed 01-05-PLAN.md
+Last session: 2026-08-19T14:44:18.979Z
+Stopped at: Completed 01-06-PLAN.md
 Resume file: None
