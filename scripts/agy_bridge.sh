@@ -7,6 +7,15 @@
 
 set -euo pipefail
 
+# Duplicate of this script's ORIGINAL stderr, before any call site redirects
+# fd 2 into a capture file. Bounding diagnostics go here and nowhere else: at
+# the delegation site below, fd 2 is captured and its contents are interpolated
+# into the caller-visible error string and the JSON envelope, so a diagnostic
+# written to plain stderr would corrupt a payload that must stay untouched.
+# Numeric form on purpose -- the fallback this serves exists for stock macOS,
+# whose shipped bash predates named descriptors.
+exec 9>&2
+
 # ── Dependency check ─────────────────────────────────────────────────────────
 if ! command -v agy &>/dev/null; then
     echo "ERROR: agy not found in PATH (expected at ~/.local/bin/agy)" >&2; exit 2
@@ -26,6 +35,239 @@ AGY_MODELS_TIMEOUT="${AGY_MODELS_TIMEOUT:-20}"
 [[ "$AGY_MODELS_TIMEOUT" =~ ^[1-9][0-9]*$ ]] || {
     echo "ERROR: AGY_MODELS_TIMEOUT must be a positive integer" >&2; exit 2
 }
+
+# --- BEGIN run_bounded ---
+# Bounded invocation, redirect-transparent: the command runs in the caller's own
+# stdio, so command substitution, direct file redirects, a cd-subshell and a
+# piped stdin all keep exactly the capture semantics they had before.
+#
+# Everything between these two markers is duplicated BYTE-FOR-BYTE into
+# scripts/agy_bridge.sh and depends on exactly two things from its host script:
+# $TIMEOUT_BIN (set by the probe above) and file descriptor 9 (the script's own
+# original stderr, opened at the top). Add no third dependency, and never edit
+# one copy alone -- the two blocks are pinned byte-identical by the suite.
+# Duplicated rather than sourced for the same reason the model-mapping code
+# below is: this script installs as ~/.local/bin/gemini and shadows the real
+# gemini for every caller on PATH, so a missing helper would break `gemini`
+# box-wide.
+#
+# The coreutils binary is preferred where it exists, because it isolates its
+# child in a new process group and signals the GROUP, reaping descendants. Where
+# it does not exist, bash's own job control does the same job with no external
+# binary at all -- which is what makes this work on a stock macOS that has
+# neither coreutils nor setsid. The escalation rationale is the one already
+# stated at the bound declarations above; it is not restated here.
+RB_WATCHDOG_KILLED_NOTE='NOTICE: bash watchdog fallback killed the bounded call after its bound (exit 124)'
+RUN_BOUNDED_KILLED=0
+
+# $1=pid -> prints a bare digit string, or nothing. NEVER fails its caller: an
+# unguarded lookup under `set -euo pipefail` aborts the whole calling script
+# rather than degrading, so this body swallows its own failures and the caller
+# checks for an empty result instead.
+_rb_pgid_of() {
+    local p="$1" v=""
+    if [[ -r "/proc/$p/stat" ]]; then
+        v=$(awk '{print $5}' "/proc/$p/stat" 2>/dev/null) || v=""
+    else
+        v=$(ps -o pgid= -p "$p" 2>/dev/null) || v=""
+    fi
+    # One normalisation point, deliberately at the single exit: `ps -o pgid='
+    # right-pads its one-row output and procfs field 5 does not. A padded value
+    # fails OPEN twice over -- the self-group comparison below stops matching,
+    # and the same value lands as a process-group kill operand whose embedded
+    # blank makes the target invalid, a rejection the kill's own
+    # failure-tolerant suffix swallows. The result would be a reported kill that
+    # never happened, on the one platform without procfs, which is exactly the
+    # platform this path exists for.
+    v="${v//[![:digit:]]/}"
+    if [[ -n "$v" ]]; then printf '%s' "$v"; fi
+    return 0
+}
+
+# $1=signal $2=direct pid $3=process group id, or EMPTY when the child's group
+# could not be confirmed distinct from our own. Never signals a group we may be
+# a member of; degrades to the direct pid instead.
+_rb_signal() {
+    if [[ -n "$3" ]]; then
+        kill -s "$1" -- "-$3" 2>/dev/null || true
+    else
+        kill -s "$1" "$2" 2>/dev/null || true
+    fi
+}
+
+# $1=timer pid, EMPTY before the timer has started (a no-op) $2=the timer's own
+# process group id, or EMPTY when it could not be confirmed distinct from ours.
+# Cancelling the timer has to reap what the timer FORKED, not just the timer: the
+# `sleep` it is blocked on is a separate process, so a kill aimed at the subshell
+# pid alone leaves that sleep reparented to init for the rest of the bound. Both
+# exits from the wait below cancel through here -- the normal return and the
+# signal-relay traps -- because a timer left running past either one leaks the
+# same process.
+_rb_cancel_timer() {
+    if [[ -z "$1" ]]; then return 0; fi
+    _rb_signal TERM "$1" "$2"
+    wait "$1" 2>/dev/null || true
+}
+
+# Starts the two-stage escalation ladder in the background.
+#   $1 = delay before the first signal: the bound for a timeout, 0 for a relay,
+#        whose signal has already arrived and is only being forwarded
+#   $2 = that first signal: a timeout sends TERM, a relay forwards what it got
+# Two stages because the child may ignore the first one -- agy is observed to,
+# which is the whole reason every bounded site passes a positive kill_after -- so
+# the second stage escalates to SIGKILL after $kill_after in both cases. That is
+# the coreutils binary's behaviour for its own bound AND for a signal forwarded to
+# it, and this path claims parity with it.
+#
+# Reads $kill_after, $child, $kill_pgid and $self_pgid from run_bounded's frame and
+# publishes $timer and $timer_pgid back into it -- the same dynamic scope the trap
+# strings below already resolve their $child and $kill_pgid through. Deliberate:
+# returning two values any other way costs a subshell, which is precisely the job
+# that must survive.
+#
+# The ladder's stdio is detached on purpose: an orphaned `sleep` holding the
+# caller's stdout open would block a caller that captured it for the rest of the
+# bound -- a 600s hang in a script that shadows `gemini` box-wide.
+#
+# Backgrounded under `set -m` for exactly the reason the bounded child is, and
+# against the same failure: job control makes the subshell a process-group leader,
+# so the `sleep` it forks inherits that group and _rb_cancel_timer reaps BOTH.
+# Without it the subshell shares this script's group, the cancel reaches the
+# subshell alone, and every bounded call leaks one `sleep <bound>` to init for the
+# full length of its bound.
+_rb_start_timer() {
+    local restore=0
+    case "$-" in *m*) : ;; *) restore=1 ;; esac
+    {
+        set -m
+        ( sleep "$1";          _rb_signal "$2"  "$child" "$kill_pgid"
+          sleep "$kill_after"; _rb_signal KILL "$child" "$kill_pgid"
+        ) </dev/null >/dev/null 2>&1 9>&- &
+        timer=$!
+        if [[ "$restore" -eq 1 ]]; then set +m; fi
+    } 2>/dev/null
+    # The bounded child's self-kill guard, applied to the ladder for the same
+    # reason: an unconfirmed or shared group must never become a `kill -- -<pgid>`
+    # operand. Empty degrades _rb_cancel_timer to a direct-pid kill, which still
+    # cancels the subshell -- it just cannot reap the sleep.
+    timer_pgid=$(_rb_pgid_of "$timer")
+    if [[ "$timer_pgid" == "$self_pgid" ]]; then timer_pgid=""; fi
+}
+
+# $1=the signal we received and are forwarding $2=the status to leave with.
+# A relay is a bound teardown on a shorter fuse, not a different mechanism: the
+# running ladder is replaced by one whose first stage fires immediately, so the
+# child is forwarded the signal and then SIGKILLed after the same $kill_after it
+# would have been given at the bound. Forwarding without escalating would park
+# this `wait` for as long as the child chooses to live, which for a SIGTERM-
+# ignoring agy is unbounded -- the same hang this helper exists to prevent,
+# reached by the cancellation path instead of the timeout path.
+#
+# The status is the relay's own, 143 or 130. A caller-interrupted call is NOT a
+# call the bound killed, so it is never relabelled 124 and RUN_BOUNDED_KILLED
+# stays untouched -- that flag is set only by the branch that fired the bound.
+_rb_relay() {
+    _rb_cancel_timer "$timer" "$timer_pgid"
+    _rb_start_timer 0 "$1"
+    wait "$child" 2>/dev/null || true
+    _rb_cancel_timer "$timer" "$timer_pgid"
+    exit "$2"
+}
+
+# run_bounded <secs> <kill_after> -- cmd args...
+run_bounded() {
+    RUN_BOUNDED_KILLED=0
+    local secs="${1:-}" kill_after="${2:-}"
+    if [[ $# -ge 2 ]]; then shift 2; fi
+    if [[ "${1:-}" == "--" ]]; then shift; fi
+    # Bounds are operands of sleep, kill and the coreutils binary -- never
+    # eval'd, never expanded into a command string -- and are validated here as
+    # well as at their env-var source. That second check is not redundant: the
+    # coreutils binary documents a zero duration as "no timeout", so an
+    # unvalidated bound is a bound that silently disables bounding, which is the
+    # exact hang this helper exists to prevent.
+    if ! [[ "$secs" =~ ^[1-9][0-9]*$ ]] || ! [[ "$kill_after" =~ ^[1-9][0-9]*$ ]] \
+       || [[ $# -eq 0 ]]; then
+        echo "ERROR: run_bounded needs positive integer secs and kill_after, then -- and a command" >&9
+        return 2
+    fi
+
+    local rc=0
+    if [[ -n "$TIMEOUT_BIN" ]]; then
+        "$TIMEOUT_BIN" -k "$kill_after" "$secs" "$@" || rc=$?
+        if [[ "$rc" -eq 124 || "$rc" -eq 137 ]]; then RUN_BOUNDED_KILLED=1; fi
+        return "$rc"
+    fi
+
+    # ── bash watchdog fallback: no external binary at all ────────────────────
+    local self_pgid child child_pgid kill_pgid="" restore_m=0 timer="" timer_pgid=""
+    # $BASHPID, never $$: inside a command substitution $$ still reports the
+    # top-level shell, which would make the comparison below meaningless.
+    self_pgid=$(_rb_pgid_of "$BASHPID")
+
+    case "$-" in *m*) : ;; *) restore_m=1 ;; esac
+    # Job control makes the shell announce background jobs. Only the enclosing
+    # group's OWN stderr goes to the bit bucket; the command's stderr is
+    # explicitly restored from the caller's, so an immediate fatal startup error
+    # (permission denied, exec format error) is never swallowed. A blanket
+    # redirect around the backgrounding construct would be a worse failure than
+    # the noise it suppresses.
+    exec 8>&2
+    {
+        set -m
+        "$@" 2>&8 8>&- &
+        child=$!
+        if [[ "$restore_m" -eq 1 ]]; then set +m; fi
+    } 2>/dev/null
+    exec 8>&-
+
+    child_pgid=$(_rb_pgid_of "$child")
+    if [[ -n "$child_pgid" && "$child_pgid" != "$self_pgid" ]]; then
+        kill_pgid="$child_pgid"
+    elif kill -0 "$child" 2>/dev/null; then
+        # Gated on the child being STILL LIVE, and `kill -0` is the discriminator
+        # precisely because a child that exited but has not been reaped is still
+        # signalable and still has its procfs entry -- so this branch is reached
+        # only once the child is fully gone, or once it is genuinely sharing our
+        # group. A child that finished before the read above has no group left to
+        # find, needs no kill, and left no descendant behind; warning about it
+        # would fire on every fast success and make the case the warning exists
+        # for -- a live child whose descendants really can survive a pid-only
+        # kill -- indistinguishable from routine operation.
+        echo "WARNING: run_bounded: child $child has no process group of its own; bounding it by pid only, descendants may survive" >&9
+    fi
+
+    # Relay a signal we receive ourselves to the same target the timer would use,
+    # matching the coreutils binary's own forwarding contract: without this a
+    # Ctrl-C leaves the child alive in a group detached from the terminal. $timer
+    # is still empty while these traps are installed, which _rb_relay's own cancel
+    # reads as "nothing to cancel"; installing them before the timer starts is
+    # deliberate, because the reverse order would leave a window where a signal
+    # kills the shell outright and leaks the whole timer instead of just the narrow
+    # fork-to-assignment gap inside _rb_start_timer.
+    trap '_rb_relay TERM 143' TERM
+    trap '_rb_relay INT 130' INT
+
+    _rb_start_timer "$secs" TERM
+    wait "$child" 2>/dev/null || rc=$?
+    _rb_cancel_timer "$timer" "$timer_pgid"
+    trap - TERM INT
+
+    # Authoritative, never inferred from elapsed time: this branch is the one
+    # that fired, so it is the one that says so. Deriving the fact from
+    # elapsed-versus-bound would report an orchestrator-level cancellation that
+    # happens to land at the bound as our own timeout.
+    # ponytail: a child killed externally with SIGKILL is indistinguishable from
+    # our own escalation here, exactly as it is with the coreutils binary; the
+    # host script's duration-based discriminator is what separates the two.
+    if [[ "$rc" -eq 143 || "$rc" -eq 137 ]]; then
+        RUN_BOUNDED_KILLED=1
+        rc=124
+        echo "$RB_WATCHDOG_KILLED_NOTE" >&9
+    fi
+    return "$rc"
+}
+# --- END run_bounded ---
 
 # ── Defaults ─────────────────────────────────────────────────────────────────
 TYPE="code"
