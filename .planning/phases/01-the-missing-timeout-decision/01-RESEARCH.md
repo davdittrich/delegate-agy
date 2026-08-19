@@ -364,17 +364,19 @@ DURATION=$(( SECONDS - START ))
 
 **If this table is empty:** N/A — see above; all four entries carry real but bounded risk and none blocks planning.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **macOS-specific job-control-notice and PGID-allocation behavior (bash 3.2)**
+Both questions raised during research are resolved below. Neither blocks planning or execution; each names where its resolution is recorded so a later reader does not reopen it.
+
+1. **macOS-specific job-control-notice and PGID-allocation behavior (bash 3.2)** — **RESOLVED: cannot be settled on this machine; discharged as a recorded manual check, not as a blocker.**
    - What we know: Linux/bash-5.3.15/no-PTY shows clean, notice-free, correctly-PGID-isolated behavior in every tested shape.
-   - What's unclear: whether macOS's shipped `/bin/bash` (3.2.57, the last GPLv2 release, materially older than every other tested config) behaves identically for `set -m` PGID allocation and notice suppression.
-   - Recommendation: the plan should not block on macOS verification (no macOS host available in this research session), but the D-06c suppression code should be written defensively (narrow, not blanket) per Pitfall 3's guidance regardless, so it is correct on macOS whether or not notices actually appear there.
+   - What was unclear: whether macOS's shipped `/bin/bash` (3.2.57, the last GPLv2 release, materially older than every other tested config) behaves identically for `set -m` PGID allocation and notice suppression.
+   - **Resolution:** no macOS host is available to this project, so the question is unanswerable here and stays unanswerable however long planning waits — deferring it buys nothing. It is discharged two ways instead. (a) The D-06c suppression code ships **defensively narrow, never blanket**, per Pitfall 3, so it is correct on macOS whether or not notices appear there. (b) The verification itself is recorded as a manual-only row in `01-VALIDATION.md` § Manual-Only Verifications, with the exact steps to run on a macOS host with stock bash 3.2 and no coreutils. Tracked as assumption **A2** in the Assumptions Log above, whose stated risk is cosmetic stderr noise rather than a correctness bug.
 
-2. **Exact self-kill-guard fallback wording and whether `/proc` vs `ps` selection needs to be platform-detected at all, or whether `ps -o pgid=` alone (portable, slightly slower) is an acceptable single implementation**
-   - What we know: `/proc` read is faster and narrows the Pitfall-1 race window on Linux; `ps -o pgid=` is the only option on macOS (no procfs).
-   - What's unclear: whether the marginal race-window narrowing from a Linux-specific `/proc` fast path is worth the code-path branching, given that Pitfall 1 is irrelevant to real (multi-second) agy calls either way.
-   - Recommendation: this is explicitly CONTEXT.md's "Exact helper internals" — Claude's Discretion. The planner should pick one implementation (this research recommends the `/proc`-with-`ps`-fallback shown in §Code Examples for correctness-on-both-platforms) and not treat it as an open design question requiring further research.
+2. **`/proc` vs `ps -o pgid=` for the self-kill-guard lookup** — **RESOLVED: `/proc` fast path with a `ps -o pgid=` fallback.**
+   - What we know: the `/proc` read is faster and narrows the Pitfall-1 race window on Linux; `ps -o pgid=` is the only option on macOS, which has no procfs by default.
+   - What was unclear: whether the marginal race-window narrowing from a Linux-specific fast path justifies the code-path branching, given Pitfall 1 is irrelevant to real multi-second agy calls either way.
+   - **Resolution:** CONTEXT.md assigns "exact helper internals" to Claude's Discretion, so this is a decision to make rather than research to extend. Take the `/proc`-with-`ps`-fallback shown in § Code Examples (`_rb_pgid_of`): it is correct on both platforms, and the branch costs two lines against a guard that must not itself be the thing that fails. Tracked as assumption **A4**. The planner has adopted it; this is settled, not open.
 
 ## Environment Availability
 
