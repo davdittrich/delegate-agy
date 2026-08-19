@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 01
 current_phase_name: the-missing-timeout-decision
 status: executing
-stopped_at: Completed 01-01-PLAN.md
-last_updated: "2026-08-19T08:02:44.430Z"
+stopped_at: Completed 01-02-PLAN.md
+last_updated: "2026-08-19T08:41:23.433Z"
 last_activity: 2026-08-19
 last_activity_desc: Roadmap created from REQUIREMENTS.md; 9 requirements mapped across 7 phases, all 7 open bd tickets absorbed
 progress:
   total_phases: 1
   completed_phases: 0
   total_plans: 6
-  completed_plans: 1
+  completed_plans: 2
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 01 (the-missing-timeout-decision) — EXECUTING
-Plan: 2 of 6
+Plan: 3 of 6
 Status: Ready to execute
 Last activity: 2026-08-19 — Phase 01 execution started
 
-Progress: [██░░░░░░░░] 17%
+Progress: [███░░░░░░░] 33%
 
 ## Performance Metrics
 
@@ -59,6 +59,7 @@ Progress: [██░░░░░░░░] 17%
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 01 P01 | 4h 30m | 3 tasks | 3 files |
+| Phase 01 P02 | 1h 10m | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -71,6 +72,8 @@ Recent decisions affecting current work:
 - Resolve models from the live `agy models` list, never a frozen display-name map.
 - The launcher's exec target is an install-time literal; the registry read is comparison-only.
 - OPEN (Phase 1 must settle): bridge treats a missing `timeout` binary as fatal while the shim degrades to unbounded. Both defensible; the divergence is undocumented.
+- The stdin read gets an explicit positive `kill_after`, not a zero mirroring the bare `timeout <secs> cat` it replaces — so `run_bounded` validates every bound with one rule and no site can pass a value coreutils reads as *no timeout*. (Phase 1, plan 02)
+- The missing-binary warning is emitted at the `TIMEOUT_BIN` probe, never inside `run_bounded` — the probe runs once per invocation while the helper runs up to three times, and plain stderr rather than fd 9 puts the line ahead of every bounded call's output. (Phase 1, plan 02)
 
 ### Pending Todos
 
@@ -83,6 +86,8 @@ None yet.
 - **The per-run GEMINI.md policy may not be authoritative.** A probe from a throwaway CWD had agy answer that it found `GEMINI.md` in five unrelated projects, so agy discovers context outside its working directory. `agy_bridge.sh`'s per-type tool restriction assumes its own GEMINI.md binds. Not yet reproduced through the bridge, which also passes `--sandbox` and `--add-dir` (`delegate-agy-xfa`, P1, Phase 1.5).
 - **R6's empty-success case is real, not hypothetical.** The same probe saw agy exit rc=0 with completely empty stdout when a tool hit a headless permission gate (`jetski: no output produced -- a tool required the "command" permission ... auto-denied`). Phase 3's exit-3 requirement is grounded in observed behavior.
 - **agy is live; the docs that said otherwise are corrected, the phases are not yet re-read.** Verified 2026-08-19 against agy 1.1.13: `--version` and `agy models` both return in seconds, and a real `--type review` delegation returned 4721 bytes. `agy --model` accepts BOTH ids and display names; a bogus name gives rc=1 with an `Available models:` list rendered in display names. PROJECT.md and ROADMAP.md are corrected and Phase 7 moved to Phase 1.5; `delegate-agy-9qp` stays open until Phase 1.5 lands the fixtures and the README statement. **Not established:** whether agy ignores SIGTERM -- every probe call returned on its own, so no bound fired and the `-k` rationale rests on its original observation, untested.
+- delegate-agy-vtx (P0): run_bounded's watchdog timer leaks one 'sleep <bound>' process per bounded call, reparented to init and alive for the full bound -- up to 3 per gemini invocation with the shim's defaults. Inside the marker block, so 01-02 could not fix it; 01-03 copies the block byte-for-byte and will double the blast radius. Fix both copies in one commit.
+- delegate-agy-84e (P1): run_bounded's self-kill guard prints 'no process group of its own; descendants may survive' deterministically for any bounded child that exits before the PGID read -- i.e. every fast successful watchdog-path call. False, and it masks the real signal. Inside the marker block; same both-copies constraint.
 
 ### Roadmap Evolution
 
@@ -98,6 +103,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-19T08:02:44.424Z
-Stopped at: Completed 01-01-PLAN.md
+Last session: 2026-08-19T08:41:23.428Z
+Stopped at: Completed 01-02-PLAN.md
 Resume file: None

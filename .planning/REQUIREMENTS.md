@@ -85,7 +85,7 @@ An output-format change must fail loudly and diagnosably, never silently resolve
 | R5 | Phase 3 | `6q1`, `v5a` | partial — 137 discrimination shipped on branch; docs and empty-stderr suffix still wrong |
 | R6 | Phase 3 | — | shipped on branch, needs regression coverage |
 | R8 | Phase 4 | — | shipped on branch, reviewed |
-| R11 | Phase 1 | `cy5` | partial — every `agy` invocation on the branch carries `-k` **when a `timeout` binary exists**; the empty-`TIMEOUT_BIN` fallbacks are unbounded and the bridge/shim divergence is undecided. No count stated deliberately: see R11's acceptance |
+| R11 | Phase 1 | `cy5` | partial — `scripts/gemini_shim.sh` is DONE as of plan 01-02: all four of its sites go through `run_bounded`, bounded on a host with no `timeout`/`gtimeout` too, and the divergence is resolved in the shim's favour (bound always, warn once per run, never fatal). `scripts/agy_bridge.sh` is untouched — its three sites are plan 01-03's, and R11's invariant spans both scripts, so it stays open. No count stated deliberately: see R11's acceptance |
 | S1 | Phase 2 | — | partial — tab normalization shipped 1.6.1; degraded-list reporting not yet distinct from an unmatched `--type` |
 | S2 | Phase 4 | — | shipped on branch |
 | S3 | Phase 5 | `cy5` (shared with R11) | open — contract table and per-mode tests not written |
