@@ -40,7 +40,8 @@ The Model column is a rule, not a pin: the bridge resolves each `--type` to the 
 
 - [agy](https://github.com/google/agy) installed and authenticated via OAuth
 - `python3` 3.6 or later (standard on all modern systems)
-- `timeout` or `gtimeout` — Linux ships `timeout`; macOS needs `brew install coreutils`
+
+Recommended, not required: `timeout` or `gtimeout` (coreutils). Every agy call is bounded with or without one — see [Bounding without `timeout`/`gtimeout`](#bounding-without-timeoutgtimeout). What coreutils buys is the *kind* of kill: `timeout` isolates its child in its own process group and signals the group, so it reaps whatever agy forked, while the built-in bash watchdog does the same through job control and degrades to killing the direct process only where job control cannot isolate the child. Linux ships `timeout`; on macOS `brew install coreutils` provides `gtimeout`.
 
 ## Installation
 
@@ -51,7 +52,7 @@ Follow the agy project's installation instructions. After installing, run `agy` 
 **2. Install dependencies.**
 
 ```bash
-# macOS — timeout (coreutils); python3 ships with macOS
+# macOS — python3 ships with macOS; coreutils is recommended, not required
 brew install coreutils
 
 # Debian/Ubuntu — timeout is in coreutils, already present on most systems
@@ -230,7 +231,7 @@ The plugin installs a `SubagentStart` hook (`hooks/agy-subagent-policy.sh`, wire
 | Exit code 124 | Timeout — simplify the query or pass `--timeout 600` |
 | Exit code 137 (`agy killed (signal 9) after Ns, before its Ms bound -- possible OOM or external kill`) | An external kill (OOM killer, `kill -9`, container preemption) landed before the bridge's own `--timeout` bound elapsed, so it isn't the bridge's own `-k` escalation. Check the host/container for memory pressure — raising `--timeout` won't help. |
 | Exit code 3 (`agy returned empty output`) | agy exited 0 with no output — usually quota `RESOURCE_EXHAUSTED (429)`. The reason (full agy stderr) is surfaced; wait for quota reset or re-auth. Both `agy-bridge` and the `gemini` shim fail loud here rather than reporting empty success. |
-| `ERROR: timeout/gtimeout not found in PATH` | `brew install coreutils` (macOS) |
+| `WARNING: timeout/gtimeout not found -- bounding agy with the bash watchdog fallback; install coreutils for process-group kill` | Not a failure, and not fatal to either entry point: the call is still bounded, by the bash watchdog. `brew install coreutils` (macOS) upgrades the kill from the direct process to its whole process group, so anything agy forked cannot outlive the bound either. |
 
 ## Security
 
@@ -266,9 +267,34 @@ The installer (`scripts/install.sh`) and uninstaller run with `set -euo pipefail
 
 | Variable | Default | Notes |
 |----------|---------|-------|
-| `GEMINI_SHIM_STDIN_TIMEOUT` | `30` | Seconds to wait for stdin before failing (exit 2). Must match `^[1-9][0-9]*$`; anything else is rejected at startup. If no `timeout`/`gtimeout` binary is on PATH, the read is unbounded regardless of this value. |
-| `GEMINI_SHIM_TIMEOUT` | `600` | Seconds to wait for the agy delegation call, escalated to `SIGKILL` 5s after `SIGTERM` (agy ignores `SIGTERM`). Exceeding it exits 124. Must match `^[1-9][0-9]*$`; anything else is rejected at startup. If no `timeout`/`gtimeout` binary is on PATH, the call is unbounded regardless of this value. |
-| `AGY_MODELS_TIMEOUT` | `20` | Seconds to wait for the `agy models` fetch that resolves model names, escalated to `SIGKILL` after 3s. Shared with `agy_bridge.sh`. Anything not matching `^[1-9][0-9]*$` — including `0`, which coreutils `timeout` treats as "no timeout" — is **corrected to 20 rather than rejected**: an optional knob must not stop a `gemini` that shadows the system binary. Exceeding it is not fatal; the shim falls back to the cache and then to passing the name through. If no `timeout`/`gtimeout` binary is on PATH, the fetch is unbounded regardless of this value. |
+| `GEMINI_SHIM_STDIN_TIMEOUT` | `30` | Seconds to wait for stdin before failing (exit 2). Must match `^[1-9][0-9]*$`; anything else is rejected at startup. The read is bounded whether or not a `timeout`/`gtimeout` binary is on PATH (see below). |
+| `GEMINI_SHIM_TIMEOUT` | `600` | Seconds to wait for the agy delegation call, escalated to `SIGKILL` 5s after `SIGTERM` (agy ignores `SIGTERM`). Exceeding it exits 124. Must match `^[1-9][0-9]*$`; anything else is rejected at startup. The call is bounded whether or not a `timeout`/`gtimeout` binary is on PATH (see below). |
+| `AGY_MODELS_TIMEOUT` | `20` | Seconds to wait for the `agy models` fetch that resolves model names, escalated to `SIGKILL` after 3s. Shared with `agy_bridge.sh`. Anything not matching `^[1-9][0-9]*$` — including `0`, which coreutils `timeout` treats as "no timeout" — is **corrected to 20 rather than rejected**: an optional knob must not stop a `gemini` that shadows the system binary. Exceeding it is not fatal; the shim falls back to the cache and then to passing the name through. The fetch is bounded whether or not a `timeout`/`gtimeout` binary is on PATH (see below). |
+
+#### Bounding without `timeout`/`gtimeout`
+
+Both entry points do the same thing here, and that sameness is the decision rather than a coincidence. `agy-bridge` and the `gemini` shim each route **every** agy call through one shared `run_bounded` helper, so no call from either script is left without a bound on any host. Earlier releases diverged: the bridge refused to start at all without a coreutils binary, while the shim ran the delegation call with no bound. Those were two ways of paying the same price — the shim's caller got the hang this plugin exists to prevent, and the bridge's caller got that same broken `gemini` moved one step earlier, at startup, which is worse for a binary that shadows the system `gemini` for every PATH caller. Bash can enforce a bound with no external binary, so neither price has to be paid, and neither is.
+
+What a missing coreutils changes is *which* kill you get, not whether you get one:
+
+| | `timeout`/`gtimeout` on PATH | no bounding binary |
+|-|------------------------------|--------------------|
+| `agy-bridge` | coreutils enforces the bound | warns once at startup, then bounds with the bash watchdog |
+| `gemini` shim | coreutils enforces the bound | warns once at startup, then bounds with the bash watchdog |
+
+Coreutils `timeout` isolates its child in a new process group and signals the *group*, so it reaps whatever agy forked. The bash watchdog enforces the same seconds, the same `SIGTERM`-then-`SIGKILL` escalation and the same exit `124`, and reaps the child's process group through job control — but where job control cannot give the child a group of its own it degrades to killing the direct process only, so a descendant agy forked can survive. That single difference is what installing coreutils buys.
+
+Each script prints this once per run, before any agy call, when it finds no bounding binary:
+
+```
+WARNING: timeout/gtimeout not found -- bounding agy with the bash watchdog fallback; install coreutils for process-group kill
+```
+
+and this when the watchdog is the mechanism that killed a call:
+
+```
+NOTICE: bash watchdog fallback killed the bounded call after its bound (exit 124)
+```
 
 ### Model name mapping
 
@@ -358,7 +384,7 @@ config/policies/               — GEMINI.md tool restriction policies (one file
 
 ### 1.6.2
 
-- `agy-bridge` no longer hangs when agy does. Both agy invocations now escalate to `SIGKILL`: the model fetch via `timeout -k 3 $AGY_MODELS_TIMEOUT` (default 20s) and the delegation call via `timeout -k 5 $TIMEOUT`. agy ignores `SIGTERM`, so plain `timeout` sent the signal and then blocked forever — the delegation call outlived even its own 600s bound. A failed fetch now falls back to the stale cached list with a warning instead of hard-failing while a usable list sits on disk.
+- `agy-bridge` no longer hangs when agy does. Both agy invocations now escalate to `SIGKILL`: the model fetch 3s after `$AGY_MODELS_TIMEOUT` (default 20s), the delegation call 5s after `$TIMEOUT`. agy ignores `SIGTERM`, so plain `timeout` sent the signal and then blocked forever — the delegation call outlived even its own 600s bound. Both entry points enforce every bound through one shared helper, using coreutils `timeout -k` where it exists and a bash watchdog where it does not, so a host without coreutils no longer costs the bridge its startup or the shim its bound. A failed fetch now falls back to the stale cached list with a warning instead of hard-failing while a usable list sits on disk.
 - A failed `agy models` surfaces agy's own stderr instead of discarding it. That text is the only diagnostic when the real fault is auth or the network.
 - A model list carrying no `gemini-` ids reports a degraded/unauthenticated agy rather than blaming the `--type` the user picked.
 - An agy killed by something other than its own timeout — an OOM killer, an external `kill -9`, a container preemption — is now named as such rather than surfacing as a bare `agy exit 137`. A 137 arriving before the bound elapsed cannot be the bridge's own `-k` escalation, so it is reported distinctly and the 137 exit status is preserved.
