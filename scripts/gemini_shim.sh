@@ -219,7 +219,13 @@ run_bounded() {
 
     local rc=0
     if [[ -n "$TIMEOUT_BIN" ]]; then
-        "$TIMEOUT_BIN" -k "$kill_after" "$secs" "$@" || rc=$?
+        # 9>&- and not merely tidiness: fd 9 is OUR diagnostic descriptor, and
+        # under `out=$(gemini ... 2>&1)` it IS the caller's capture pipe. A
+        # bounded command that inherits it hands it to everything it forks, and
+        # any descendant agy leaves behind then holds that pipe open forever --
+        # on a run that exited 0 in under a second. The redirection is
+        # command-local, so the writes to >&9 below are unaffected.
+        "$TIMEOUT_BIN" -k "$kill_after" "$secs" "$@" 9>&- || rc=$?
         if [[ "$rc" -eq 124 || "$rc" -eq 137 ]]; then RUN_BOUNDED_KILLED=1; fi
         return "$rc"
     fi
@@ -236,11 +242,12 @@ run_bounded() {
     # explicitly restored from the caller's, so an immediate fatal startup error
     # (permission denied, exec format error) is never swallowed. A blanket
     # redirect around the backgrounding construct would be a worse failure than
-    # the noise it suppresses.
+    # the noise it suppresses. fd 9 travels the opposite way for the opposite
+    # reason -- it is closed for the child, see the coreutils arm above.
     exec 8>&2
     {
         set -m
-        "$@" 2>&8 8>&- &
+        "$@" 2>&8 8>&- 9>&- &
         child=$!
         if [[ "$restore_m" -eq 1 ]]; then set +m; fi
     } 2>/dev/null
