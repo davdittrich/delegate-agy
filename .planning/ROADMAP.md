@@ -11,6 +11,7 @@ This is brownfield. 1.6.1 ships and works; 1.6.2 is written, sits on `fix/agy-br
 ## Phases
 
 **Phase Numbering:**
+
 - Integer phases (1, 2, 3): Planned milestone work
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
@@ -29,23 +30,37 @@ Decimal phases appear between their surrounding integers in numeric order.
 ## Phase Details
 
 ### Phase 1: The missing-`timeout` decision
+
 **Goal**: On a host with no `timeout`/`gtimeout`, both entry points behave one decided way, and both scripts and the README say which and why.
 **Depends on**: Nothing (first phase)
 **Requirements**: R11
 **Tickets**: `delegate-agy-cy5` (P1)
 **Success Criteria** (what must be TRUE):
+
   1. The divergence is decided and the decision recorded in PROJECT.md's Key Decisions table with its rationale — hard-fail like the bridge, degrade with a loud warning, or degrade for everything except the delegation call itself.
   2. With no `timeout`/`gtimeout` on PATH and an unresponsive fake agy, `gemini` and `agy-bridge` each do exactly what that decision says, proven by a test per entry point; neither leaves an agy process running with no bound unless the recorded decision says it should.
   3. A reader of README's environment-variable section finds both behaviors stated side by side, with the reason they do or do not differ.
   4. With a `timeout` binary present, no `agy` invocation anywhere in the scripts can outlive its bound against a SIGTERM-ignoring fake. This is enforced as an **invariant, not a count**: a test asserts that every `"$AGY_BIN"` occurrence in `scripts/agy_bridge.sh` and `scripts/gemini_shim.sh` is either wrapped in `"$TIMEOUT_BIN" -k …` or sits in a `TIMEOUT_BIN`-empty fallback branch that Criterion 1's recorded decision explicitly permits — so a call site added later fails the suite instead of slipping through unbounded.
+
 **Plans**: 6 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 01-01-PLAN.md — Tracer: one bounded shim delegation that reaps agy and its child with no `timeout` binary present
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 01-02-PLAN.md — Route the shim's remaining three sites through `run_bounded` and warn once per run at the probe
 - [ ] 01-03-PLAN.md — Duplicate the helper into the bridge, remove its startup fatal, bound its three sites
 - [ ] 01-04-PLAN.md — Record the decision: README, PROJECT.md Key Decisions, REQUIREMENTS.md R11, ticket resolution
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 01-05-PLAN.md — Lock the invariant: static scan with zero exceptions, block identity, warning literal
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 01-06-PLAN.md — Runtime proof per entry point, on both mechanisms, with and without a controlling terminal
 
 **Note**: the ticket names three candidate designs and states that the choice, not just the implementation, is open. This phase is not done when code changes; it is done when the choice is written down.
@@ -53,29 +68,35 @@ Plans:
 **Why criterion 4 is an invariant rather than a list.** The count of `agy` call sites has been stated wrong three times in three different ways: the original plan said two, a whole-branch review corrected it to four, and it is now five — the last because this project's own dynamic-model-resolution work added one to the shim. A criterion naming a number is correct only until the next commit and then silently goes stale, which is precisely the failure mode that let an unbounded call survive a release built to eliminate unbounded calls. Assert the property over the file instead: any new call site must justify itself against the test, not against someone's memory of how many there were.
 
 ### Phase 1.5: Contract check against a real agy
+
 **Goal**: An operator can ask the real binary which assumptions hold and get either a recorded answer or an honest "could not ask" — and the later phases build on the recorded answers rather than on hypotheses.
 **Depends on**: Nothing
 **Requirements**: S5
 **Tickets**: `delegate-agy-xfa` (P1). `delegate-agy-9qp` (P2) carries the probe evidence that motivated this phase's move and closes when its doc corrections land. `delegate-agy-62x`, which raised the id-vs-display-name question and was closed without ever being verified, is answered by criterion 1.
 **Success Criteria** (what must be TRUE):
+
   1. One command, separate from the unit suite and never invoked by it, exercises the real `agy` and reports which assumptions hold — at minimum what `agy models` emits, whether `--model` accepts ids, display names, or both, and whether a per-run `GEMINI.md` in the working directory actually binds when agy can also see `GEMINI.md` files in other projects (`delegate-agy-xfa`).
   2. Run against an `agy` that hangs or is absent, the check exits within its own `-k` bound with a distinct "unverified" status, names the assumption it could not settle, and never reports pass — it does not hang the operator who ran it. This path is required and must be tested; it is no longer the expected outcome.
   3. Its captured output lands in `tests/` fixtures in a form the fake agy can be regenerated from, so the suite's fake tracks real output instead of a hypothesis. At minimum the fixtures carry the `id<TAB>display name` model list, the invalid-model rejection (which renders its "Available models:" list in display names), and the rc=0-with-empty-stdout response that R6 exists to catch.
   4. README states the verified behavior as fact — that `--model` accepts both ids and display names — carrying the `agy` version and the date it was verified against, and the check re-confirms it rather than the docs disclaiming it. No document may claim the assumption is unverified.
+
 **Plans**: TBD
 
 **Note**: this phase was Phase 7 until 2026-08-19 and depended on Phase 6. It moved because its blocking premise was disproven, not because its scope shrank. The "could not ask" path in criterion 2 stays mandatory — agy was unreachable last week and may be again — but the phase now has to produce a real verdict, and Phases 2 and 5 consume its fixtures. Verified so far against agy 1.1.13: `agy models` returns 14 lines of `id<TAB>display name` in under 30s; live ids carry a third segment (`gemini-3.1-pro-high`, `gemini-3.7-flash-medium`), so both scripts' anchored matchers and `config/model-map.json`'s `pro-high`/`flash-high` class values still hold.
 
 ### Phase 2: Model-list handling, end to end
+
 **Goal**: A bare environment cannot crash the bridge, and one bad `agy models` reply cannot degrade the other tool or blame the user for it.
 **Depends on**: Phase 1.5
 **Requirements**: S1, S4
 **Tickets**: `delegate-agy-30m` (P1), `delegate-agy-8ph` (P2)
 **Success Criteria** (what must be TRUE):
+
   1. `agy-bridge` invoked with no `HOME` set — `env -i`, a container entrypoint, a `User=`-less systemd unit — reaches its own argument handling instead of dying on an unbound variable, and an unwritable cache path leaks no redirect error to stderr.
   2. An `agy models` reply containing no `gemini-` ids is never written to `~/.cache/agy-bridge-models` by either writer, so the next invocation of the *other* tool re-fetches rather than reading poison for up to an hour.
   3. A caller who hits a `gemini-`less model list is told agy is degraded or unauthenticated, and shown agy's own stderr — not told their `--type` did not match.
   4. A tab-suffixed or extra-column `agy models` reply still resolves a model: the input is normalized, and the anchored `^gemini-[0-9.]+-<class>$` matchers are byte-identical to what shipped.
+
 **Plans**: TBD
 
 **Note**: `delegate-agy-8ph` forbids a one-sided fix and forbids changing the 60-minute TTL as a substitute. Both writers change together or neither does.
@@ -83,59 +104,71 @@ Plans:
 **On the Phase 1.5 dependency**: 1.5's recorded fixtures are what criterion 4's "byte-identical to what shipped" is checked against — without them this phase re-asserts a hypothesis about `agy models` output rather than a fact. Otherwise this phase is independent of Phase 1: same two files, different code region.
 
 ### Phase 3: The exit-code contract
+
 **Goal**: Every documented exit code is reachable, means exactly one thing, and the docs quote the message the code actually prints.
 **Depends on**: Nothing
 **Requirements**: R5, R6
 **Tickets**: `delegate-agy-6q1` (P3), `delegate-agy-v5a` (P3)
 **Success Criteria** (what must be TRUE):
+
   1. A caller can provoke each of 2, 3, 124, 127, and 137 and receives a distinct message naming that specific cause; the suite exercises all five.
   2. An agy killed by something else early is reported as an external kill, while one killed by the bridge's own `-k` escalation is reported as a timeout — the two are separated by elapsed duration against the bound, not conflated.
   3. When agy writes nothing to stderr, no error message ends in a dangling `: ` — in either the plain-text or the JSON form, at both the external-kill and the generic branch.
   4. README's troubleshooting table quotes each exit-code message as the code emits it, appended stderr suffix included, so an operator matching output against the docs finds their string.
   5. agy exiting 0 with empty stdout yields exit 3 with 0-byte stdout in text mode and an `{"error":…}` envelope carrying no `response` key in JSON mode — a regression test pins both shapes so the failure payload can never become success-shaped.
+
 **Plans**: TBD
 
 **Note**: independent of Phases 1–2 — this phase owns the bridge's error output, a different code region from the `TIMEOUT_BIN` branches and the model cache. Criterion 5's empty-success case is not hypothetical: a live agy was observed on 2026-08-19 exiting rc=0 with completely empty stdout when a tool hit a headless permission gate.
 
 ### Phase 4: Installer and launcher surface
+
 **Goal**: The registry read stays a version comparison and contributes nothing else, and no install path can abort after the wrappers are written.
 **Depends on**: Nothing
 **Requirements**: R8, S2
 **Tickets**: `delegate-agy-4vy` (P3), `delegate-agy-4xn` (P3)
 **Success Criteria** (what must be TRUE):
+
   1. A lookalike plugin from another marketplace sitting in `installed_plugins.json` never matches this plugin's key, and an adjacent entry's version is never misattributed — proven with registry fixtures that place one immediately beside the other.
   2. An absent, truncated, or reshaped registry makes the launcher run silently rather than refuse, so a Claude Code schema change can never manufacture a false "superseded pin" and break `gemini` box-wide.
   3. The repin command printed on a real version mismatch is assembled from install-time literals plus a version matched against `^[0-9]+(\.[0-9]+)*$`; no registry-supplied string is ever printed as a command to run, and the exec target remains the install-time literal.
   4. `AGY_SETUP_PATCH_ALIASES=1` on a host with no `python3` ends in the same graceful state as every other python3-absent path in the installer, rather than hard-failing after the wrappers already exist on disk.
   5. The documented CLI fallback one-liner reaches its validating `case` under `set -euo pipefail` instead of aborting on a SIGPIPE from `head`.
+
 **Plans**: TBD
 
 **Note**: independent of Phases 1–3 — this phase owns `install.sh`, the generated wrapper, and the docs one-liner, none of which the other phases touch. `delegate-agy-lkg` lands here too: the "non-fatal live verify" at `install.sh:360-368` invokes the bridge and shim with no installer-side bound, so it can sit for up to `GEMINI_SHIM_TIMEOUT` (default 600s) under a line that says it is non-fatal.
 
 ### Phase 5: The shim's failure-mode contract
+
 **Goal**: An operator can read exactly what `gemini` does to a caller that has never heard of agy, for every way this plugin fails.
 **Depends on**: Phases 1, 1.5, 2, 3, 4
 **Requirements**: S3
 **Tickets**: none open — this phase states the contract the earlier phases make true
 **Success Criteria** (what must be TRUE):
+
   1. README carries one table naming the shim's behavior for each failure mode — hung agy, unparseable model list, missing dependency, superseded pin — with the bridge's behavior in the adjacent column.
   2. Every row of that table has a test, so changing any of those four paths fails the suite rather than the next Octopus or Metaswarm run.
   3. Every row where the shim and bridge differ states why in one line, and no row differs without a stated reason.
   4. An unrecognized model name still passes through to agy unchanged — the shim warns or degrades but never hard-rejects input it merely does not recognize.
+
 **Plans**: TBD
 
 **Note**: each dependency settles one of the four failure modes this phase pins down. Phase 1.5 supplies the real-agy behavior the "hung agy" and "unparseable model list" rows are written against, so those rows describe what agy does rather than what it was assumed to do.
 
 ### Phase 6: Ship 1.6.2
+
 **Goal**: The held release lands on master with every follow-up it surfaced already closed.
 **Depends on**: Phases 1, 1.5, 2, 3, 4, 5
 **Requirements**: none directly — this phase is the release gate for R5, R6, R8, R11, S1, S2, S3, S4, S5
 **Tickets**: none at plan time; the gate is that none exist at ship time
 **Success Criteria** (what must be TRUE):
+
   1. `bd list --status open` contains no ticket discovered or caused by 1.6.2 work, including any opened during Phases 1–5; anything not fixed is deferred with a recorded reason before the tag is cut.
   2. Reading the files on `master` — not `git log` — shows the fixes present, so the `a001d0e` content revert is genuinely undone rather than papered over by a merge that restores only history.
   3. A fresh `scripts/install.sh` run against merged `master` produces working `agy-bridge` and `gemini` launchers, and both suites pass on that tree.
   4. The release notes name each defect 1.6.2 closes and state plainly that every existing installation must re-run the installer, because the pin only points forward.
+
 **Plans**: TBD
 
 ## Progress
