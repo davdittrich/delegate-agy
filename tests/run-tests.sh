@@ -1648,6 +1648,73 @@ else
         "detail=$RB03_DETAIL"
 fi
 
+echo "== one warning per run, before any bounded output (RB08) =="
+
+# RB08: the missing-binary warning is announced at the PROBE, which runs once
+# per invocation, and never inside run_bounded, which runs two or more times in
+# a delegating run. Both halves of that are observable and neither is implied by
+# the other: the count says the emission has not migrated into the helper, and
+# the ordering says it still happens before any call site is reached. A warning
+# that appeared after a bounded call's output would mean exactly that migration
+# even if some other path kept the count at one.
+#
+# Each run is driven with the model cache cleared, so the fetch actually happens
+# instead of being served from cache, and with the prompt arriving on STDIN
+# rather than as an argument, so all three bounded sites run: the model fetch,
+# the stdin `cat`, and the delegation.
+#
+# Feeding the prompt through stdin is load-bearing, not incidental. The fetch
+# and the delegation both redirect their stderr into files or /dev/null, so a
+# warning migrated into the helper would be swallowed at those two sites and the
+# count would stay at one -- verified: a mutated shim emitting the warning per
+# bounded call still passed an argument-driven version of this case. The stdin
+# `cat` site is the one whose stderr reaches the captured stream, which is what
+# gives the count something to see. Ceiling, stated rather than hidden: a
+# migration that somehow touched only the two redirect-into-a-file sites would
+# still be invisible here, and would have to be caught by reading those files.
+RB08_MARK="RB08-delegation-output"
+RB08_OK=1
+RB08_DETAIL=""
+
+for _rb08_entry in bridge shim; do
+    if [[ "$_rb08_entry" == "bridge" ]]; then
+        _rb08_cmd=("$BRIDGE" --type code)
+    else
+        _rb08_cmd=("$SHIM" -m flash)
+    fi
+
+    # No bounding binary on PATH: exactly one warning, ahead of the delegation.
+    rm -f "$_SHIM_CACHE"
+    FAKE_AGY_STDOUT="$RB08_MARK" _run_sanitized RB08_OUT RB08_RC bash "${_rb08_cmd[@]}" \
+        < <(printf 'do a thing\n')
+    _rb08_n="$(printf '%s\n' "$RB08_OUT" | grep -cF "$_RB_WARN_LITERAL")" || _rb08_n=0
+    _rb08_head="${RB08_OUT%%"$RB08_MARK"*}"
+    if [[ "$RB08_RC" -ne 0 || "$RB08_OUT" != *"$RB08_MARK"* ]]; then
+        # Without this the two assertions below could both hold on a run that
+        # never delegated at all.
+        RB08_OK=0
+        RB08_DETAIL="$RB08_DETAIL $_rb08_entry:no_delegation(rc=$RB08_RC out=${RB08_OUT:0:120})"
+    fi
+    [[ "$_rb08_n" -eq 1 ]] || { RB08_OK=0; RB08_DETAIL="$RB08_DETAIL $_rb08_entry:emitted_${_rb08_n}"; }
+    [[ "$_rb08_head" == *"$_RB_WARN_LITERAL"* ]] || { RB08_OK=0; RB08_DETAIL="$RB08_DETAIL $_rb08_entry:warning_after_bounded_output"; }
+
+    # Ordinary suite PATH, where a bounding binary resolves: never emitted.
+    rm -f "$_SHIM_CACHE"
+    FAKE_AGY_STDOUT="$RB08_MARK" _run RB08_OUT2 RB08_RC2 bash "${_rb08_cmd[@]}" \
+        < <(printf 'do a thing\n')
+    _rb08_n2="$(printf '%s\n' "$RB08_OUT2" | grep -cF "$_RB_WARN_LITERAL")" || _rb08_n2=0
+    [[ "$RB08_RC2" -eq 0 && "$RB08_OUT2" == *"$RB08_MARK"* ]] \
+        || { RB08_OK=0; RB08_DETAIL="$RB08_DETAIL $_rb08_entry:coreutils_run_failed(rc=$RB08_RC2)"; }
+    [[ "$_rb08_n2" -eq 0 ]] || { RB08_OK=0; RB08_DETAIL="$RB08_DETAIL $_rb08_entry:emitted_${_rb08_n2}_with_coreutils"; }
+done
+rm -f "$_SHIM_CACHE"
+if [[ "$RB08_OK" -eq 1 ]]; then
+    ok "RB08 each entry point warns exactly once per coreutils-less run, ahead of any bounded output, and never with coreutils"
+else
+    bad "RB08 each entry point warns exactly once per coreutils-less run, ahead of any bounded output, and never with coreutils" \
+        "detail=$RB08_DETAIL"
+fi
+
 echo "== install.sh / uninstall.sh (vfn.11) =="
 
 _MARKER='# agy-delegate-wrapper'
