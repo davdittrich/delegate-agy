@@ -1868,25 +1868,47 @@ else
         "occurrences=$RB01_TOTAL detail=$RB01_DETAIL"
 fi
 
-# RB01m: the scan is proven capable of failing before it is trusted. A copy of
-# the shim gains one directly-invoked agy line -- on a path no test drives,
-# which is the whole point -- and the SAME helper must report it. A scan never
-# shown to fail is a scan that passes forever.
+# RB01m: the scan is proven capable of failing before it is trusted. Copies of
+# the shim each gain one line -- on a path no test drives, which is the whole
+# point -- and the SAME helper must report it, or must not. A scan never shown
+# to fail is a scan that passes forever.
+#
+# The last two shapes are the ones that walked past the per-LINE version of this
+# scan. A line was counted violating or not; two occurrences on one logical
+# line, one bounded and one not, made the whole line look bounded, and a decoy
+# string that merely CONTAINED `run_bounded ... --` made an unbounded expansion
+# look like an argument. Both reported zero violations against a shim carrying a
+# live unbounded call. RB01's stated ceiling claims it "errs toward failing
+# loudly"; these two erred the other way, which is the one direction an
+# enforcement mechanism must not err in.
 RB01M_DIR="$SANDBOX/rb01m"
-mkdir -p "$RB01M_DIR"
-cp "$SHIM" "$RB01M_DIR/mutated.sh"
-printf '%s\n' 'if [[ "${RB01M_NEVER:-0}" == "1" ]]; then "$AGY_BIN" --version; fi' >> "$RB01M_DIR/mutated.sh"
-read -r RB01M_V RB01M_O <<<"$(_rb_agy_scan "$RB01M_DIR/mutated.sh")"
-# And a copy whose only addition is a COMMENT naming the variable must stay
-# clean, so the scan's own noise floor is pinned alongside its sensitivity.
-cp "$SHIM" "$RB01M_DIR/commented.sh"
-printf '%s\n' '# a comment mentioning "$AGY_BIN" is not a call site' >> "$RB01M_DIR/commented.sh"
-read -r RB01M_CV RB01M_CO <<<"$(_rb_agy_scan "$RB01M_DIR/commented.sh")"
-if [[ "$RB01M_V" -ge 1 && "$RB01M_CV" -eq 0 && "$RB01M_CO" -ge 1 ]]; then
-    ok "RB01m the scan reports an injected unbounded call site and ignores a comment"
+rm -rf "$RB01M_DIR"; mkdir -p "$RB01M_DIR"
+RB01M_OK=1
+RB01M_DETAIL=""
+# _rb01m_probe NAME WANT_VIOLATION APPENDED_LINE
+_rb01m_probe() {
+    local name="$1" want="$2" line="$3" v o
+    cp "$SHIM" "$RB01M_DIR/$name.sh"
+    printf '%s\n' "$line" >> "$RB01M_DIR/$name.sh"
+    read -r v o <<<"$(_rb_agy_scan "$RB01M_DIR/$name.sh")"
+    # The occurrence floor is asserted on every probe, not just the clean ones:
+    # a scan that matched nothing at all would report zero violations too.
+    [[ "$o" -ge 1 ]] || { RB01M_OK=0; RB01M_DETAIL="$RB01M_DETAIL $name:no_occurrences"; }
+    if [[ "$want" -eq 1 ]]; then
+        [[ "$v" -ge 1 ]] || { RB01M_OK=0; RB01M_DETAIL="$RB01M_DETAIL $name:missed(${v}/${o})"; }
+    else
+        [[ "$v" -eq 0 ]] || { RB01M_OK=0; RB01M_DETAIL="$RB01M_DETAIL $name:false_positive(${v}/${o})"; }
+    fi
+}
+_rb01m_probe mutated   1 'if [[ "${RB01M_NEVER:-0}" == "1" ]]; then "$AGY_BIN" --version; fi'
+_rb01m_probe commented 0 '# a comment mentioning "$AGY_BIN" is not a call site'
+_rb01m_probe twoonone  1 'run_bounded 5 2 -- "$AGY_BIN" foo; "$AGY_BIN" --version'
+_rb01m_probe decoy     1 'echo "run_bounded x -- $AGY_BIN"'
+if [[ "$RB01M_OK" -eq 1 ]]; then
+    ok "RB01m the scan reports every injected unbounded call site, including a second one on a bounded line and a decoy string, and ignores a comment"
 else
-    bad "RB01m the scan reports an injected unbounded call site and ignores a comment" \
-        "mutated=${RB01M_V}/${RB01M_O} commented=${RB01M_CV}/${RB01M_CO}"
+    bad "RB01m the scan reports every injected unbounded call site, including a second one on a bounded line and a decoy string, and ignores a comment" \
+        "detail=$RB01M_DETAIL"
 fi
 rm -rf "$RB01M_DIR"
 
