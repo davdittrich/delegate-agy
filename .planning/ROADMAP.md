@@ -42,12 +42,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. A reader of README's environment-variable section finds both behaviors stated side by side, with the reason they do or do not differ.
   4. With a `timeout` binary present, no `agy` invocation anywhere in the scripts can outlive its bound against a SIGTERM-ignoring fake. This is enforced as an **invariant, not a count**: a test asserts that every `"$AGY_BIN"` occurrence in `scripts/agy_bridge.sh` and `scripts/gemini_shim.sh` is either wrapped in `"$TIMEOUT_BIN" -k …` or sits in a `TIMEOUT_BIN`-empty fallback branch that Criterion 1's recorded decision explicitly permits — so a call site added later fails the suite instead of slipping through unbounded.
 
-**Plans**: 6 plans
+**Plans**: 1/6 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 01-01-PLAN.md — Tracer: one bounded shim delegation that reaps agy and its child with no `timeout` binary present
+- [x] 01-01-PLAN.md — Tracer: one bounded shim delegation that reaps agy and its child with no `timeout` binary present
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -180,7 +180,7 @@ Phases 1, 1.5, 3, and 4 have no dependencies on each other and may be planned or
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. The missing-`timeout` decision | 0/6 | Not started | - |
+| 1. The missing-`timeout` decision | 1/6 | In Progress|  |
 | 1.5. Contract check against a real agy | 0/TBD | Not started | - |
 | 2. Model-list handling, end to end | 0/TBD | Not started | - |
 | 3. The exit-code contract | 0/TBD | Not started | - |
