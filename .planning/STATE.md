@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 01
 current_phase_name: the-missing-timeout-decision
 status: executing
-stopped_at: Completed 01-03-PLAN.md
-last_updated: "2026-08-19T10:07:36.741Z"
+stopped_at: Completed 01-04-PLAN.md
+last_updated: "2026-08-19T10:19:26.418Z"
 last_activity: 2026-08-19
 last_activity_desc: Roadmap created from REQUIREMENTS.md; 9 requirements mapped across 7 phases, all 7 open bd tickets absorbed
 progress:
   total_phases: 1
   completed_phases: 0
   total_plans: 6
-  completed_plans: 3
+  completed_plans: 4
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 01 (the-missing-timeout-decision) — EXECUTING
-Plan: 4 of 6
+Plan: 5 of 6
 Status: Ready to execute
 Last activity: 2026-08-19 — Phase 01 execution started
 
-Progress: [█████░░░░░] 50%
+Progress: [███████░░░] 67%
 
 ## Performance Metrics
 
@@ -61,6 +61,7 @@ Progress: [█████░░░░░] 50%
 | Phase 01 P01 | 4h 30m | 3 tasks | 3 files |
 | Phase 01 P02 | 1h 10m | 2 tasks | 1 files |
 | Phase 01 P03 | 35m | 3 tasks | 1 files |
+| Phase 01 P04 | 18min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -78,6 +79,8 @@ Recent decisions affecting current work:
 - [Phase ?]: 01-03: deleted the bridge's startup fatal on a missing timeout/gtimeout rather than documenting the divergence -- its only justification was that an unbounded call beats a refusal, and the watchdog leaves no unbounded call to refuse
 - [Phase ?]: 01-03: the bridge's stdin-read kill_after is 1, derived from cat not ignoring SIGTERM, not the 5 the agy sites carry for a SIGTERM-ignoring child
 - [Phase ?]: 01-03: added no permanent test case -- the phase coverage split allocates plan 01-03 no RB id; red was observed via uncommitted probes and recorded in the summary and on the beads
+- [Phase ?]: Phase 1's recorded decision is *always bounded* — none of delegate-agy-cy5's three candidate designs; the premise that a missing timeout binary forces a tradeoff was rejected
+- [Phase ?]: coreutils demoted from dependency to recommendation in README and PROJECT.md; it buys process-group kill, not the bound
 
 ### Pending Todos
 
@@ -107,6 +110,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-19T10:07:29.476Z
-Stopped at: Completed 01-03-PLAN.md
+Last session: 2026-08-19T10:19:26.412Z
+Stopped at: Completed 01-04-PLAN.md
 Resume file: None
