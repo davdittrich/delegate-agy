@@ -1803,14 +1803,18 @@ echo "== the bounding invariant, asserted over the files (RB01) =="
 # escape hatch is cheaper to add than a decision is to revisit, which is how the
 # unbounded call survived the release built to eliminate unbounded calls.
 #
-# Known ceiling: a line that merely MENTIONS the variable outside a run_bounded
-# call -- printing it in a diagnostic, say -- is reported as a violation. That
-# is deliberate rather than an oversight; separating "invokes" from "mentions"
-# needs a shell parser, and the cheap approximation errs toward failing loudly.
+# Known ceiling: a segment that merely MENTIONS the variable outside a
+# run_bounded call -- printing it in a diagnostic, say -- is reported as a
+# violation. That is deliberate rather than an oversight; separating "invokes"
+# from "mentions" needs a shell parser, and the cheap approximation errs toward
+# failing loudly. Second ceiling, stated for the same reason: a second
+# occurrence inside one bounded segment (`run_bounded 5 2 -- "$AGY_BIN"
+# "$AGY_BIN"`) counts as bounded, which it is.
 
 # Comment-only lines dropped first (a comment naming the variable is neither an
 # occurrence nor a violation), then backslash-continued lines joined into one
-# logical line each. The join is load-bearing, not tidiness: the bridge's
+# logical line each -- which _rb_agy_segments below then splits back apart at
+# the command separators, so the unit of judgement is a command and not a line. The join is load-bearing, not tidiness: the bridge's
 # delegation call puts `run_bounded` on one physical line and the invocation on
 # the next, so a per-physical-line scan reports a false violation -- and the
 # cheapest way to silence a false violation is to invent the allowlist this case
@@ -1821,18 +1825,47 @@ _rb_logical_lines() {
         | sed -e :a -e '/\\$/{N; s/\\\n[[:space:]]*/ /; ta' -e '}'
 }
 
+# _rb_agy_segments FILE -> one COMMAND per line. Logical lines first, then split
+# at the separators that end a command (`;`, `|`, `&`, and so `&&`/`||` too),
+# then the leading noise stripped off what remains until a command word is at
+# the front: a grouping paren, a control keyword, an assignment prefix, a
+# command substitution's `$(`.
+#
+# The split is what makes the scan count OCCURRENCES rather than LINES. Per
+# line, `run_bounded 5 2 -- "$AGY_BIN" foo; "$AGY_BIN" --version` reads as
+# bounded, because one match anywhere on the line satisfied the bounded regex
+# for every occurrence on it. Per command it reads as one bounded call and one
+# violation, which is what it is.
+#
+# The strip is what closes the other half. Anchoring `run_bounded` at the front
+# of a command means a decoy -- `echo "run_bounded x -- $AGY_BIN"` -- can no
+# longer launder an expansion by quoting the words of a call, while the shipped
+# sites keep passing: they sit behind `raw=$(`, `if _agy_models=$(` and
+# `( cd "$WORK_DIR" && `, each of which the strip removes. `tr`, not a sed
+# newline escape, because BSD sed does not read `\n` in a replacement and this
+# suite must mean the same thing on the platform the fallback exists for.
+_rb_agy_segments() {
+    _rb_logical_lines "$1" \
+        | tr ';|&' '\n\n\n' \
+        | sed -E -e :a \
+            -e 's/^[[:space:]]*(if|then|elif|while|until|do|!|\{|\(|\$\(|[A-Za-z_][A-Za-z0-9_]*=)//' \
+            -e ta \
+            -e 's/^[[:space:]]+//'
+}
+
 # _rb_agy_scan FILE -> "<violations> <occurrences>". An occurrence is any
 # expansion of AGY_BIN in any form -- "$AGY_BIN", "${AGY_BIN}", or bare
 # $AGY_BIN. Matching only the doubly-quoted form would let a brace or an
 # unquoted rewrite walk straight past a scan that still reported zero
 # violations, which is the one way this case could fail silently. The
 # assignment line (`AGY_BIN=...`) carries no `$` and is not an occurrence.
+# Counted with `grep -o`, so two expansions in one command are two occurrences.
 _rb_agy_scan() {
-    local lines occ viol
-    lines="$(_rb_logical_lines "$1")"
-    occ="$(printf '%s\n' "$lines" | grep -cE '\$\{?AGY_BIN\}?')" || occ=0
-    viol="$(printf '%s\n' "$lines" | grep -E '\$\{?AGY_BIN\}?' \
-            | grep -cvE 'run_bounded[[:space:]].*[[:space:]]--[[:space:]].*\$\{?AGY_BIN\}?')" || viol=0
+    local segs occ viol
+    segs="$(_rb_agy_segments "$1")"
+    occ="$(printf '%s\n' "$segs" | grep -oE '\$\{?AGY_BIN\}?' | grep -c '')" || occ=0
+    viol="$(printf '%s\n' "$segs" | grep -vE '^run_bounded[[:space:]].*[[:space:]]--([[:space:]]|$)' \
+            | grep -oE '\$\{?AGY_BIN\}?' | grep -c '')" || viol=0
     printf '%s %s' "$viol" "$occ"
 }
 
@@ -1853,8 +1886,9 @@ for _rb01_f in "$BRIDGE" "$SHIM"; do
     if [[ "$_rb01_v" -ne 0 ]]; then
         RB01_OK=0
         RB01_DETAIL="$RB01_DETAIL ${_rb01_f##*/}:${_rb01_v}_unbounded_of_${_rb01_o}"
-        RB01_DETAIL="$RB01_DETAIL[$(_rb_logical_lines "$_rb01_f" | grep -E '\$\{?AGY_BIN\}?' \
-            | grep -vE 'run_bounded[[:space:]].*[[:space:]]--[[:space:]].*\$\{?AGY_BIN\}?' | head -3 | tr '\n' ';')]"
+        RB01_DETAIL="$RB01_DETAIL[$(_rb_agy_segments "$_rb01_f" \
+            | grep -vE '^run_bounded[[:space:]].*[[:space:]]--([[:space:]]|$)' \
+            | grep -E '\$\{?AGY_BIN\}?' | head -3 | tr '\n' ';')]"
     fi
 done
 if [[ "$RB01_TOTAL" -lt 1 ]]; then
