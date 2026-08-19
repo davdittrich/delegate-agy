@@ -30,6 +30,18 @@
 #   FAKE_AGY_PRINT_HANG   same as FAKE_AGY_MODELS_HANG but on the --print
 #                         (delegation) path. Traps SIGTERM and sleeps 300s;
 #                         only `timeout -k` (SIGKILL) ends it.
+#   FAKE_AGY_FORK_HANG    like FAKE_AGY_PRINT_HANG, but the --print path ALSO
+#                         forks a child that ignores SIGTERM too. A kill aimed
+#                         at this process's PID alone therefore leaves a live
+#                         survivor; only a kill that reaches the whole process
+#                         group ends both. Both PIDs are recorded (see the two
+#                         vars below) before either process blocks, so a reader
+#                         can never race it. Ignored outside --print.
+#   FAKE_AGY_PID_FILE     if set to a path, FAKE_AGY_FORK_HANG writes this
+#                         process's own PID there. Purely observational.
+#   FAKE_AGY_CHILD_PID_FILE
+#                         if set to a path, FAKE_AGY_FORK_HANG writes the
+#                         forked child's PID there. Purely observational.
 #   FAKE_AGY_VERSION_HANG same as FAKE_AGY_MODELS_HANG but on the --version
 #                         path. Traps SIGTERM and sleeps 300s; only
 #                         `timeout -k` (SIGKILL) ends it. Ignored outside
@@ -104,6 +116,24 @@ esac
 if [[ -n "${FAKE_AGY_PRINT_HANG:-}" ]]; then
     trap '' TERM
     sleep 300
+    exit 0
+fi
+
+# Delegation fork-hang mode: same shape as FAKE_AGY_PRINT_HANG, plus a forked
+# child that ignores SIGTERM too. The child is a real process (not a subshell
+# that exits), so killing this PID alone demonstrably leaves it running -- the
+# only shape that tells a process-group kill apart from a direct-child kill.
+# Both PIDs are written BEFORE anything blocks, so a reader cannot race them.
+# The child's stdio goes to /dev/null so it never holds a caller's capture pipe
+# open, and this process blocks in `wait` rather than in a `sleep`, so no third
+# process exists to be orphaned when the pair is reaped.
+if [[ -n "${FAKE_AGY_FORK_HANG:-}" ]]; then
+    trap '' TERM
+    bash -c 'trap "" TERM; exec sleep 300' </dev/null >/dev/null 2>&1 &
+    _fake_child=$!
+    [[ -n "${FAKE_AGY_CHILD_PID_FILE:-}" ]] && printf '%s\n' "$_fake_child" > "$FAKE_AGY_CHILD_PID_FILE"
+    [[ -n "${FAKE_AGY_PID_FILE:-}" ]] && printf '%s\n' "$$" > "$FAKE_AGY_PID_FILE"
+    wait "$_fake_child"
     exit 0
 fi
 

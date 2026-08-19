@@ -35,7 +35,18 @@ INSTALL="$ROOT/scripts/install.sh"
 UNINSTALL="$ROOT/scripts/uninstall.sh"
 
 SANDBOX="$(mktemp -d -t agy-tests.XXXXXX)"
-cleanup() { rm -rf "$SANDBOX"; }
+# Reap anything a fixture left running before removing the sandbox. Every
+# fixture that records a PID writes it to $SANDBOX/<name>.pid; a failing run
+# must not leave 300-second sleepers behind on the developer's box.
+cleanup() {
+    local f p
+    for f in "$SANDBOX"/*.pid; do
+        [[ -s "$f" ]] || continue
+        p="$(cat "$f" 2>/dev/null)" || continue
+        [[ "$p" =~ ^[0-9]+$ ]] && kill -KILL "$p" 2>/dev/null
+    done
+    rm -rf "$SANDBOX"
+}
 trap cleanup EXIT
 
 mkdir -p "$SANDBOX/bin" "$SANDBOX/home"
@@ -67,6 +78,72 @@ _run() {
     shift 2
     local __out __rc
     __out="$("$@" 2>&1)"
+    __rc=$?
+    printf -v "$__outvar" '%s' "$__out"
+    printf -v "$__rcvar" '%s' "$__rc"
+}
+
+# ── Sanitized PATH ────────────────────────────────────────────────────────────
+# The suite-wide `export PATH="$SANDBOX/bin:$PATH"` above PREPENDS, so the
+# host's timeout/gtimeout stays reachable through every case and the scripts'
+# no-bounding-binary branch would never be exercised on a dev box. _purebin
+# builds a SECOND bin dir holding the fake agy plus an explicit, named list of
+# the external tools the scripts genuinely use -- and nothing else. The list is
+# the deliverable, not an implementation detail: it documents the real PATH
+# dependency set instead of guessing where the bounding binaries live. A tool
+# that cannot be resolved is fatal, never skipped -- a silently-missing tool
+# turns every sanitized case into a vacuous pass.
+_PUREBIN_TOOLS=(
+    mktemp find grep sed sort tail head cat mkdir mv rm chmod cp tr cut awk
+    date sleep ps env python3
+    # Beyond the baseline set: the scripts resolve their own config/policy dirs
+    # through `readlink -f` + `dirname`, and the fake agy's shebang is
+    # `#!/usr/bin/env bash`, so env must find bash on the replacement PATH.
+    bash readlink dirname
+)
+_PUREBIN=""
+_purebin() {
+    if [[ -n "$_PUREBIN" ]]; then printf '%s' "$_PUREBIN"; return 0; fi
+    local d t p
+    d="$(mktemp -d "$SANDBOX/purebin.XXXXXX")"
+    cp "$HERE/fake-agy.sh" "$d/agy"
+    chmod +x "$d/agy"
+    for t in "${_PUREBIN_TOOLS[@]}"; do
+        p="$(command -v "$t" 2>/dev/null)" || p=""
+        if [[ -z "$p" ]]; then
+            printf 'FATAL: sanitized PATH cannot resolve required tool: %s\n' "$t" >&2
+            exit 1
+        fi
+        ln -sf "$p" "$d/$t"
+    done
+    _PUREBIN="$d"
+    printf '%s' "$d"
+}
+
+# The outer bound below is a suite-level safety net, never the mechanism under
+# test. `--foreground` is load-bearing and must not be dropped: this tool's
+# default mode places its child in a new process group and signals the GROUP,
+# which would reap the fake agy and its fork as a side effect and turn a
+# genuinely failing descendant assertion into a vacuous pass. `--foreground`
+# creates no group and signals only its direct child, so a broken
+# implementation leaves the fake alive and the assertion fails as it should.
+# Resolved from the harness's own PATH, before the replacement PATH applies.
+_TIMEOUT_NET="$(command -v timeout 2>/dev/null)" || _TIMEOUT_NET=""
+if [[ -z "$_TIMEOUT_NET" ]]; then
+    echo "FATAL: the harness needs coreutils timeout for its safety net" >&2
+    exit 1
+fi
+
+# _run_sanitized OUTVAR RCVAR cmd...  -- like _run, but with PATH fully
+# REPLACED by _purebin's directory (no ":$PATH" suffix), scoped to this one
+# invocation and never exported suite-wide. HOME keeps pointing at the existing
+# sandbox home.
+_run_sanitized() {
+    local __outvar="$1" __rcvar="$2"
+    shift 2
+    local __dir __out __rc
+    __dir="$(_purebin)"
+    __out="$(PATH="$__dir" "$_TIMEOUT_NET" --foreground 30 "$@" 2>&1)"
     __rc=$?
     printf -v "$__outvar" '%s' "$__out"
     printf -v "$__rcvar" '%s' "$__rc"
@@ -1026,6 +1103,63 @@ else
         "rc=$SH14_RC model=$SH14_ID stderr=$(cat "$SH14_ERR")"
 fi
 rm -f "$_SHIM_CACHE"
+
+echo "== watchdog fixtures (RB00) =="
+
+# RB00a: the sanitized PATH must genuinely resolve no bounding binary, AND still
+# be complete enough to run a real delegation end to end. Both halves matter.
+# Without the first, every later RB case silently exercises coreutils and the
+# no-bounding-binary branch rots untested. Without the second, a tool missing
+# from the explicit list would make later cases fail for a reason that has
+# nothing to do with bounding -- which is why the list is asserted complete here
+# rather than assumed complete downstream.
+_run_sanitized RB00A_TOOLS RB00A_TRC bash -c 'command -v timeout; command -v gtimeout; exit 0'
+FAKE_AGY_STDOUT="pure-path ok" _run_sanitized RB00A_OUT RB00A_RC bash "$SHIM" -p "do a thing"
+if [[ -z "$RB00A_TOOLS" && "$RB00A_RC" -eq 0 && "$RB00A_OUT" == *"pure-path ok"* ]]; then
+    ok "RB00a sanitized PATH resolves no timeout/gtimeout yet still runs a full shim delegation"
+else
+    bad "RB00a sanitized PATH resolves no timeout/gtimeout yet still runs a full shim delegation" \
+        "resolved='$RB00A_TOOLS' rc=$RB00A_RC out=$RB00A_OUT"
+fi
+
+# RB00b: the forking fake must be shaped so a kill aimed at its own PID leaves a
+# survivor. That is the only shape that tells a process-group kill apart from a
+# direct-child kill; if the child died with its parent, every descendant
+# assertion in this phase would pass vacuously. Asserted in two steps: SIGTERM
+# at the parent's PID leaves the PARENT alive (it ignores the signal, as the
+# real agy is observed to), and SIGKILL at the parent's PID leaves the CHILD
+# alive.
+RB00B_PPF="$SANDBOX/rb00b-parent.pid"
+RB00B_CPF="$SANDBOX/rb00b-child.pid"
+rm -f "$RB00B_PPF" "$RB00B_CPF"
+FAKE_AGY_FORK_HANG=1 FAKE_AGY_PID_FILE="$RB00B_PPF" FAKE_AGY_CHILD_PID_FILE="$RB00B_CPF" \
+    bash "$HERE/fake-agy.sh" --print x </dev/null >/dev/null 2>&1 &
+# Drop it from the job table: the harness kills it deliberately below, and an
+# async-job death notice on the suite's own stdout is noise, not a result.
+disown $! 2>/dev/null || true
+for _rb00b_i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+    [[ -s "$RB00B_PPF" && -s "$RB00B_CPF" ]] && break
+    sleep 0.25
+done
+RB00B_PPID="$(cat "$RB00B_PPF" 2>/dev/null)" || RB00B_PPID=""
+RB00B_CPID="$(cat "$RB00B_CPF" 2>/dev/null)" || RB00B_CPID=""
+RB00B_TERM_SURVIVED=0
+RB00B_CHILD_SURVIVED=0
+if [[ "$RB00B_PPID" =~ ^[0-9]+$ && "$RB00B_CPID" =~ ^[0-9]+$ ]]; then
+    kill -TERM "$RB00B_PPID" 2>/dev/null
+    sleep 1
+    kill -0 "$RB00B_PPID" 2>/dev/null && RB00B_TERM_SURVIVED=1
+    kill -KILL "$RB00B_PPID" 2>/dev/null
+    sleep 1
+    kill -0 "$RB00B_CPID" 2>/dev/null && RB00B_CHILD_SURVIVED=1
+fi
+if [[ "$RB00B_TERM_SURVIVED" -eq 1 && "$RB00B_CHILD_SURVIVED" -eq 1 ]]; then
+    ok "RB00b forking fake ignores SIGTERM and its child outlives a direct-PID kill of the parent"
+else
+    bad "RB00b forking fake ignores SIGTERM and its child outlives a direct-PID kill of the parent" \
+        "parent=$RB00B_PPID term_survived=$RB00B_TERM_SURVIVED child=$RB00B_CPID child_survived=$RB00B_CHILD_SURVIVED"
+fi
+kill -KILL "$RB00B_CPID" 2>/dev/null
 
 echo "== install.sh / uninstall.sh (vfn.11) =="
 
