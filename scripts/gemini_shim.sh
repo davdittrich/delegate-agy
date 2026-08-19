@@ -184,7 +184,16 @@ run_bounded() {
     child_pgid=$(_rb_pgid_of "$child")
     if [[ -n "$child_pgid" && "$child_pgid" != "$self_pgid" ]]; then
         kill_pgid="$child_pgid"
-    else
+    elif kill -0 "$child" 2>/dev/null; then
+        # Gated on the child being STILL LIVE, and `kill -0` is the discriminator
+        # precisely because a child that exited but has not been reaped is still
+        # signalable and still has its procfs entry -- so this branch is reached
+        # only once the child is fully gone, or once it is genuinely sharing our
+        # group. A child that finished before the read above has no group left to
+        # find, needs no kill, and left no descendant behind; warning about it
+        # would fire on every fast success and make the case the warning exists
+        # for -- a live child whose descendants really can survive a pid-only
+        # kill -- indistinguishable from routine operation.
         echo "WARNING: run_bounded: child $child has no process group of its own; bounding it by pid only, descendants may survive" >&9
     fi
 
