@@ -387,6 +387,10 @@ while [[ $# -gt 0 ]]; do
         --add-dir)
             [[ $# -lt 2 ]] && { echo "ERROR: --add-dir requires a value" >&2; exit 2; }
             _d=$(CDPATH='' cd -- "$2" 2>/dev/null && pwd) || { echo "ERROR: --add-dir '$2' is not a directory" >&2; exit 2; }
+            # Empty fallback, not the /nonexistent one the cache paths below
+            # use: this is a path COMPARISON, and a stand-in root would be a
+            # directory nobody can pass as --add-dir. With HOME unset there is
+            # simply no home to over-grant, which the -n guard says exactly.
             _home="${HOME:-}"
             if [[ "$_d" == "/" || ( -n "$_home" && "$_d" == "${_home%/}" ) ]]; then
                 if [[ "${AGY_ALLOW_BROAD_GRANT:-0}" != "1" ]]; then
@@ -457,7 +461,11 @@ case "$TYPE_SAFE" in
 esac
 
 # ── Fetch/cache live model list ───────────────────────────────────────────────
-CACHE_FILE="$HOME/.cache/agy-bridge-models"
+# ${HOME:-} — this runs under `set -u` and the bridge is reached with HOME unset
+# by systemd units without User=, `env -i`, container entrypoints and CI
+# runners. An unwritable cache path degrades to fetch-every-time via the guards
+# below; it may never abort the bridge. Same shape as gemini_shim.sh's.
+CACHE_FILE="${HOME:-/nonexistent}/.cache/agy-bridge-models"
 _agy_models=""
 if [[ ! -s "$CACHE_FILE" ]] || [[ -n "$(find "$CACHE_FILE" -mmin +60 2>/dev/null)" ]]; then
     # agy ignores SIGTERM (observed: `timeout 25 agy models` still running after
@@ -466,9 +474,13 @@ if [[ ! -s "$CACHE_FILE" ]] || [[ -n "$(find "$CACHE_FILE" -mmin +60 2>/dev/null
     _agy_err="$(mktemp -t agy-models-err.XXXXXX)"
     if _agy_models=$(run_bounded "$AGY_MODELS_TIMEOUT" 3 -- \
                      "$AGY_BIN" models </dev/null 2>"$_agy_err"); then
+        # stderr suppressed across the whole write: an unwritable cache dir
+        # (HOME unset, read-only FS) otherwise makes bash print the failed
+        # redirect on every single invocation. Caching is best-effort — the
+        # fetched list in $_agy_models is already usable without it.
         mkdir -p "${CACHE_FILE%/*}" 2>/dev/null || true
-        printf '%s' "$_agy_models" > "$CACHE_FILE.tmp.$$" \
-            && mv "$CACHE_FILE.tmp.$$" "$CACHE_FILE" || true
+        { printf '%s' "$_agy_models" > "$CACHE_FILE.tmp.$$" \
+            && mv "$CACHE_FILE.tmp.$$" "$CACHE_FILE"; } 2>/dev/null || true
         chmod 600 "$CACHE_FILE" 2>/dev/null || true
     else
         _agy_rc=$?
@@ -609,14 +621,16 @@ fi
 # stanza is advisory GEMINI.md text — it does NOT relax --sandbox/--add-dir.
 _MCP_LEANCTX=0; _MCP_TOKENSAVE=0
 if command -v python3 >/dev/null 2>&1; then
-    _MCP_CACHE="$HOME/.cache/agy-bridge-mcp"
+    # Guarded like CACHE_FILE above: HOME may be unset, and this block runs on
+    # every delegation. A missing home degrades to autodetect-every-time.
+    _MCP_CACHE="${HOME:-/nonexistent}/.cache/agy-bridge-mcp"
     if [[ -s "$_MCP_CACHE" ]] && [[ -z "$(find "$_MCP_CACHE" -mmin +60 2>/dev/null)" ]]; then
         _MCP_LEANCTX=$(sed -n '1p' "$_MCP_CACHE" 2>/dev/null)
         _MCP_TOKENSAVE=$(sed -n '2p' "$_MCP_CACHE" 2>/dev/null)
     else
         read _MCP_LEANCTX _MCP_TOKENSAVE < <(python3 - \
-            "$HOME/.config/agy-delegate/config.json" \
-            "$HOME/.gemini/antigravity-cli/mcp_config.json" <<'PY'
+            "${HOME:-/nonexistent}/.config/agy-delegate/config.json" \
+            "${HOME:-/nonexistent}/.gemini/antigravity-cli/mcp_config.json" <<'PY'
 import sys, json, os
 hint, live = sys.argv[1], sys.argv[2]
 lc = ts = False
@@ -636,8 +650,8 @@ PY
 )
         _MCP_LEANCTX="${_MCP_LEANCTX:-0}"; _MCP_TOKENSAVE="${_MCP_TOKENSAVE:-0}"
         mkdir -p "${_MCP_CACHE%/*}" 2>/dev/null || true
-        printf '%s\n%s\n' "$_MCP_LEANCTX" "$_MCP_TOKENSAVE" > "$_MCP_CACHE.tmp.$$" \
-            && mv "$_MCP_CACHE.tmp.$$" "$_MCP_CACHE" 2>/dev/null || true
+        { printf '%s\n%s\n' "$_MCP_LEANCTX" "$_MCP_TOKENSAVE" > "$_MCP_CACHE.tmp.$$" \
+            && mv "$_MCP_CACHE.tmp.$$" "$_MCP_CACHE"; } 2>/dev/null || true
         chmod 600 "$_MCP_CACHE" 2>/dev/null || true
     fi
 fi
