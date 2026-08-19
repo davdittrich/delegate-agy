@@ -148,7 +148,12 @@ fi
 # array's own ']'. The version match is anchored at line start so a compact,
 # single-line registry cannot hand back a later entry's version. Both shapes
 # otherwise mis-attribute a NEIGHBOURING plugin's version and refuse to run.
-_AGY_REGISTRY="\${CLAUDE_CONFIG_DIR:-\$HOME/.claude}/plugins/installed_plugins.json"
+# HOME is guarded because bash expands the ':-' default word whenever
+# CLAUDE_CONFIG_DIR is unset, and this wrapper runs under 'set -u': an unset
+# HOME would abort it here, before the exec below. With neither variable set the
+# registry is genuinely unreadable, so the '-r' guard skips the check and the
+# wrapper runs -- the same degradation as a dev install with no registry.
+_AGY_REGISTRY="\${CLAUDE_CONFIG_DIR:-\${HOME:-/nonexistent}/.claude}/plugins/installed_plugins.json"
 if [[ -r "\$_AGY_REGISTRY" ]]; then
     _agy_active="\$(sed -n '/"$reg_key_re_sq":[[:space:]]*\[\$/,/^[[:space:]]*\]/p' "\$_AGY_REGISTRY" 2>/dev/null \
         | sed -nE 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/p' | head -1 || true)"
