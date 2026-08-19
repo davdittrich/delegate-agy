@@ -1638,6 +1638,149 @@ else
         "detail=$RB24_DETAIL"
 fi
 
+echo "== the pgid lookup depends on nothing (RB25, RB26) =="
+
+# RB25 and RB26 both aim at `_rb_pgid_of`, from the two directions the suite
+# could not see it from: the tools it shells out to, and the file it parses.
+#
+# The blind spot was structural, not accidental. _PUREBIN_TOOLS hardcodes awk
+# and ps into the sanitized PATH -- correctly, as documentation of the real
+# dependency set -- so no case could ever ask what happens without them.
+
+# A second sanitized bin dir: everything _purebin resolves EXCEPT the two
+# binaries the pgid lookup used to shell out to. Built by subtraction from
+# _purebin rather than by a second explicit list, so it cannot drift from it and
+# so a case that fails here fails for the missing binaries and nothing else.
+_PUREBIN_NOAWK=""
+_purebin_noawk() {
+    if [[ -n "$_PUREBIN_NOAWK" ]]; then printf '%s' "$_PUREBIN_NOAWK"; return 0; fi
+    local d
+    d="$(mktemp -d "$SANDBOX/purebin-noawk.XXXXXX")"
+    cp -a "$(_purebin)/." "$d/"
+    rm -f "$d/awk" "$d/ps"
+    _PUREBIN_NOAWK="$d"
+    printf '%s' "$d"
+}
+
+# RB25: with neither awk nor ps resolvable, the lookup returned empty, kill_pgid
+# stayed empty, and the escalation degraded to a pid-only kill -- so the bound
+# still fired, still reported 124, and everything agy had forked survived it.
+# Silent by construction: the operator's only signal is the guard's warning, and
+# four of the six bounded sites have already redirected the stream it would land
+# on. The shim installs at ~/.local/bin/gemini and is reached from systemd units,
+# `env -i` wrappers, container entrypoints and CI runners -- the contexts its own
+# ${HOME:-} comment names as the ones it must survive -- where a PATH this thin
+# is ordinary.
+#
+# The guard's warning is asserted ABSENT rather than passed to
+# _rb_assert_reaped: that helper treats the warning as the documented D-14a
+# degradation and stops claiming the descendant kill, which is exactly the
+# branch this case must refuse. A degradation caused by a missing binary is not
+# a host whose job control could not isolate the child.
+RB25_PPF="$SANDBOX/rb25-parent.pid"
+RB25_CPF="$SANDBOX/rb25-child.pid"
+RB25_FD9="$SANDBOX/rb25-fd9.log"
+RB25_OUT="$SANDBOX/rb25-out.log"
+rm -f "$RB25_PPF" "$RB25_CPF"; : > "$RB25_FD9"; : > "$RB25_OUT"
+_RB25_BIN="$(_purebin_noawk)"
+FAKE_AGY_FORK_HANG=1 FAKE_AGY_PID_FILE="$RB25_PPF" FAKE_AGY_CHILD_PID_FILE="$RB25_CPF" \
+    "$_TIMEOUT_NET" --foreground -k 5 30 env "PATH=$_RB25_BIN" bash -c '
+    set -euo pipefail
+    exec 9>"$2"
+    TIMEOUT_BIN=""
+    . "$1"
+    rc=0
+    run_bounded 3 2 -- bash "$3" --print x || rc=$?
+    printf "%s\n" "$rc"
+' _ "$_RB_BLOCK" "$RB25_FD9" "$HERE/fake-agy.sh" > "$RB25_OUT" 2>&1
+RB25_SEEN="$(cat "$RB25_OUT" 2>/dev/null)"
+RB25_PPID="$(cat "$RB25_PPF" 2>/dev/null)" || RB25_PPID=""
+RB25_CPID="$(cat "$RB25_CPF" 2>/dev/null)" || RB25_CPID=""
+RB25_PGONE=1; RB25_CGONE=1
+[[ "$RB25_PPID" =~ ^[0-9]+$ ]] && kill -0 "$RB25_PPID" 2>/dev/null && RB25_PGONE=0
+[[ "$RB25_CPID" =~ ^[0-9]+$ ]] && kill -0 "$RB25_CPID" 2>/dev/null && RB25_CGONE=0
+RB25_OK=1
+RB25_DETAIL=""
+[[ "$RB25_SEEN" == "124" ]] || { RB25_OK=0; RB25_DETAIL="$RB25_DETAIL rc='$RB25_SEEN'(want 124)"; }
+[[ "$RB25_PPID" =~ ^[0-9]+$ && "$RB25_CPID" =~ ^[0-9]+$ ]] \
+    || { RB25_OK=0; RB25_DETAIL="$RB25_DETAIL fake_never_started(parent='$RB25_PPID' child='$RB25_CPID')"; }
+[[ "$RB25_PGONE" -eq 1 ]] || { RB25_OK=0; RB25_DETAIL="$RB25_DETAIL direct_process_survived($RB25_PPID)"; }
+[[ "$RB25_CGONE" -eq 1 ]] || { RB25_OK=0; RB25_DETAIL="$RB25_DETAIL descendant_survived($RB25_CPID)"; }
+grep -qF "$_RB_GUARD_MSG" "$RB25_FD9" \
+    && { RB25_OK=0; RB25_DETAIL="$RB25_DETAIL degraded_to_pid_only"; }
+if [[ "$RB25_OK" -eq 1 ]]; then
+    ok "RB25 (unit) on a PATH with neither awk nor ps, the bound still reaps agy AND its fork, with no degradation"
+else
+    bad "RB25 (unit) on a PATH with neither awk nor ps, the bound still reaps agy AND its fork, with no degradation" \
+        "detail=$RB25_DETAIL fd9=$(head -c 200 "$RB25_FD9")"
+fi
+[[ "$RB25_PPID" =~ ^[0-9]+$ ]] && kill -KILL "$RB25_PPID" 2>/dev/null
+[[ "$RB25_CPID" =~ ^[0-9]+$ ]] && kill -KILL "$RB25_CPID" 2>/dev/null
+: > "$RB25_PPF"; : > "$RB25_CPF"
+
+# RB26: /proc/<pid>/stat is `pid (comm) state ppid pgrp ...` and comm may contain
+# BOTH spaces and `)`. Whitespace-splitting to field 5 is the pgrp only for a
+# single-token comm; for a two-word comm it is the PPID -- a number, so it
+# survives the digit sanitiser, differs from our own group, and is installed as
+# kill_pgid. The ladder then sends TERM and then KILL to `-<ppid>`: a real
+# process group, belonging to something else. `_rb_signal`'s failure-tolerant
+# suffix swallows the outcome either way.
+#
+# Measured on this host, one process per shape:
+#   comm='a b'    field5=1046709 (the PPID)  true pgid=1046698
+#   comm='a b c'  field5=S -> sanitises to empty (fails closed, no kill at all)
+#   comm='a)b c'  field5=1046709 (the PPID)
+#
+# Not reachable from the shipped call sites, whose commands are `agy` and `cat`;
+# reachable the moment anything else is bounded, which is why it is pinned here
+# rather than left to the next caller to discover.
+#
+# Asserted against `ps -o pgid=` as ground truth, so the case means the same
+# thing on a host with no procfs (where the helper's own fallback IS ps, and the
+# agreement is trivial). The ppid != pgid precondition is the anti-vacuity half:
+# where they coincide, the broken parse would agree by accident.
+RB26_DIR="$SANDBOX/rb26"
+RB26_OUT="$SANDBOX/rb26-out.log"
+rm -rf "$RB26_DIR"; mkdir -p "$RB26_DIR"; : > "$RB26_OUT"
+RB26_OK=1
+RB26_DETAIL=""
+_rb26_sleep="$(command -v sleep 2>/dev/null)" || _rb26_sleep=""
+if [[ -z "$_rb26_sleep" ]]; then
+    bad "RB26 (unit) the pgid of a process whose comm contains whitespace is read correctly" "no sleep binary to copy"
+else
+    for _rb26_comm in "a b" "a b c" "a)b c"; do
+        cp "$_rb26_sleep" "$RB26_DIR/$_rb26_comm"
+        : > "$RB26_OUT"
+        bash -c '
+            set -euo pipefail
+            exec 9>/dev/null
+            TIMEOUT_BIN=""
+            . "$1"
+            ( exec "$2" 5 ) &
+            p=$!
+            sleep 0.5
+            saw="$(_rb_pgid_of "$p")"
+            pgid="$(ps -o pgid= -p "$p" 2>/dev/null | tr -cd "[:digit:]")" || pgid=""
+            ppid="$(ps -o ppid= -p "$p" 2>/dev/null | tr -cd "[:digit:]")" || ppid=""
+            printf "%s %s %s\n" "${saw:-EMPTY}" "${pgid:-EMPTY}" "${ppid:-EMPTY}"
+            kill -KILL "$p" 2>/dev/null || true
+        ' _ "$_RB_BLOCK" "$RB26_DIR/$_rb26_comm" > "$RB26_OUT" 2>&1 \
+            || { RB26_OK=0; RB26_DETAIL="$RB26_DETAIL [$_rb26_comm]driver_failed"; }
+        read -r _rb26_saw _rb26_pgid _rb26_ppid < "$RB26_OUT"
+        [[ "$_rb26_pgid" =~ ^[0-9]+$ && "$_rb26_ppid" =~ ^[0-9]+$ && "$_rb26_ppid" != "$_rb26_pgid" ]] \
+            || { RB26_OK=0; RB26_DETAIL="$RB26_DETAIL [$_rb26_comm]cannot_discriminate(pgid=$_rb26_pgid ppid=$_rb26_ppid)"; }
+        [[ "$_rb26_saw" == "$_rb26_pgid" ]] \
+            || { RB26_OK=0; RB26_DETAIL="$RB26_DETAIL [$_rb26_comm]saw=$_rb26_saw(want $_rb26_pgid, ppid=$_rb26_ppid)"; }
+    done
+    if [[ "$RB26_OK" -eq 1 ]]; then
+        ok "RB26 (unit) the pgid of a process whose comm contains whitespace is read correctly"
+    else
+        bad "RB26 (unit) the pgid of a process whose comm contains whitespace is read correctly" \
+            "detail=$RB26_DETAIL"
+    fi
+fi
+rm -rf "$RB26_DIR"
+
 echo "== the bounding invariant, asserted over the files (RB01) =="
 
 # RB01 is the only case in this suite that asserts something about code nobody
