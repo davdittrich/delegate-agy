@@ -5,12 +5,12 @@ milestone_name: milestone
 current_phase: 01
 current_phase_name: the-missing-timeout-decision
 status: completed
-stopped_at: Completed 01-06-PLAN.md
-last_updated: "2026-08-19T16:10:20.324Z"
+stopped_at: Phase 1.5 context gathered
+last_updated: "2026-08-19T19:47:53.941Z"
 last_activity: 2026-08-19
 last_activity_desc: Roadmap created from REQUIREMENTS.md; 9 requirements mapped across 7 phases, all 7 open bd tickets absorbed
 progress:
-  total_phases: 1
+  total_phases: 2
   completed_phases: 1
   total_plans: 6
   completed_plans: 6
@@ -119,6 +119,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-19T14:44:18.979Z
-Stopped at: Completed 01-06-PLAN.md
-Resume file: None
+Last session: 2026-08-19T19:47:53.935Z
+Stopped at: Phase 1.5 context gathered
+Resume file: /home/dd/Gemini/delegate-agy/.planning/phases/01.5-contract-check-against-a-real-agy/01.5-CONTEXT.md
