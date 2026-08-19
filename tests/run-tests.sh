@@ -3289,6 +3289,113 @@ else
         "syntax_err=$(cat "$SANDBOX/err-i18-syntax.log") wrc=$WRC wout=${WOUT:0:200} log=$(tail -5 "$SANDBOX/last-install.log")"
 fi
 
+echo "== bridge survives a bare environment, HOME unset (RB27) =="
+
+# Both launchers run under `set -euo pipefail`, so ONE unguarded $HOME aborts
+# the script before it does anything -- and they are reached with HOME unset by
+# `env -i`, systemd units without User=, container entrypoints and CI runners.
+# gemini_shim.sh was hardened for this at 2c78194; agy_bridge.sh carried FOUR
+# unguarded expansions (the models cache, the MCP cache, and the two config
+# paths handed to python3), so a guard on the first alone leaves three live
+# crashes on exactly the hosts this defect is about.
+#
+# Driven through a REAL delegation, which is the only path that reaches all
+# four: --types exits inside the argument loop, well before the first of them.
+RB27_BIN="$(mktemp -d "$SANDBOX/rb27bin.XXXXXX")"
+cp "$HERE/fake-agy.sh" "$RB27_BIN/agy"
+chmod +x "$RB27_BIN/agy"
+RB27_ERRF="$SANDBOX/rb27.err"
+RB27_OUT="$(env -i PATH="$RB27_BIN:/usr/bin:/bin" FAKE_AGY_STDOUT="rb27 bare ok" \
+    bash "$BRIDGE" --type code -- "no home here" 2>"$RB27_ERRF")" && RB27_RC=0 || RB27_RC=$?
+RB27_ERR="$(cat "$RB27_ERRF" 2>/dev/null || true)"
+
+RB27_OK=1
+[[ "$RB27_RC" -eq 0 ]]                       || RB27_OK=0
+# Non-vacuity: the delegation really ran end to end under the bare env, so a
+# pass cannot come from the bridge bailing out early for some other reason.
+[[ "$RB27_OUT" == *"rb27 bare ok"* ]]        || RB27_OK=0
+[[ "$RB27_ERR" != *"unbound variable"* ]]    || RB27_OK=0
+# Second half of the same defect: with HOME unset the cache paths land under the
+# fallback root, which does not exist. Both cache writes must swallow the failed
+# redirect the way the shim's does -- caching is best-effort, and a per-call
+# "No such file or directory" on stderr corrupts nothing but pollutes every
+# caller's log.
+[[ "$RB27_ERR" != *"No such file or directory"* ]] || RB27_OK=0
+
+# Per-site, not per-symptom: every $HOME used as a PATH PREFIX in either shipped
+# launcher must carry a fallback. The run above proves today's four sites; this
+# catches a fifth added later on a branch that delegation does not take.
+RB27_UNGUARDED="$(grep -n '\$HOME/' "$BRIDGE" "$SHIM" | grep -v '\${HOME:-' || true)"
+[[ -z "$RB27_UNGUARDED" ]] || RB27_OK=0
+
+if [[ "$RB27_OK" -eq 1 ]]; then
+    ok "RB27 bridge completes a delegation with HOME unset, and no \$HOME path expansion is unguarded"
+else
+    bad "RB27 bridge completes a delegation with HOME unset, and no \$HOME path expansion is unguarded" \
+        "rc=$RB27_RC out=${RB27_OUT:0:120} err=${RB27_ERR:0:200} unguarded=${RB27_UNGUARDED:0:200}"
+fi
+
+echo "== installer live verify is bounded against a hung agy (RB28) =="
+
+# install.sh's live verify pipes a REAL delegation through the shim. With no
+# installer-side bound it inherits GEMINI_SHIM_TIMEOUT's 600s default -- a work
+# bound, not a smoke-test one -- so a hung agy parks the installer for ten
+# minutes under a line that reads "non-fatal". The installer must impose its own
+# short bound and fall into the existing "could not run" branch on expiry.
+#
+# The limit here is the OBSERVATION window, not the contract: it exists so the
+# unbounded regression is caught in a minute instead of ten. FORK_HANG (rather
+# than PRINT_HANG) is used purely because it records the fake agy's PIDs, which
+# is what lets this case reap them deterministically instead of leaving a
+# 300-second sleeper behind on the unbounded path.
+RB28_LIMIT=60
+RB28_HOME="$(_fresh_home)"
+RB28_LOG="$SANDBOX/rb28-install.log"
+RB28_PPF="$SANDBOX/rb28-agy-parent.pid"
+RB28_CPF="$SANDBOX/rb28-agy-child.pid"
+: > "$RB28_PPF"; : > "$RB28_CPF"
+RB28_START=$(date +%s)
+env -i HOME="$RB28_HOME" PATH="$RB28_HOME/bin:$RB28_HOME/.local/bin:/usr/bin:/bin" \
+    AGY_PLUGIN_DIR="$ROOT" FAKE_AGY_FORK_HANG=1 \
+    FAKE_AGY_PID_FILE="$RB28_PPF" FAKE_AGY_CHILD_PID_FILE="$RB28_CPF" \
+    bash "$INSTALL" > "$RB28_LOG" 2>&1 &
+RB28_PID=$!
+RB28_DONE=0
+for _ in $(seq 1 "$RB28_LIMIT"); do
+    kill -0 "$RB28_PID" 2>/dev/null || { RB28_DONE=1; break; }
+    sleep 1
+done
+RB28_ELAPSED=$(( $(date +%s) - RB28_START ))
+if [[ "$RB28_DONE" -eq 0 ]]; then
+    # Unbounded: release the installer by killing the agy it is waiting on, then
+    # let it finish normally. Killing the installer itself would orphan the shim
+    # and its agy for the rest of their 600s bound.
+    for _f in "$RB28_PPF" "$RB28_CPF"; do
+        _p="$(cat "$_f" 2>/dev/null)" || _p=""
+        [[ "$_p" =~ ^[0-9]+$ ]] && kill -KILL "$_p" 2>/dev/null
+    done
+fi
+wait "$RB28_PID" 2>/dev/null && RB28_RC=0 || RB28_RC=$?
+RB28_AGY_PID="$(cat "$RB28_PPF" 2>/dev/null || true)"
+: > "$RB28_PPF"; : > "$RB28_CPF"
+RB28_LOGTXT="$(cat "$RB28_LOG" 2>/dev/null || true)"
+
+RB28_OK=1
+[[ "$RB28_DONE" -eq 1 ]] || RB28_OK=0
+[[ "$RB28_RC" -eq 0 ]]   || RB28_OK=0
+# Non-vacuity: the smoke call must have actually reached agy and hung there, so
+# a pass cannot come from the shim erroring out before it ever delegated. The
+# fake records its own PID immediately before it blocks.
+[[ "$RB28_AGY_PID" =~ ^[0-9]+$ ]] || RB28_OK=0
+[[ "$RB28_LOGTXT" == *"gemini shim smoke: could not run"* ]] || RB28_OK=0
+[[ "$RB28_LOGTXT" == *"Done."* ]] || RB28_OK=0
+if [[ "$RB28_OK" -eq 1 ]]; then
+    ok "RB28 installer live verify bounds its own smoke call and reports 'could not run' on a hung agy"
+else
+    bad "RB28 installer live verify bounds its own smoke call and reports 'could not run' on a hung agy" \
+        "done=$RB28_DONE elapsed=${RB28_ELAPSED}s limit=${RB28_LIMIT}s rc=$RB28_RC agy_pid=${RB28_AGY_PID:-none} log=$(tail -4 "$RB28_LOG" 2>/dev/null)"
+fi
+
 echo
 echo "PASS=$PASS FAIL=$FAIL"
 if [[ "$FAIL" -eq 0 ]]; then
