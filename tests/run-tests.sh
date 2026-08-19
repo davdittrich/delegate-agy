@@ -1493,6 +1493,63 @@ kill -KILL "$RB22_PPID" 2>/dev/null
 kill -KILL "$RB22_CPID" 2>/dev/null
 _rb_reap_sentinels
 
+echo "== the bounded child inherits none of our descriptors (RB23) =="
+
+# RB23: fd 9 is the helper's own diagnostic descriptor -- each entry point's
+# ORIGINAL stderr -- and it must never reach the bounded command. Under the
+# commonest capture shape for a CLI that shadows `gemini` box-wide,
+# `out=$(gemini ... 2>&1)`, that descriptor IS the caller's capture pipe: any
+# descendant agy leaves behind holds the pipe open, so `$( )` never reaches EOF
+# and never returns -- on a run that exited 0 in under a second. Nothing timed
+# out; the run SUCCEEDED and the caller hangs anyway.
+#
+# Driven through a real capturing caller rather than by reading the child's
+# /proc/self/fd, and that choice is the case. This suite already met this
+# mechanism once and moved ITSELF to file capture for it (RB05's note, and the
+# fake's own child stdio) -- the shipped scripts never got the fix, so a case
+# that pins the harness's defence proves nothing about a caller's. This one
+# fails the way a caller fails.
+#
+# Both arms, because the descriptor survives the bound rather than being freed
+# by it: the coreutils binary leaks it exactly as the watchdog does.
+#
+# The leak's lifetime is what bounds a red run: a regression fails in ~12s per
+# arm instead of hanging the suite for the fake's usual 300s. The elapsed cap
+# separates "the entry point returned" from "the pipe finally drained", and
+# asserting the leaked child was ALIVE when the capture returned is what stops a
+# fixture that forked nothing from passing vacuously.
+RB23_CPF="$SANDBOX/rb23-child.pid"
+RB23_LEAK=12
+RB23_OK=1
+RB23_DETAIL=""
+for _rb23_mech in watchdog coreutils; do
+    rm -f "$RB23_CPF"
+    if [[ "$_rb23_mech" == "watchdog" ]]; then _rb23_path="$(_purebin)"; else _rb23_path="$PATH"; fi
+    _RB23_START=$(date +%s)
+    RB23_OUT="$(PATH="$_rb23_path" FAKE_AGY_LEAK_CHILD="$RB23_LEAK" \
+        FAKE_AGY_CHILD_PID_FILE="$RB23_CPF" FAKE_AGY_STDOUT="RB23-reply" \
+        "$_TIMEOUT_NET" --foreground -k 5 30 bash "$SHIM" -p "do a thing" 2>&1)"
+    RB23_RC=$?
+    _RB23_ELAPSED=$(( $(date +%s) - _RB23_START ))
+    RB23_CPID="$(cat "$RB23_CPF" 2>/dev/null)" || RB23_CPID=""
+    RB23_CALIVE=0
+    [[ "$RB23_CPID" =~ ^[0-9]+$ ]] && kill -0 "$RB23_CPID" 2>/dev/null && RB23_CALIVE=1
+    [[ "$RB23_RC" -eq 0 && "$RB23_OUT" == *"RB23-reply"* ]] \
+        || { RB23_OK=0; RB23_DETAIL="$RB23_DETAIL $_rb23_mech:no_successful_run(rc=$RB23_RC out=${RB23_OUT:0:120})"; }
+    [[ "$RB23_CALIVE" -eq 1 ]] \
+        || { RB23_OK=0; RB23_DETAIL="$RB23_DETAIL $_rb23_mech:nothing_leaked(child='$RB23_CPID')"; }
+    [[ "$_RB23_ELAPSED" -lt 10 ]] \
+        || { RB23_OK=0; RB23_DETAIL="$RB23_DETAIL $_rb23_mech:capture_held_open(${_RB23_ELAPSED}s)"; }
+    [[ "$RB23_CPID" =~ ^[0-9]+$ ]] && kill -KILL "$RB23_CPID" 2>/dev/null
+    : > "$RB23_CPF"
+done
+if [[ "$RB23_OK" -eq 1 ]]; then
+    ok "RB23 a capturing caller is not held open by a descendant of the bounded call, on either mechanism"
+else
+    bad "RB23 a capturing caller is not held open by a descendant of the bounded call, on either mechanism" \
+        "detail=$RB23_DETAIL"
+fi
+
 echo "== the bounding invariant, asserted over the files (RB01) =="
 
 # RB01 is the only case in this suite that asserts something about code nobody

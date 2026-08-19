@@ -45,6 +45,15 @@
 #   FAKE_AGY_CHILD_PID_FILE
 #                         if set to a path, FAKE_AGY_FORK_HANG writes the
 #                         forked child's PID there. Purely observational.
+#   FAKE_AGY_LEAK_CHILD   the --print (delegation) path forks a child that
+#                         OUTLIVES it and then exits 0 immediately -- the shape
+#                         a real agy leaves behind (an MCP server, a language
+#                         server, any detached helper) on a successful, fast
+#                         run. The value is that child's lifetime in seconds, so
+#                         a caller held open by a descriptor the child inherited
+#                         fails in bounded time instead of hanging. Its PID is
+#                         recorded in FAKE_AGY_CHILD_PID_FILE. Ignored outside
+#                         --print.
 #   FAKE_AGY_VERSION_HANG same as FAKE_AGY_MODELS_HANG but on the --version
 #                         path. Traps SIGTERM and sleeps 300s; only
 #                         `timeout -k` (SIGKILL) ends it. Ignored outside
@@ -147,6 +156,19 @@ if [[ -n "${FAKE_AGY_FORK_HANG:-}" ]]; then
     [[ -n "${FAKE_AGY_CHILD_PID_FILE:-}" ]] && printf '%s\n' "$_fake_child" > "$FAKE_AGY_CHILD_PID_FILE"
     [[ -n "${FAKE_AGY_PID_FILE:-}" ]] && printf '%s\n' "$$" > "$FAKE_AGY_PID_FILE"
     wait "$_fake_child"
+    exit 0
+fi
+
+# Delegation "leaked descendant" mode: the mirror image of FAKE_AGY_FORK_HANG.
+# This process exits 0 at once, having forked a child that keeps running -- so
+# the run SUCCEEDS and nothing times out, and whatever that child inherited is
+# the only thing still holding anything open. Which descriptors it inherits is
+# the property under test, so nothing is closed for it beyond stdio: the caller
+# is the one that owes the bounded command a clean descriptor set.
+if [[ -n "${FAKE_AGY_LEAK_CHILD:-}" ]]; then
+    bash -c 'exec sleep "$1"' _ "$FAKE_AGY_LEAK_CHILD" </dev/null >/dev/null 2>&1 &
+    [[ -n "${FAKE_AGY_CHILD_PID_FILE:-}" ]] && printf '%s\n' "$!" > "$FAKE_AGY_CHILD_PID_FILE"
+    [[ -n "${FAKE_AGY_STDOUT:-}" ]] && printf '%s' "$FAKE_AGY_STDOUT"
     exit 0
 fi
 
