@@ -355,6 +355,8 @@ PY
 fi
 
 # ── final LIVE verify (non-fatal) ────────────────────────────────────────────
+# `--types` prints a static table and exits inside the bridge's argument loop,
+# before it ever reaches agy, so it needs no bound of its own.
 echo
 echo "== live verify (non-fatal) =="
 if "$BIN_DIR/agy-bridge" --types >/dev/null 2>&1; then
@@ -362,7 +364,16 @@ if "$BIN_DIR/agy-bridge" --types >/dev/null 2>&1; then
 else
     echo "agy-bridge --types: could not run (agy may not be installed/authed yet)."
 fi
-if printf 'Say only: shim ok\n' | "$BIN_DIR/gemini" -m gemini-2.5-flash -o text --approval-mode yolo >/dev/null 2>&1; then
+# The smoke call is a REAL delegation, so unbounded it inherits the shim's 600s
+# default -- ten minutes of silence under a line that says "non-fatal". The
+# assignment prefix hands the shim its own smoke-test bound instead, overriding
+# whatever the user set for work calls: this is one flash sentence, so 20s is
+# already generous, and on expiry the shim exits 124 into the "could not run"
+# branch below. Deliberately NOT a third copy of run_bounded, and deliberately
+# not `timeout` (which is exactly what may be missing on the hosts this
+# protects) -- the shim's own bound already carries the SIGKILL escalation and
+# the pure-bash fallback, and reusing it costs one assignment.
+if printf 'Say only: shim ok\n' | GEMINI_SHIM_TIMEOUT=20 "$BIN_DIR/gemini" -m gemini-2.5-flash -o text --approval-mode yolo >/dev/null 2>&1; then
     echo "gemini shim smoke: ok"
 else
     echo "gemini shim smoke: could not run (agy may not be installed/authed yet)."
