@@ -127,6 +127,12 @@ _purebin() {
 # genuinely failing descendant assertion into a vacuous pass. `--foreground`
 # creates no group and signals only its direct child, so a broken
 # implementation leaves the fake alive and the assertion fails as it should.
+# `-k` is required for the net to bound anything at all: a script blocked on a
+# foreground child DEFERS a SIGTERM until that child returns, so the plain
+# SIGTERM form would sit for as long as the fake sleeps -- observed at 300s --
+# and a broken implementation would hang the suite instead of failing it. The
+# escalation still reaches only the direct child, so the fake and its fork stay
+# alive to be asserted on.
 # Resolved from the harness's own PATH, before the replacement PATH applies.
 _TIMEOUT_NET="$(command -v timeout 2>/dev/null)" || _TIMEOUT_NET=""
 if [[ -z "$_TIMEOUT_NET" ]]; then
@@ -143,7 +149,7 @@ _run_sanitized() {
     shift 2
     local __dir __out __rc
     __dir="$(_purebin)"
-    __out="$(PATH="$__dir" "$_TIMEOUT_NET" --foreground 30 "$@" 2>&1)"
+    __out="$(PATH="$__dir" "$_TIMEOUT_NET" --foreground -k 5 30 "$@" 2>&1)"
     __rc=$?
     printf -v "$__outvar" '%s' "$__out"
     printf -v "$__rcvar" '%s' "$__rc"
@@ -1160,6 +1166,43 @@ else
         "parent=$RB00B_PPID term_survived=$RB00B_TERM_SURVIVED child=$RB00B_CPID child_survived=$RB00B_CHILD_SURVIVED"
 fi
 kill -KILL "$RB00B_CPID" 2>/dev/null
+
+echo "== bounded delegation, no bounding binary on PATH (RB04) =="
+
+# RB04: one real shim delegation on a PATH with no timeout/gtimeout, against an
+# agy that ignores SIGTERM and has forked a SIGTERM-ignoring child. It must come
+# back 124 within its own bound and leave NEITHER process alive.
+#
+# Three of the four assertions carry the weight, not the exit code: the outer
+# safety net also returns 124, so a shim that bounded nothing at all would still
+# show rc=124 -- just 30 seconds later with both processes still running. The
+# elapsed check separates "our bound fired" from "the net fired", and the two
+# PID checks separate a process-group kill from a direct-child kill. The PIDs
+# are also required NON-EMPTY, so a run where the fake never started cannot
+# report both processes "gone".
+RB04_PPF="$SANDBOX/rb04-parent.pid"
+RB04_CPF="$SANDBOX/rb04-child.pid"
+rm -f "$RB04_PPF" "$RB04_CPF"
+_RB04_START=$(date +%s)
+FAKE_AGY_FORK_HANG=1 FAKE_AGY_PID_FILE="$RB04_PPF" FAKE_AGY_CHILD_PID_FILE="$RB04_CPF" \
+    GEMINI_SHIM_TIMEOUT=3 _run_sanitized OUT RC bash "$SHIM" -p "do a thing"
+_RB04_ELAPSED=$(( $(date +%s) - _RB04_START ))
+RB04_PPID="$(cat "$RB04_PPF" 2>/dev/null)" || RB04_PPID=""
+RB04_CPID="$(cat "$RB04_CPF" 2>/dev/null)" || RB04_CPID=""
+RB04_PARENT_GONE=1
+RB04_CHILD_GONE=1
+[[ "$RB04_PPID" =~ ^[0-9]+$ ]] && kill -0 "$RB04_PPID" 2>/dev/null && RB04_PARENT_GONE=0
+[[ "$RB04_CPID" =~ ^[0-9]+$ ]] && kill -0 "$RB04_CPID" 2>/dev/null && RB04_CHILD_GONE=0
+if [[ "$RC" -eq 124 && "$_RB04_ELAPSED" -lt 20 \
+      && "$RB04_PPID" =~ ^[0-9]+$ && "$RB04_CPID" =~ ^[0-9]+$ \
+      && "$RB04_PARENT_GONE" -eq 1 && "$RB04_CHILD_GONE" -eq 1 ]]; then
+    ok "RB04 no bounding binary: shim delegation returns 124 and reaps agy plus its fork"
+else
+    bad "RB04 no bounding binary: shim delegation returns 124 and reaps agy plus its fork" \
+        "rc=$RC elapsed=${_RB04_ELAPSED}s parent=$RB04_PPID parent_gone=$RB04_PARENT_GONE child=$RB04_CPID child_gone=$RB04_CHILD_GONE out=${OUT:0:200}"
+fi
+kill -KILL "$RB04_PPID" 2>/dev/null
+kill -KILL "$RB04_CPID" 2>/dev/null
 
 echo "== install.sh / uninstall.sh (vfn.11) =="
 
