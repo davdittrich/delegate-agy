@@ -17,6 +17,15 @@
 
 set -euo pipefail
 
+# Duplicate of this script's ORIGINAL stderr, before any call site redirects
+# fd 2 into a capture file. Bounding diagnostics go here and nowhere else: at
+# the delegation site below, fd 2 is captured and its contents are interpolated
+# into the caller-visible error string and the JSON envelope, so a diagnostic
+# written to plain stderr would corrupt a payload that must stay untouched.
+# Numeric form on purpose -- the fallback this serves exists for stock macOS,
+# whose shipped bash predates named descriptors.
+exec 9>&2
+
 if ! command -v agy &>/dev/null; then
     echo "ERROR: agy not found in PATH" >&2; exit 2
 fi
@@ -43,6 +52,155 @@ SHIM_TIMEOUT="${GEMINI_SHIM_TIMEOUT:-600}"
     echo "ERROR: GEMINI_SHIM_TIMEOUT must be a positive integer (got '$SHIM_TIMEOUT')" >&2
     exit 2
 }
+
+# --- BEGIN run_bounded ---
+# Bounded invocation, redirect-transparent: the command runs in the caller's own
+# stdio, so command substitution, direct file redirects, a cd-subshell and a
+# piped stdin all keep exactly the capture semantics they had before.
+#
+# Everything between these two markers is duplicated BYTE-FOR-BYTE into
+# scripts/agy_bridge.sh and depends on exactly two things from its host script:
+# $TIMEOUT_BIN (set by the probe above) and file descriptor 9 (the script's own
+# original stderr, opened at the top). Add no third dependency, and never edit
+# one copy alone -- the two blocks are pinned byte-identical by the suite.
+# Duplicated rather than sourced for the same reason the model-mapping code
+# below is: this script installs as ~/.local/bin/gemini and shadows the real
+# gemini for every caller on PATH, so a missing helper would break `gemini`
+# box-wide.
+#
+# The coreutils binary is preferred where it exists, because it isolates its
+# child in a new process group and signals the GROUP, reaping descendants. Where
+# it does not exist, bash's own job control does the same job with no external
+# binary at all -- which is what makes this work on a stock macOS that has
+# neither coreutils nor setsid. The escalation rationale is the one already
+# stated at the bound declarations above; it is not restated here.
+RB_WATCHDOG_KILLED_NOTE='NOTICE: bash watchdog fallback killed the bounded call after its bound (exit 124)'
+RUN_BOUNDED_KILLED=0
+
+# $1=pid -> prints a bare digit string, or nothing. NEVER fails its caller: an
+# unguarded lookup under `set -euo pipefail` aborts the whole calling script
+# rather than degrading, so this body swallows its own failures and the caller
+# checks for an empty result instead.
+_rb_pgid_of() {
+    local p="$1" v=""
+    if [[ -r "/proc/$p/stat" ]]; then
+        v=$(awk '{print $5}' "/proc/$p/stat" 2>/dev/null) || v=""
+    else
+        v=$(ps -o pgid= -p "$p" 2>/dev/null) || v=""
+    fi
+    # One normalisation point, deliberately at the single exit: `ps -o pgid='
+    # right-pads its one-row output and procfs field 5 does not. A padded value
+    # fails OPEN twice over -- the self-group comparison below stops matching,
+    # and the same value lands as a process-group kill operand whose embedded
+    # blank makes the target invalid, a rejection the kill's own
+    # failure-tolerant suffix swallows. The result would be a reported kill that
+    # never happened, on the one platform without procfs, which is exactly the
+    # platform this path exists for.
+    v="${v//[![:digit:]]/}"
+    if [[ -n "$v" ]]; then printf '%s' "$v"; fi
+    return 0
+}
+
+# $1=signal $2=direct pid $3=process group id, or EMPTY when the child's group
+# could not be confirmed distinct from our own. Never signals a group we may be
+# a member of; degrades to the direct pid instead.
+_rb_signal() {
+    if [[ -n "$3" ]]; then
+        kill -s "$1" -- "-$3" 2>/dev/null || true
+    else
+        kill -s "$1" "$2" 2>/dev/null || true
+    fi
+}
+
+# run_bounded <secs> <kill_after> -- cmd args...
+run_bounded() {
+    RUN_BOUNDED_KILLED=0
+    local secs="${1:-}" kill_after="${2:-}"
+    if [[ $# -ge 2 ]]; then shift 2; fi
+    if [[ "${1:-}" == "--" ]]; then shift; fi
+    # Bounds are operands of sleep, kill and the coreutils binary -- never
+    # eval'd, never expanded into a command string -- and are validated here as
+    # well as at their env-var source. That second check is not redundant: the
+    # coreutils binary documents a zero duration as "no timeout", so an
+    # unvalidated bound is a bound that silently disables bounding, which is the
+    # exact hang this helper exists to prevent.
+    if ! [[ "$secs" =~ ^[1-9][0-9]*$ ]] || ! [[ "$kill_after" =~ ^[1-9][0-9]*$ ]] \
+       || [[ $# -eq 0 ]]; then
+        echo "ERROR: run_bounded needs positive integer secs and kill_after, then -- and a command" >&9
+        return 2
+    fi
+
+    local rc=0
+    if [[ -n "$TIMEOUT_BIN" ]]; then
+        "$TIMEOUT_BIN" -k "$kill_after" "$secs" "$@" || rc=$?
+        if [[ "$rc" -eq 124 || "$rc" -eq 137 ]]; then RUN_BOUNDED_KILLED=1; fi
+        return "$rc"
+    fi
+
+    # ── bash watchdog fallback: no external binary at all ────────────────────
+    local self_pgid child child_pgid kill_pgid="" restore_m=0 timer
+    # $BASHPID, never $$: inside a command substitution $$ still reports the
+    # top-level shell, which would make the comparison below meaningless.
+    self_pgid=$(_rb_pgid_of "$BASHPID")
+
+    case "$-" in *m*) : ;; *) restore_m=1 ;; esac
+    # Job control makes the shell announce background jobs. Only the enclosing
+    # group's OWN stderr goes to the bit bucket; the command's stderr is
+    # explicitly restored from the caller's, so an immediate fatal startup error
+    # (permission denied, exec format error) is never swallowed. A blanket
+    # redirect around the backgrounding construct would be a worse failure than
+    # the noise it suppresses.
+    exec 8>&2
+    {
+        set -m
+        "$@" 2>&8 8>&- &
+        child=$!
+        if [[ "$restore_m" -eq 1 ]]; then set +m; fi
+    } 2>/dev/null
+    exec 8>&-
+
+    child_pgid=$(_rb_pgid_of "$child")
+    if [[ -n "$child_pgid" && "$child_pgid" != "$self_pgid" ]]; then
+        kill_pgid="$child_pgid"
+    else
+        echo "WARNING: run_bounded: child $child has no process group of its own; bounding it by pid only, descendants may survive" >&9
+    fi
+
+    # Relay a signal we receive ourselves to the same target the timer would
+    # use, matching the coreutils binary's own forwarding contract: without this
+    # a Ctrl-C leaves the child alive in a group detached from the terminal.
+    trap '_rb_signal TERM "$child" "$kill_pgid"; wait "$child" 2>/dev/null || true; exit 143' TERM
+    trap '_rb_signal INT "$child" "$kill_pgid"; wait "$child" 2>/dev/null || true; exit 130' INT
+
+    # The timer's stdio is detached on purpose. Cancelling it below kills the
+    # subshell but orphans its current `sleep`, and an orphan holding the
+    # caller's stdout open would block a caller that captured it for the rest of
+    # the bound -- a 600s hang in a script that shadows `gemini` box-wide.
+    ( sleep "$secs";       _rb_signal TERM "$child" "$kill_pgid"
+      sleep "$kill_after"; _rb_signal KILL "$child" "$kill_pgid"
+    ) </dev/null >/dev/null 2>&1 9>&- &
+    timer=$!
+
+    wait "$child" 2>/dev/null || rc=$?
+    kill "$timer" 2>/dev/null || true
+    wait "$timer" 2>/dev/null || true
+    trap - TERM INT
+
+    # Authoritative, never inferred from elapsed time: this branch is the one
+    # that fired, so it is the one that says so. Deriving the fact from
+    # elapsed-versus-bound would report an orchestrator-level cancellation that
+    # happens to land at the bound as our own timeout.
+    # ponytail: a child killed externally with SIGKILL is indistinguishable from
+    # our own escalation here, exactly as it is with the coreutils binary; the
+    # host script's duration-based discriminator is what separates the two.
+    if [[ "$rc" -eq 143 || "$rc" -eq 137 ]]; then
+        RUN_BOUNDED_KILLED=1
+        rc=124
+        echo "$RB_WATCHDOG_KILLED_NOTE" >&9
+    fi
+    return "$rc"
+}
+# --- END run_bounded ---
 
 # ── Model name mapping ────────────────────────────────────────────────────────
 # Maps gemini CLI model names/aliases → agy model ids, resolved against the LIVE
@@ -313,17 +471,10 @@ done
 START=$SECONDS
 EXIT_CODE=0
 set +e
-if [[ -n "$TIMEOUT_BIN" ]]; then
-    "$TIMEOUT_BIN" -k 5 "$SHIM_TIMEOUT" "$AGY_BIN" "${AGY_ARGS[@]}" \
-        > "$STDOUT_FILE" \
-        2> "$STDERR_FILE" \
-        < /dev/null
-else
-    "$AGY_BIN" "${AGY_ARGS[@]}" \
-        > "$STDOUT_FILE" \
-        2> "$STDERR_FILE" \
-        < /dev/null
-fi
+run_bounded "$SHIM_TIMEOUT" 5 -- "$AGY_BIN" "${AGY_ARGS[@]}" \
+    > "$STDOUT_FILE" \
+    2> "$STDERR_FILE" \
+    < /dev/null
 EXIT_CODE=$?
 set -e
 DURATION=$(( SECONDS - START ))
