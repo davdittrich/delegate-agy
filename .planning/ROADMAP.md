@@ -38,7 +38,15 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. With no `timeout`/`gtimeout` on PATH and an unresponsive fake agy, `gemini` and `agy-bridge` each do exactly what that decision says, proven by a test per entry point; neither leaves an agy process running with no bound unless the recorded decision says it should.
   3. A reader of README's environment-variable section finds both behaviors stated side by side, with the reason they do or do not differ.
   4. With a `timeout` binary present, no `agy` invocation anywhere in the scripts can outlive its bound against a SIGTERM-ignoring fake. This is enforced as an **invariant, not a count**: a test asserts that every `"$AGY_BIN"` occurrence in `scripts/agy_bridge.sh` and `scripts/gemini_shim.sh` is either wrapped in `"$TIMEOUT_BIN" -k …` or sits in a `TIMEOUT_BIN`-empty fallback branch that Criterion 1's recorded decision explicitly permits — so a call site added later fails the suite instead of slipping through unbounded.
-**Plans**: TBD
+**Plans**: 6 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Tracer: one bounded shim delegation that reaps agy and its child with no `timeout` binary present
+- [ ] 01-02-PLAN.md — Route the shim's remaining three sites through `run_bounded` and warn once per run at the probe
+- [ ] 01-03-PLAN.md — Duplicate the helper into the bridge, remove its startup fatal, bound its three sites
+- [ ] 01-04-PLAN.md — Record the decision: README, PROJECT.md Key Decisions, REQUIREMENTS.md R11, ticket resolution
+- [ ] 01-05-PLAN.md — Lock the invariant: static scan with zero exceptions, block identity, warning literal
+- [ ] 01-06-PLAN.md — Runtime proof per entry point, on both mechanisms, with and without a controlling terminal
 
 **Note**: the ticket names three candidate designs and states that the choice, not just the implementation, is open. This phase is not done when code changes; it is done when the choice is written down.
 
@@ -139,7 +147,7 @@ Phases 1, 1.5, 3, and 4 have no dependencies on each other and may be planned or
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. The missing-`timeout` decision | 0/TBD | Not started | - |
+| 1. The missing-`timeout` decision | 0/6 | Not started | - |
 | 1.5. Contract check against a real agy | 0/TBD | Not started | - |
 | 2. Model-list handling, end to end | 0/TBD | Not started | - |
 | 3. The exit-code contract | 0/TBD | Not started | - |
