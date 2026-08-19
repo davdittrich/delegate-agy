@@ -301,6 +301,14 @@ run_bounded() {
     trap '_rb_signal TERM; wait "$child" 2>/dev/null; exit 143' TERM
     trap '_rb_signal INT;  wait "$child" 2>/dev/null; exit 130' INT
 
+    # SUPERSEDED (delegate-agy-s4x) -- do NOT copy this line. It leaks a
+    # caller-blocking process: `kill "$timer"` below reaps the subshell but
+    # orphans its currently-running `sleep`, which inherited the caller's
+    # stdout, so `out=$(gemini ...)` blocks for the remainder of the bound
+    # (~595s on the shim's 600s default) even when the call returned in 5s.
+    # The shipped form detaches the timer's stdio; copy that one instead:
+    #   scripts/gemini_shim.sh, `# --- BEGIN run_bounded ---` block
+    #   ) </dev/null >/dev/null 2>&1 9>&- &
     ( sleep "$secs"; _rb_signal TERM; sleep "$kill_after"; _rb_signal KILL ) &
     local timer=$!
 

@@ -19,7 +19,7 @@
     "quick_branch_template": null
   },
   "workflow": {
-    "use_worktrees": true,
+    "use_worktrees": false,
     "research": true,
     "plan_check": true,
     "verifier": true,
