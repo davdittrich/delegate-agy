@@ -1169,17 +1169,78 @@ kill -KILL "$RB00B_CPID" 2>/dev/null
 
 echo "== bounded delegation, no bounding binary on PATH (RB04) =="
 
+# The self-kill guard's warning, as it reaches an operator: run_bounded writes it
+# to fd 9 (each script's own original stderr). Its presence is how a case tells
+# "job control isolated the child" from "it could not", which decides which
+# contract the run below is held to.
+_RB_GUARD_MSG='has no process group of its own'
+
+# _rb_assert_reaped LABEL RC ELAPSED PARENT_PID_FILE CHILD_PID_FILE [STDERR_TEXT]
+#
+# The ONE contract every runtime descendant case is held to -- RB04 below, RB05
+# and RB13, and both halves of RB06. Written once and parameterised by entry
+# point and PATH rather than copied per case, because the whole point of treating
+# the BOUNDED INVOCATION as the primary noun is that the coreutils mechanism and
+# the bash watchdog owe the caller the SAME contract. Two similar-looking sets of
+# assertions would let them drift apart silently; if the two mechanisms ever
+# genuinely needed different assertions, that promotion would be a fiction and
+# this helper is where it would show.
+#
+# The weight is carried by the two PID checks, not by the exit code: an entry
+# point that bounded nothing at all still shows rc=124 once the outer safety net
+# fires -- just 30 seconds later with both processes still running. The elapsed
+# cap is what separates "our bound fired" from "the net fired", and it is derived
+# rather than tuned: every caller below passes a 3s bound with a 5s kill_after,
+# so a working escalation is finished inside ~8s, well under the 20s cap RB04 and
+# RB22 already use against a 30s net. The PIDs are required NON-EMPTY so a run
+# where the fake never started cannot report both processes "gone".
+#
+# $6 is the entry point's own stderr, or the merged capture containing it. Where
+# it carries the self-kill guard's warning, job control could NOT give the child
+# a group of its own, and D-14a/D-06a's documented degradation is what gets
+# asserted instead: the direct process still killed, the descendant kill not
+# claimed. That outcome is a named, reported branch -- the label says so out loud
+# -- never an untested branch and never a silent pass.
+_rb_assert_reaped() {
+    local label="$1" rc="$2" el="$3" ppf="$4" cpf="$5" errtext="${6:-}"
+    local ppid cpid pgone=1 cgone=1 degraded=0 why="" note=""
+    ppid="$(cat "$ppf" 2>/dev/null)" || ppid=""
+    cpid="$(cat "$cpf" 2>/dev/null)" || cpid=""
+    [[ "$ppid" =~ ^[0-9]+$ ]] && kill -0 "$ppid" 2>/dev/null && pgone=0
+    [[ "$cpid" =~ ^[0-9]+$ ]] && kill -0 "$cpid" 2>/dev/null && cgone=0
+    [[ "$errtext" == *"$_RB_GUARD_MSG"* ]] && degraded=1
+
+    [[ "$rc" -eq 124 ]] || why="$why rc=$rc(want_124)"
+    [[ "$el" -lt 20 ]] || why="$why elapsed=${el}s(want_lt_20)"
+    [[ "$ppid" =~ ^[0-9]+$ && "$cpid" =~ ^[0-9]+$ ]] \
+        || why="$why fake_never_started(parent='$ppid' child='$cpid')"
+    [[ "$pgone" -eq 1 ]] || why="$why direct_process_survived($ppid)"
+    if [[ "$degraded" -eq 1 ]]; then
+        note=" [D-14a degradation: guard warned, so only the direct kill is claimed]"
+    else
+        [[ "$cgone" -eq 1 ]] || why="$why descendant_survived($cpid)"
+    fi
+
+    if [[ -z "$why" ]]; then
+        ok "$label$note"
+    else
+        bad "$label$note" "detail=$why"
+    fi
+    # Unconditional, tolerating absence: a red run must not leave 300s sleepers
+    # behind on the developer's box.
+    [[ "$ppid" =~ ^[0-9]+$ ]] && kill -KILL "$ppid" 2>/dev/null
+    [[ "$cpid" =~ ^[0-9]+$ ]] && kill -KILL "$cpid" 2>/dev/null
+    return 0
+}
+
 # RB04: one real shim delegation on a PATH with no timeout/gtimeout, against an
 # agy that ignores SIGTERM and has forked a SIGTERM-ignoring child. It must come
 # back 124 within its own bound and leave NEITHER process alive.
 #
-# Three of the four assertions carry the weight, not the exit code: the outer
-# safety net also returns 124, so a shim that bounded nothing at all would still
-# show rc=124 -- just 30 seconds later with both processes still running. The
-# elapsed check separates "our bound fired" from "the net fired", and the two
-# PID checks separate a process-group kill from a direct-child kill. The PIDs
-# are also required NON-EMPTY, so a run where the fake never started cannot
-# report both processes "gone".
+# Held to the shared contract above, not to a private copy of it: the exit code
+# alone proves nothing (the outer net also returns 124), the elapsed cap
+# separates "our bound fired" from "the net fired", and the two PID checks
+# separate a process-group kill from a direct-child kill.
 RB04_PPF="$SANDBOX/rb04-parent.pid"
 RB04_CPF="$SANDBOX/rb04-child.pid"
 rm -f "$RB04_PPF" "$RB04_CPF"
@@ -1187,22 +1248,9 @@ _RB04_START=$(date +%s)
 FAKE_AGY_FORK_HANG=1 FAKE_AGY_PID_FILE="$RB04_PPF" FAKE_AGY_CHILD_PID_FILE="$RB04_CPF" \
     GEMINI_SHIM_TIMEOUT=3 _run_sanitized OUT RC bash "$SHIM" -p "do a thing"
 _RB04_ELAPSED=$(( $(date +%s) - _RB04_START ))
-RB04_PPID="$(cat "$RB04_PPF" 2>/dev/null)" || RB04_PPID=""
-RB04_CPID="$(cat "$RB04_CPF" 2>/dev/null)" || RB04_CPID=""
-RB04_PARENT_GONE=1
-RB04_CHILD_GONE=1
-[[ "$RB04_PPID" =~ ^[0-9]+$ ]] && kill -0 "$RB04_PPID" 2>/dev/null && RB04_PARENT_GONE=0
-[[ "$RB04_CPID" =~ ^[0-9]+$ ]] && kill -0 "$RB04_CPID" 2>/dev/null && RB04_CHILD_GONE=0
-if [[ "$RC" -eq 124 && "$_RB04_ELAPSED" -lt 20 \
-      && "$RB04_PPID" =~ ^[0-9]+$ && "$RB04_CPID" =~ ^[0-9]+$ \
-      && "$RB04_PARENT_GONE" -eq 1 && "$RB04_CHILD_GONE" -eq 1 ]]; then
-    ok "RB04 no bounding binary: shim delegation returns 124 and reaps agy plus its fork"
-else
-    bad "RB04 no bounding binary: shim delegation returns 124 and reaps agy plus its fork" \
-        "rc=$RC elapsed=${_RB04_ELAPSED}s parent=$RB04_PPID parent_gone=$RB04_PARENT_GONE child=$RB04_CPID child_gone=$RB04_CHILD_GONE out=${OUT:0:200}"
-fi
-kill -KILL "$RB04_PPID" 2>/dev/null
-kill -KILL "$RB04_CPID" 2>/dev/null
+_rb_assert_reaped \
+    "RB04 no bounding binary: shim delegation returns 124 and reaps agy plus its fork" \
+    "$RC" "$_RB04_ELAPSED" "$RB04_PPF" "$RB04_CPF" "$OUT"
 
 echo "== watchdog timer leaves nothing behind (RB20) =="
 
@@ -1320,7 +1368,6 @@ echo "== self-kill guard warns only about a LIVE child (RB21) =="
 # host dependencies are $TIMEOUT_BIN and fd 9.
 _RB_BLOCK="$SANDBOX/run_bounded.block.sh"
 sed -n '/# --- BEGIN run_bounded ---/,/# --- END run_bounded ---/p' "$SHIM" > "$_RB_BLOCK"
-_RB_GUARD_MSG='has no process group of its own'
 
 # RB21a: a fast SUCCESSFUL bounded call must say nothing on fd 9. Ten instant
 # children, because one could pass by luck; the warning was measured firing 10/10
@@ -1714,6 +1761,100 @@ else
     bad "RB08 each entry point warns exactly once per coreutils-less run, ahead of any bounded output, and never with coreutils" \
         "detail=$RB08_DETAIL"
 fi
+
+echo "== one contract, two entry points, two mechanisms (RB05, RB07, RB13) =="
+
+# RB05: the BRIDGE half of phase criterion 2. RB04 proved the shim on a host with
+# no bounding binary; the criterion asks for a test per ENTRY POINT, so this is
+# the same adversarial fake and the same shared assertions pointed at the other
+# script.
+#
+# RUN_BOUNDED_KILLED is deliberately NOT read here. The bridge's delegation runs
+# inside a `( cd "$WORK_DIR" && run_bounded ... )` subshell, so the flag never
+# reaches this scope; a case that asserted it at this site would be reading a
+# stale value and passing for the wrong reason. What crosses that boundary is the
+# exit code and the two recorded PIDs, and those are what is asserted.
+# Captured into a FILE rather than through `_run_sanitized`'s command
+# substitution, and this is not style. Each entry point opens fd 9 on its own
+# original stderr, and every child inherits it -- including the fake and the fake's
+# fork. Under a command substitution that descriptor IS the capture pipe, so a run
+# where the descendant assertion would FAIL leaves an orphan holding the pipe and
+# the read blocks for the fake's full 300s sleep instead of failing. Measured: a
+# mutated shim turned a ~10s red case into a ~5min one. A file cannot be held
+# open against us, so a broken implementation fails in ~35s, bounded by the net.
+RB05_PPF="$SANDBOX/rb05-parent.pid"
+RB05_CPF="$SANDBOX/rb05-child.pid"
+RB05_CAP="$SANDBOX/rb05-capture.log"
+rm -f "$RB05_PPF" "$RB05_CPF"
+_RB05_BIN="$(_purebin)"
+_RB05_START=$(date +%s)
+PATH="$_RB05_BIN" FAKE_AGY_FORK_HANG=1 FAKE_AGY_PID_FILE="$RB05_PPF" \
+    FAKE_AGY_CHILD_PID_FILE="$RB05_CPF" \
+    "$_TIMEOUT_NET" --foreground -k 5 30 \
+    bash "$BRIDGE" --type code --timeout 3 -- "do a thing" > "$RB05_CAP" 2>&1
+RB05_RC=$?
+_RB05_ELAPSED=$(( $(date +%s) - _RB05_START ))
+_rb_assert_reaped \
+    "RB05 no bounding binary: bridge delegation returns 124 and reaps agy plus its fork" \
+    "$RB05_RC" "$_RB05_ELAPSED" "$RB05_PPF" "$RB05_CPF" "$(cat "$RB05_CAP")"
+
+# RB07: with no bounding binary on PATH the bridge must reach its OWN argument
+# handling instead of exiting 2 at startup -- the behaviour this phase reversed
+# (D-03). Before the phase it printed a fatal and exited 2 before parsing a
+# single flag.
+#
+# Two assertions, and the second is what makes the first mean anything: a non-2
+# exit would also be produced by a bridge that never ran the probe at all, so the
+# warning literal on stderr is what pins that the probe DID run and chose to
+# degrade. `--types` is the cheapest deterministic path that produces the
+# bridge's own output without going anywhere near agy.
+_run_sanitized RB07_OUT RB07_RC bash "$BRIDGE" --types
+if [[ "$RB07_RC" -eq 0 && "$RB07_OUT" == *"$_RB_WARN_LITERAL"* \
+      && "$RB07_OUT" == *"search"* && "$RB07_OUT" == *"300s"* ]]; then
+    ok "RB07 no bounding binary: the bridge degrades past its startup probe instead of exiting 2"
+else
+    bad "RB07 no bounding binary: the bridge degrades past its startup probe instead of exiting 2" \
+        "rc=$RB07_RC out=${RB07_OUT:0:300}"
+fi
+
+# RB13: criterion 4's runtime half -- with a bounding binary PRESENT, no agy
+# invocation on either entry point outlives its bound against a SIGTERM-ignoring
+# fake that has forked. Same fake, same shared assertions, ordinary suite PATH.
+# Proven rather than assumed: the coreutils mechanism has never been driven
+# against the forking fake before this case.
+#
+# The outer net is added explicitly because `_run` carries none, and it uses the
+# same `--foreground` form `_run_sanitized` does. That form is load-bearing: the
+# default mode places its child in a new process group and signals the GROUP,
+# which would reap the fake and its fork as a side effect and turn a genuinely
+# failing descendant assertion into a vacuous pass.
+#
+# Measured on this host: the SCRIPT's own `timeout -k` returns 137 here, not 124,
+# because the SIGKILL it sends to its own process group reaches itself. run_bounded
+# flags 124 and 137 alike as its own kill and both entry points map both to 124,
+# which is the unified code the caller is owed. So this asserts 124 at the ENTRY
+# POINT and makes no claim about which of the two the mechanism returned -- the
+# contract is the caller's, not the mechanism's.
+for _rb13_entry in bridge shim; do
+    RB13_PPF="$SANDBOX/rb13-$_rb13_entry-parent.pid"
+    RB13_CPF="$SANDBOX/rb13-$_rb13_entry-child.pid"
+    rm -f "$RB13_PPF" "$RB13_CPF"
+    if [[ "$_rb13_entry" == "bridge" ]]; then
+        _rb13_cmd=(bash "$BRIDGE" --type code --timeout 3 -- "do a thing")
+    else
+        _rb13_cmd=(bash "$SHIM" -p "do a thing")
+    fi
+    RB13_CAP="$SANDBOX/rb13-$_rb13_entry-capture.log"
+    _RB13_START=$(date +%s)
+    FAKE_AGY_FORK_HANG=1 FAKE_AGY_PID_FILE="$RB13_PPF" FAKE_AGY_CHILD_PID_FILE="$RB13_CPF" \
+        GEMINI_SHIM_TIMEOUT=3 \
+        "$_TIMEOUT_NET" --foreground -k 5 30 "${_rb13_cmd[@]}" > "$RB13_CAP" 2>&1
+    RB13_RC=$?
+    _RB13_ELAPSED=$(( $(date +%s) - _RB13_START ))
+    _rb_assert_reaped \
+        "RB13 bounding binary present: $_rb13_entry delegation returns 124 and reaps agy plus its fork" \
+        "$RB13_RC" "$_RB13_ELAPSED" "$RB13_PPF" "$RB13_CPF" "$(cat "$RB13_CAP")"
+done
 
 echo "== install.sh / uninstall.sh (vfn.11) =="
 
