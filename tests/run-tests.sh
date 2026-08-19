@@ -1425,7 +1425,13 @@ else
     bad "RB22 a relayed SIGTERM escalates to SIGKILL and returns 143 instead of waiting out the child" \
         "exited=$RB22_EXITED rc=$RB22_RC elapsed=${_RB22_ELAPSED}s parent=$RB22_PPID parent_gone=$RB22_PARENT_GONE child=$RB22_CPID child_gone=$RB22_CHILD_GONE sleepers=$_RB22_SLEEPERS"
 fi
-kill -KILL "$RB22_SHIM" 2>/dev/null
+# Only on the failure path, and disowned first: killing a job still in the table
+# makes bash print a "Killed" notice on the suite's own stdout, which is noise
+# rather than a result. On the passing path `wait` above has already reaped it.
+if [[ "$RB22_EXITED" -eq 0 ]]; then
+    disown "$RB22_SHIM" 2>/dev/null || true
+    kill -KILL "$RB22_SHIM" 2>/dev/null
+fi
 kill -KILL "$RB22_PPID" 2>/dev/null
 kill -KILL "$RB22_CPID" 2>/dev/null
 _rb_reap_sentinels

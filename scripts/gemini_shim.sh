@@ -134,6 +134,71 @@ _rb_cancel_timer() {
     wait "$1" 2>/dev/null || true
 }
 
+# Starts the two-stage escalation ladder in the background.
+#   $1 = delay before the first signal: the bound for a timeout, 0 for a relay,
+#        whose signal has already arrived and is only being forwarded
+#   $2 = that first signal: a timeout sends TERM, a relay forwards what it got
+# Two stages because the child may ignore the first one -- agy is observed to,
+# which is the whole reason every bounded site passes a positive kill_after -- so
+# the second stage escalates to SIGKILL after $kill_after in both cases. That is
+# the coreutils binary's behaviour for its own bound AND for a signal forwarded to
+# it, and this path claims parity with it.
+#
+# Reads $kill_after, $child, $kill_pgid and $self_pgid from run_bounded's frame and
+# publishes $timer and $timer_pgid back into it -- the same dynamic scope the trap
+# strings below already resolve their $child and $kill_pgid through. Deliberate:
+# returning two values any other way costs a subshell, which is precisely the job
+# that must survive.
+#
+# The ladder's stdio is detached on purpose: an orphaned `sleep` holding the
+# caller's stdout open would block a caller that captured it for the rest of the
+# bound -- a 600s hang in a script that shadows `gemini` box-wide.
+#
+# Backgrounded under `set -m` for exactly the reason the bounded child is, and
+# against the same failure: job control makes the subshell a process-group leader,
+# so the `sleep` it forks inherits that group and _rb_cancel_timer reaps BOTH.
+# Without it the subshell shares this script's group, the cancel reaches the
+# subshell alone, and every bounded call leaks one `sleep <bound>` to init for the
+# full length of its bound.
+_rb_start_timer() {
+    local restore=0
+    case "$-" in *m*) : ;; *) restore=1 ;; esac
+    {
+        set -m
+        ( sleep "$1";          _rb_signal "$2"  "$child" "$kill_pgid"
+          sleep "$kill_after"; _rb_signal KILL "$child" "$kill_pgid"
+        ) </dev/null >/dev/null 2>&1 9>&- &
+        timer=$!
+        if [[ "$restore" -eq 1 ]]; then set +m; fi
+    } 2>/dev/null
+    # The bounded child's self-kill guard, applied to the ladder for the same
+    # reason: an unconfirmed or shared group must never become a `kill -- -<pgid>`
+    # operand. Empty degrades _rb_cancel_timer to a direct-pid kill, which still
+    # cancels the subshell -- it just cannot reap the sleep.
+    timer_pgid=$(_rb_pgid_of "$timer")
+    if [[ "$timer_pgid" == "$self_pgid" ]]; then timer_pgid=""; fi
+}
+
+# $1=the signal we received and are forwarding $2=the status to leave with.
+# A relay is a bound teardown on a shorter fuse, not a different mechanism: the
+# running ladder is replaced by one whose first stage fires immediately, so the
+# child is forwarded the signal and then SIGKILLed after the same $kill_after it
+# would have been given at the bound. Forwarding without escalating would park
+# this `wait` for as long as the child chooses to live, which for a SIGTERM-
+# ignoring agy is unbounded -- the same hang this helper exists to prevent,
+# reached by the cancellation path instead of the timeout path.
+#
+# The status is the relay's own, 143 or 130. A caller-interrupted call is NOT a
+# call the bound killed, so it is never relabelled 124 and RUN_BOUNDED_KILLED
+# stays untouched -- that flag is set only by the branch that fired the bound.
+_rb_relay() {
+    _rb_cancel_timer "$timer" "$timer_pgid"
+    _rb_start_timer 0 "$1"
+    wait "$child" 2>/dev/null || true
+    _rb_cancel_timer "$timer" "$timer_pgid"
+    exit "$2"
+}
+
 # run_bounded <secs> <kill_after> -- cmd args...
 run_bounded() {
     RUN_BOUNDED_KILLED=0
@@ -197,43 +262,18 @@ run_bounded() {
         echo "WARNING: run_bounded: child $child has no process group of its own; bounding it by pid only, descendants may survive" >&9
     fi
 
-    # Relay a signal we receive ourselves to the same target the timer would
-    # use, matching the coreutils binary's own forwarding contract: without this
-    # a Ctrl-C leaves the child alive in a group detached from the terminal. The
-    # timer is cancelled FIRST so it cannot fire its own TERM/KILL at the child
-    # midway through this teardown. $timer is still empty while these traps are
-    # installed, which _rb_cancel_timer reads as "nothing to cancel"; installing
-    # them before the timer starts is deliberate, because the reverse order would
-    # leave a window where a signal kills the shell outright and leaks the whole
-    # timer instead of just the narrow fork-to-assignment gap below.
-    trap '_rb_cancel_timer "$timer" "$timer_pgid"; _rb_signal TERM "$child" "$kill_pgid"; wait "$child" 2>/dev/null || true; exit 143' TERM
-    trap '_rb_cancel_timer "$timer" "$timer_pgid"; _rb_signal INT "$child" "$kill_pgid"; wait "$child" 2>/dev/null || true; exit 130' INT
+    # Relay a signal we receive ourselves to the same target the timer would use,
+    # matching the coreutils binary's own forwarding contract: without this a
+    # Ctrl-C leaves the child alive in a group detached from the terminal. $timer
+    # is still empty while these traps are installed, which _rb_relay's own cancel
+    # reads as "nothing to cancel"; installing them before the timer starts is
+    # deliberate, because the reverse order would leave a window where a signal
+    # kills the shell outright and leaks the whole timer instead of just the narrow
+    # fork-to-assignment gap inside _rb_start_timer.
+    trap '_rb_relay TERM 143' TERM
+    trap '_rb_relay INT 130' INT
 
-    # The timer's stdio is detached on purpose: an orphaned `sleep` holding the
-    # caller's stdout open would block a caller that captured it for the rest of
-    # the bound -- a 600s hang in a script that shadows `gemini` box-wide.
-    #
-    # Backgrounded under `set -m` for exactly the reason the child above is, and
-    # against the same failure: job control makes the subshell a process-group
-    # leader, so the `sleep` it forks inherits that group and cancelling the timer
-    # reaps BOTH. Without it the subshell shares this script's group, the cancel
-    # reaches the subshell alone, and every bounded call leaks one `sleep <bound>`
-    # to init for the full length of its bound.
-    {
-        set -m
-        ( sleep "$secs";       _rb_signal TERM "$child" "$kill_pgid"
-          sleep "$kill_after"; _rb_signal KILL "$child" "$kill_pgid"
-        ) </dev/null >/dev/null 2>&1 9>&- &
-        timer=$!
-        if [[ "$restore_m" -eq 1 ]]; then set +m; fi
-    } 2>/dev/null
-    # The child's self-kill guard, applied to the timer for the same reason: an
-    # unconfirmed or shared group must never become a `kill -- -<pgid>` operand.
-    # Empty degrades _rb_cancel_timer to the direct-pid kill this line replaced,
-    # which still cancels the subshell -- it just cannot reap the sleep.
-    timer_pgid=$(_rb_pgid_of "$timer")
-    if [[ "$timer_pgid" == "$self_pgid" ]]; then timer_pgid=""; fi
-
+    _rb_start_timer "$secs" TERM
     wait "$child" 2>/dev/null || rc=$?
     _rb_cancel_timer "$timer" "$timer_pgid"
     trap - TERM INT
