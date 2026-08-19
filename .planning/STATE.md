@@ -4,9 +4,9 @@ milestone: v1.6.2
 milestone_name: milestone
 current_phase: 01
 current_phase_name: the-missing-timeout-decision
-status: verifying
+status: completed
 stopped_at: Completed 01-06-PLAN.md
-last_updated: "2026-08-19T14:44:38.922Z"
+last_updated: "2026-08-19T16:10:20.324Z"
 last_activity: 2026-08-19
 last_activity_desc: Roadmap created from REQUIREMENTS.md; 9 requirements mapped across 7 phases, all 7 open bd tickets absorbed
 progress:
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 
 Phase: 01 (the-missing-timeout-decision) — EXECUTING
 Plan: 6 of 6
-Status: Phase complete — ready for verification
+Status: phase-1-complete
 Last activity: 2026-08-19 — Phase 01 execution started
 
 Progress: [██████████] 100%

@@ -19,7 +19,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 **`Depends on` lines are machine-read.** The dependency extractor scrapes every number on the line and ignores the leading word, so `Nothing (independent of Phases 1–2)` resolves as a dependency on 1 and 2. Write the line as either `Nothing` or a bare phase list and put every parenthetical, rationale, or criterion reference in a `**Note**:` beneath the phase (`delegate-agy-1i9`).
 
-- [ ] **Phase 1: The missing-`timeout` decision** - Settle whether the shim degrades or refuses when no `timeout` binary exists, then say so in both scripts
+- [x] **Phase 1: The missing-`timeout` decision** - Settle whether the shim degrades or refuses when no `timeout` binary exists, then say so in both scripts
 - [ ] **Phase 1.5: Contract check against a real agy** (INSERTED 2026-08-19, was Phase 7) - Ask the real binary which assumptions hold and record the answers as fixtures the later phases build on
 - [ ] **Phase 2: Model-list handling, end to end** - No crash on a bare environment, no poisoned shared cache, no misattributed blame for a degraded agy
 - [ ] **Phase 3: The exit-code contract** - Every documented code reachable, distinct, and quoted in the docs as the code actually prints it
