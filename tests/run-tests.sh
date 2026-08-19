@@ -1175,6 +1175,16 @@ echo "== bounded delegation, no bounding binary on PATH (RB04) =="
 # contract the run below is held to.
 _RB_GUARD_MSG='has no process group of its own'
 
+# _rb_extract FILE -> the marker-delimited run_bounded block on stdout. The one
+# extraction in this suite: RB02 compares the two copies with it, RB21 and the
+# unit cases below source what it produces. Defined here, ahead of its first use,
+# so there is a single expression to keep right -- a second copy of this sed is
+# exactly the drift RB02 exists to catch, one level up. Anchored at both ends so
+# an indented or embedded lookalike line cannot open or close the range.
+_rb_extract() {
+    sed -n '/^# --- BEGIN run_bounded ---$/,/^# --- END run_bounded ---$/p' "$1"
+}
+
 # _rb_assert_reaped LABEL RC ELAPSED PARENT_PID_FILE CHILD_PID_FILE [STDERR_TEXT]
 #
 # The ONE contract every runtime descendant case is held to -- RB04 below, RB05
@@ -1367,7 +1377,7 @@ echo "== self-kill guard warns only about a LIVE child (RB21) =="
 # 01-03 copies with also keeps the region's self-containment honest -- its only
 # host dependencies are $TIMEOUT_BIN and fd 9.
 _RB_BLOCK="$SANDBOX/run_bounded.block.sh"
-sed -n '/# --- BEGIN run_bounded ---/,/# --- END run_bounded ---/p' "$SHIM" > "$_RB_BLOCK"
+_rb_extract "$SHIM" > "$_RB_BLOCK"
 
 # RB21a: a fast SUCCESSFUL bounded call must say nothing on fd 9. Ten instant
 # children, because one could pass by luck; the warning was measured firing 10/10
@@ -1600,10 +1610,7 @@ echo "== the helper is one artifact in two files (RB02) =="
 # inside that helper AFTER it was first written; the hazard this case guards is
 # the fourth being fixed in one copy and not the other, which nothing else in
 # the suite would notice. Same one-sided-fix hazard delegate-agy-8ph names for
-# the two model-cache writers.
-_rb_extract() {
-    sed -n '/^# --- BEGIN run_bounded ---$/,/^# --- END run_bounded ---$/p' "$1"
-}
+# the two model-cache writers. (_rb_extract itself is defined once, up at RB04.)
 
 RB02_B="$(_rb_extract "$BRIDGE")"
 RB02_S="$(_rb_extract "$SHIM")"
@@ -2093,6 +2100,244 @@ if [[ "$RB09B_OK" -eq 1 ]]; then
 else
     bad "RB09b at the delegation site's redirect shape, the bounded call's own stdout and stderr stay free of helper diagnostics while fd 9 carries the marker" \
         "detail=$RB09B_DETAIL"
+fi
+
+echo "== the helper's own contract at its edges (RB10-RB14, unit) =="
+
+# These four exercise run_bounded DIRECTLY rather than through an entry point,
+# because the contracts they pin are not reachable from a call site: every call
+# site passes bounds the script has already validated, so the refusal branch
+# would ship untested, and the early-versus-late boundary would need a real agy
+# timed to the second. Extraction costs nothing -- the D-08 duplication markers
+# already delimit the block, and _rb_extract already reads them for RB02.
+#
+# The block is taken from the shim; RB02 pins the two copies byte-identical, so
+# what is asserted here holds for the bridge's copy too.
+#
+# Each driver sets up the two -- and only the two -- things the block declares it
+# needs from a host script: $TIMEOUT_BIN and fd 9. And each runs under the same
+# `set -euo pipefail` the shipped scripts use, not this harness's laxer `set -u`:
+# the helper's guarded-lookup behaviour only matters under the stricter setting,
+# so a relaxed driver would be testing a shape that never ships.
+#
+# Every driver's stdout goes to a FILE rather than through a command
+# substitution, for the reason RB05 documents: a surviving fake inherits fd 9 and
+# would hold a capture pipe open for its full 300s sleep on exactly the runs that
+# ought to fail fast.
+
+# RB10a -- the EARLY side of the boundary. A child that exits on its own well
+# inside `secs` hands its own code straight back: no relabelling, no flag, no
+# marker. 1s against a 5s bound is a 5x margin, and bounds are integer seconds,
+# so this is the coarsest-grained "comfortably inside" the contract can express.
+RB10A_FD9="$SANDBOX/rb10a-fd9.log"
+RB10A_OUT="$SANDBOX/rb10a-out.log"
+: > "$RB10A_FD9"; : > "$RB10A_OUT"
+bash -c '
+    set -euo pipefail
+    exec 9>"$2"
+    TIMEOUT_BIN=""
+    . "$1"
+    rc=0
+    run_bounded 5 2 -- bash -c "sleep 1; exit 42" || rc=$?
+    printf "%s %s\n" "$rc" "$RUN_BOUNDED_KILLED"
+' _ "$_RB_BLOCK" "$RB10A_FD9" > "$RB10A_OUT" 2>&1; RB10A_RC=$?
+RB10A_SEEN="$(cat "$RB10A_OUT" 2>/dev/null)"
+if [[ "$RB10A_RC" -eq 0 && "$RB10A_SEEN" == "42 0" ]] \
+   && ! grep -qF "$_RB_NOTE_LITERAL" "$RB10A_FD9"; then
+    ok "RB10a (unit) a child that exits inside its bound returns its own code untouched, flag clear, no marker"
+else
+    bad "RB10a (unit) a child that exits inside its bound returns its own code untouched, flag clear, no marker" \
+        "driver_rc=$RB10A_RC saw='$RB10A_SEEN'(want '42 0') fd9=$(head -c 200 "$RB10A_FD9")"
+fi
+
+# RB10b -- the LATE side. A child still alive at secs + kill_after is gone, and
+# so is anything it forked. Reuses the forking fake rather than growing a second
+# adversarial stub: it already ignores SIGTERM and SIGHUP, records both PIDs
+# before either process blocks, and sleeps far past any bound here.
+RB10B_FD9="$SANDBOX/rb10b-fd9.log"
+RB10B_OUT="$SANDBOX/rb10b-out.log"
+RB10B_PPF="$SANDBOX/rb10b-parent.pid"
+RB10B_CPF="$SANDBOX/rb10b-child.pid"
+: > "$RB10B_FD9"; : > "$RB10B_OUT"; rm -f "$RB10B_PPF" "$RB10B_CPF"
+FAKE_AGY_FORK_HANG=1 FAKE_AGY_PID_FILE="$RB10B_PPF" FAKE_AGY_CHILD_PID_FILE="$RB10B_CPF" \
+    "$_TIMEOUT_NET" --foreground -k 5 30 bash -c '
+    set -euo pipefail
+    exec 9>"$2"
+    TIMEOUT_BIN=""
+    . "$1"
+    rc=0
+    run_bounded 3 2 -- bash "$3" --print x || rc=$?
+    printf "%s %s\n" "$rc" "$RUN_BOUNDED_KILLED"
+' _ "$_RB_BLOCK" "$RB10B_FD9" "$HERE/fake-agy.sh" > "$RB10B_OUT" 2>&1
+RB10B_SEEN="$(cat "$RB10B_OUT" 2>/dev/null)"
+RB10B_PPID="$(cat "$RB10B_PPF" 2>/dev/null)" || RB10B_PPID=""
+RB10B_CPID="$(cat "$RB10B_CPF" 2>/dev/null)" || RB10B_CPID=""
+RB10B_PGONE=1; RB10B_CGONE=1
+[[ "$RB10B_PPID" =~ ^[0-9]+$ ]] && kill -0 "$RB10B_PPID" 2>/dev/null && RB10B_PGONE=0
+[[ "$RB10B_CPID" =~ ^[0-9]+$ ]] && kill -0 "$RB10B_CPID" 2>/dev/null && RB10B_CGONE=0
+if [[ "$RB10B_SEEN" == "124 1" \
+      && "$RB10B_PPID" =~ ^[0-9]+$ && "$RB10B_CPID" =~ ^[0-9]+$ \
+      && "$RB10B_PGONE" -eq 1 && "$RB10B_CGONE" -eq 1 ]] \
+   && grep -qF "$_RB_NOTE_LITERAL" "$RB10B_FD9"; then
+    ok "RB10b (unit) a child alive past secs + kill_after is gone, and so is its fork; returns 124 with the flag set"
+else
+    bad "RB10b (unit) a child alive past secs + kill_after is gone, and so is its fork; returns 124 with the flag set" \
+        "saw='$RB10B_SEEN'(want '124 1') parent=$RB10B_PPID gone=$RB10B_PGONE child=$RB10B_CPID gone=$RB10B_CGONE fd9=$(head -c 200 "$RB10B_FD9")"
+fi
+[[ "$RB10B_PPID" =~ ^[0-9]+$ ]] && kill -KILL "$RB10B_PPID" 2>/dev/null
+[[ "$RB10B_CPID" =~ ^[0-9]+$ ]] && kill -KILL "$RB10B_CPID" 2>/dev/null
+
+# RB12 -- adjacency. A child whose own exit is timed to land AT the bound, run a
+# few times so the race is actually exercised. What is asserted is the
+# BICONDITIONAL D-02 states -- the return is 124 exactly when the flag is set,
+# and the child's own code exactly when it is not -- never which side won. The
+# race is real and asserting a winner would be flaky by construction; the pair
+# can never disagree, and that is stable. `124 0` (a self-exited child relabelled
+# a timeout) and `55 1` (a killed call reporting the child's code) are precisely
+# the two states that must be impossible, and both are rejected below.
+#
+# secs=1 with kill_after=1 is the tightest adjacency the contract can express at
+# all, since bounds are integer seconds. Three iterations, because the whole
+# point is that EITHER outcome is legal, so repetition buys coverage of the race
+# rather than confidence in one answer.
+#
+# A FOURTH observation follows, and it is what stops this case being a tautology.
+# Measured: against a helper mutated to never set the kill flag, three at-the-bound
+# observations all landed on the self-exited side and the case stayed green -- it
+# would have passed against a helper with no kill logic at all. The fourth child
+# ignores SIGTERM and sleeps far past the bound, so it cannot win the race; it is
+# held to the SAME biconditional, not to a hand-picked answer, and the batch is
+# additionally required to contain at least one flag-set observation. That
+# requirement is not flaky, because it is satisfied by the child that cannot win
+# rather than by the three that might.
+RB12_FD9="$SANDBOX/rb12-fd9.log"
+RB12_OUT="$SANDBOX/rb12-out.log"
+: > "$RB12_FD9"; : > "$RB12_OUT"
+"$_TIMEOUT_NET" --foreground -k 5 30 bash -c '
+    set -euo pipefail
+    exec 9>"$2"
+    TIMEOUT_BIN=""
+    . "$1"
+    for _i in 1 2 3; do
+        rc=0
+        run_bounded 1 1 -- bash -c "sleep 1; exit 55" || rc=$?
+        printf "%s %s\n" "$rc" "$RUN_BOUNDED_KILLED"
+    done
+    rc=0
+    run_bounded 1 1 -- bash -c "trap \"\" TERM HUP; exec sleep 30" || rc=$?
+    printf "%s %s\n" "$rc" "$RUN_BOUNDED_KILLED"
+' _ "$_RB_BLOCK" "$RB12_FD9" > "$RB12_OUT" 2>&1; RB12_RC=$?
+RB12_OK=1
+RB12_DETAIL=""
+[[ "$RB12_RC" -eq 0 ]] || { RB12_OK=0; RB12_DETAIL="$RB12_DETAIL driver_rc=$RB12_RC"; }
+RB12_N=0
+RB12_KILLS=0
+while read -r _rb12_line; do
+    RB12_N=$(( RB12_N + 1 ))
+    case "$_rb12_line" in
+        "124 1") RB12_KILLS=$(( RB12_KILLS + 1 )) ;;
+        "55 0")  : ;;
+        *) RB12_OK=0; RB12_DETAIL="$RB12_DETAIL violated[$_rb12_line]" ;;
+    esac
+done < "$RB12_OUT"
+[[ "$RB12_N" -eq 4 ]] || { RB12_OK=0; RB12_DETAIL="$RB12_DETAIL observations=$RB12_N(want 4)"; }
+[[ "$RB12_KILLS" -ge 1 ]] || { RB12_OK=0; RB12_DETAIL="$RB12_DETAIL no_kill_observed(the TERM-ignoring child must be one)"; }
+if [[ "$RB12_OK" -eq 1 ]]; then
+    ok "RB12 (unit) the return is 124 if and only if the kill flag is set -- never 124 for a self-exited child"
+else
+    bad "RB12 (unit) the return is 124 if and only if the kill flag is set -- never 124 for a self-exited child" \
+        "detail=$RB12_DETAIL out=$(tr '\n' ';' < "$RB12_OUT")"
+fi
+
+# RB11 -- the empty edge and refusal. A bound that is empty, zero or non-numeric,
+# and a call with no command after the separator, are all refused with a fixed
+# error on the helper's own descriptor and a return of 2. The assertion that
+# actually matters is the third one: that the command DID NOT RUN, observed
+# through a sentinel the command would have created. A refusal that still
+# executes the command is worse than no refusal.
+#
+# A zero is the dangerous member of that set, not an odd one: the coreutils
+# binary documents a zero duration as NO TIMEOUT, so an unvalidated zero is a
+# bound that silently disables bounding -- the exact hang this helper exists to
+# prevent (T-01-04).
+#
+# The last probe is a VALID call, and it is not decoration: without it every
+# `norun` above could be reported because the sentinel mechanism itself is
+# broken, and the case would pass while observing nothing.
+RB11_FD9="$SANDBOX/rb11-fd9.log"
+RB11_OUT="$SANDBOX/rb11-out.log"
+RB11_SENT="$SANDBOX/rb11-sentinel"
+: > "$RB11_FD9"; : > "$RB11_OUT"; rm -f "$RB11_SENT"
+bash -c '
+    set -euo pipefail
+    exec 9>"$2"
+    TIMEOUT_BIN=""
+    . "$1"
+    SENT="$3"
+    probe() {
+        local rc=0
+        rm -f "$SENT"
+        run_bounded "$@" || rc=$?
+        if [[ -e "$SENT" ]]; then printf "%s ran\n" "$rc"; else printf "%s norun\n" "$rc"; fi
+    }
+    probe ""  2  -- bash -c "touch \"$SENT\""
+    probe 0   2  -- bash -c "touch \"$SENT\""
+    probe abc 2  -- bash -c "touch \"$SENT\""
+    probe 5   "" -- bash -c "touch \"$SENT\""
+    probe 5   0  -- bash -c "touch \"$SENT\""
+    probe 5   x  -- bash -c "touch \"$SENT\""
+    probe 5   2  --
+    probe 5   2  -- bash -c "touch \"$SENT\""
+' _ "$_RB_BLOCK" "$RB11_FD9" "$RB11_SENT" > "$RB11_OUT" 2>&1; RB11_RC=$?
+_RB_REFUSAL='ERROR: run_bounded needs positive integer secs and kill_after, then -- and a command'
+RB11_OK=1
+RB11_DETAIL=""
+[[ "$RB11_RC" -eq 0 ]] || { RB11_OK=0; RB11_DETAIL="$RB11_DETAIL driver_rc=$RB11_RC"; }
+RB11_REFUSED="$(grep -cxF '2 norun' "$RB11_OUT")" || RB11_REFUSED=0
+RB11_RAN="$(grep -cxF '0 ran' "$RB11_OUT")" || RB11_RAN=0
+RB11_ERRS="$(grep -cF "$_RB_REFUSAL" "$RB11_FD9")" || RB11_ERRS=0
+[[ "$RB11_REFUSED" -eq 7 ]] || { RB11_OK=0; RB11_DETAIL="$RB11_DETAIL refused=$RB11_REFUSED(want 7)"; }
+[[ "$RB11_RAN" -eq 1 ]] || { RB11_OK=0; RB11_DETAIL="$RB11_DETAIL control_ran=$RB11_RAN(want 1)"; }
+[[ "$RB11_ERRS" -eq 7 ]] || { RB11_OK=0; RB11_DETAIL="$RB11_DETAIL fixed_errors=$RB11_ERRS(want 7)"; }
+if [[ "$RB11_OK" -eq 1 ]]; then
+    ok "RB11 (unit) every empty/zero/non-numeric bound and a missing command are refused with 2, the fixed error, and nothing run"
+else
+    bad "RB11 (unit) every empty/zero/non-numeric bound and a missing command are refused with 2, the fixed error, and nothing run" \
+        "detail=$RB11_DETAIL out=$(tr '\n' ';' < "$RB11_OUT")"
+fi
+rm -f "$RB11_SENT"
+
+# RB14 -- argument boundaries (T-01-03). An argument containing spaces must reach
+# the command as ONE argv element. Driven through BOTH mechanisms, because that
+# symmetry is what the helper's promotion to primary claims: the coreutils arm
+# and the watchdog arm are two implementations of one contract, and argv is part
+# of it. The fake's existing observational argv dump is the recording command --
+# no new stub. It exits non-zero here (no --add-dir), which is irrelevant: the
+# dump is written before any parsing.
+RB14_OK=1
+RB14_DETAIL=""
+for _rb14_mech in watchdog coreutils; do
+    RB14_DUMP="$SANDBOX/rb14-$_rb14_mech.argv"
+    RB14_FD9="$SANDBOX/rb14-$_rb14_mech-fd9.log"
+    rm -f "$RB14_DUMP"; : > "$RB14_FD9"
+    if [[ "$_rb14_mech" == "watchdog" ]]; then _rb14_bin=""; else _rb14_bin="$_TIMEOUT_NET"; fi
+    FAKE_AGY_DUMP_ARGV="$RB14_DUMP" bash -c '
+        set -euo pipefail
+        exec 9>"$2"
+        TIMEOUT_BIN="$4"
+        . "$1"
+        run_bounded 5 2 -- bash "$3" --print "one two three" || true
+    ' _ "$_RB_BLOCK" "$RB14_FD9" "$HERE/fake-agy.sh" "$_rb14_bin" >/dev/null 2>&1
+    _rb14_n="$(grep -c '' "$RB14_DUMP" 2>/dev/null)" || _rb14_n=0
+    _rb14_one="$(grep -cxF 'one two three' "$RB14_DUMP" 2>/dev/null)" || _rb14_one=0
+    [[ "$_rb14_n" -eq 2 ]] || { RB14_OK=0; RB14_DETAIL="$RB14_DETAIL $_rb14_mech:argc=$_rb14_n(want 2)"; }
+    [[ "$_rb14_one" -eq 1 ]] || { RB14_OK=0; RB14_DETAIL="$RB14_DETAIL $_rb14_mech:not_one_element"; }
+done
+if [[ "$RB14_OK" -eq 1 ]]; then
+    ok "RB14 (unit) a space-containing argument crosses the helper as one argv element, on both mechanisms"
+else
+    bad "RB14 (unit) a space-containing argument crosses the helper as one argv element, on both mechanisms" \
+        "detail=$RB14_DETAIL"
 fi
 
 echo "== install.sh / uninstall.sh (vfn.11) =="
