@@ -38,6 +38,15 @@ SANDBOX="$(mktemp -d -t agy-tests.XXXXXX)"
 # Reap anything a fixture left running before removing the sandbox. Every
 # fixture that records a PID writes it to $SANDBOX/<name>.pid; a failing run
 # must not leave 300-second sleepers behind on the developer's box.
+#
+# It is a net for the cases that did NOT get that far, and only those: every
+# case empties its own pid files once it has reaped them, because a pid recorded
+# in the first seconds of a two-and-a-half-minute run may belong to something
+# else entirely by the time this runs. On Linux with pid_max at 4194304 that is
+# remote; on macOS, where pid_max is 99998 and this phase's watchdog is the
+# reason the suite exists, recycling inside one run is ordinary. A test harness
+# that SIGKILLs a developer's unrelated process is a defect regardless of
+# probability, so the emptying is the fix and this is what is left over.
 cleanup() {
     local f p
     for f in "$SANDBOX"/*.pid; do
@@ -144,14 +153,28 @@ fi
 # REPLACED by _purebin's directory (no ":$PATH" suffix), scoped to this one
 # invocation and never exported suite-wide. HOME keeps pointing at the existing
 # sandbox home.
+#
+# Captured through a FILE and read back afterwards, never through a live command
+# substitution, and that is not style. Each entry point opens fd 9 on its own
+# original stderr and every child inherits what it is given; under a command
+# substitution such a descriptor IS the capture pipe, so a run whose assertions
+# ought to FAIL instead leaves a survivor holding the pipe and blocks for the
+# fixture's full sleep -- measured on this suite, a ~10s red case became a ~5min
+# one, which is why RB05 and the RB09-RB14 drivers were moved to files. RB04 and
+# RB08 reach the mechanism through here and were not. The shipped scripts now
+# close fd 9 for the bounded command (RB23), so this is the second line of
+# defence rather than the first: a file cannot be held open against us, whatever
+# a future child inherits. The outer net bounds the entry point; this bounds the
+# read.
 _run_sanitized() {
     local __outvar="$1" __rcvar="$2"
     shift 2
-    local __dir __out __rc
+    local __dir __rc __f
     __dir="$(_purebin)"
-    __out="$(PATH="$__dir" "$_TIMEOUT_NET" --foreground -k 5 30 "$@" 2>&1)"
+    __f="$SANDBOX/run-sanitized.out"
+    PATH="$__dir" "$_TIMEOUT_NET" --foreground -k 5 30 "$@" > "$__f" 2>&1
     __rc=$?
-    printf -v "$__outvar" '%s' "$__out"
+    printf -v "$__outvar" '%s' "$(cat "$__f" 2>/dev/null)"
     printf -v "$__rcvar" '%s' "$__rc"
 }
 
@@ -1166,6 +1189,7 @@ else
         "parent=$RB00B_PPID term_survived=$RB00B_TERM_SURVIVED child=$RB00B_CPID child_survived=$RB00B_CHILD_SURVIVED"
 fi
 kill -KILL "$RB00B_CPID" 2>/dev/null
+: > "$RB00B_PPF"; : > "$RB00B_CPF"
 
 echo "== bounded delegation, no bounding binary on PATH (RB04) =="
 
@@ -1237,9 +1261,12 @@ _rb_assert_reaped() {
         bad "$label$note" "detail=$why"
     fi
     # Unconditional, tolerating absence: a red run must not leave 300s sleepers
-    # behind on the developer's box.
+    # behind on the developer's box. Then EMPTIED, so the suite's EXIT net has
+    # nothing left to re-kill minutes later, when the number may name something
+    # else.
     [[ "$ppid" =~ ^[0-9]+$ ]] && kill -KILL "$ppid" 2>/dev/null
     [[ "$cpid" =~ ^[0-9]+$ ]] && kill -KILL "$cpid" 2>/dev/null
+    : > "$ppf"; : > "$cpf"
     return 0
 }
 
@@ -2408,6 +2435,7 @@ else
 fi
 kill -KILL "$(cat "$RB09_PPF" 2>/dev/null)" 2>/dev/null
 kill -KILL "$(cat "$RB09_CPF" 2>/dev/null)" 2>/dev/null
+: > "$RB09_PPF"; : > "$RB09_CPF"
 
 # RB09b: the captured-stderr half. Stated ceiling rather than hidden: the bridge
 # unlinks its work directory from an EXIT trap, so the real $STDERR_FILE cannot be
@@ -2530,6 +2558,7 @@ else
 fi
 [[ "$RB10B_PPID" =~ ^[0-9]+$ ]] && kill -KILL "$RB10B_PPID" 2>/dev/null
 [[ "$RB10B_CPID" =~ ^[0-9]+$ ]] && kill -KILL "$RB10B_CPID" 2>/dev/null
+: > "$RB10B_PPF"; : > "$RB10B_CPF"
 
 # RB12 -- adjacency. A child whose own exit is timed to land AT the bound, run a
 # few times so the race is actually exercised. What is asserted is the
