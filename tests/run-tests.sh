@@ -1428,11 +1428,22 @@ echo "== a relayed signal escalates like the bound does (RB22) =="
 # planned series.
 #
 # One real shim delegation on a PATH with no timeout/gtimeout, against an agy that
-# IGNORES SIGTERM and has forked a SIGTERM-ignoring child, interrupted by a
-# SIGTERM at the shim itself. The relay must reach the same end state the coreutils
+# IGNORES the signal and has forked a child that ignores it too, interrupted by a
+# signal at the shim itself. The relay must reach the same end state the coreutils
 # arm reaches for a forwarded signal: forward, escalate to SIGKILL after the same
 # kill_after, then return. An unescalated `wait` hangs for as long as the child
 # chooses to live -- 300s here, unbounded in the field.
+#
+# Parameterised over TERM and HUP, and the second one is not symmetry for its own
+# sake. The host traps HUP with a handler that CLEANS UP AND DOES NOT EXIT, so a
+# HUP that the helper does not relay returns from `wait` as 129, the timer is
+# cancelled as if the call had ended normally, and the child is left running with
+# nothing bound to it ever again. Measured before the fix, bound 3s + 2s, checked
+# 8s later: hup-watchdog left BOTH processes alive while hup-coreutils reaped
+# both -- a direct break of the parity this whole phase rests on. SIGQUIT was
+# probed the same way, 5x, and does not reproduce (the host's QUIT trap never
+# interrupts this wait on this bash), so it is deliberately not covered: the
+# relay set is what was demonstrated, not what was imagined.
 #
 # The bound is set far out of reach (4242s) on purpose: nothing but the relay can
 # end this call, so a pass cannot be the watchdog bound firing by luck. The
@@ -1442,56 +1453,72 @@ echo "== a relayed signal escalates like the bound does (RB22) =="
 # working escalation is done inside ~6s; 15s of polling is 3x that, and the 20s
 # elapsed assertion is the one RB04 already uses. The PIDs are required NON-EMPTY
 # so a run where the fake never started cannot report both processes "gone".
-RB22_PPF="$SANDBOX/rb22-parent.pid"
-RB22_CPF="$SANDBOX/rb22-child.pid"
-rm -f "$RB22_PPF" "$RB22_CPF"
-_rb_reap_sentinels
-_RB22_BIN="$(_purebin)"
-_RB22_START=$(date +%s)
-PATH="$_RB22_BIN" FAKE_AGY_FORK_HANG=1 FAKE_AGY_PID_FILE="$RB22_PPF" \
-    FAKE_AGY_CHILD_PID_FILE="$RB22_CPF" GEMINI_SHIM_TIMEOUT=4242 \
-    AGY_MODELS_TIMEOUT=4243 GEMINI_SHIM_STDIN_TIMEOUT=4244 \
-    bash "$SHIM" -p "do a thing" >/dev/null 2>&1 &
-RB22_SHIM=$!
-for _rb22_i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24; do
-    [[ -s "$RB22_PPF" && -s "$RB22_CPF" ]] && break
-    sleep 0.25
+for _rb22_sig in TERM HUP; do
+    # 128 + signum, the conventional status for a process that leaves on that
+    # signal, and the one the relay is required to report rather than 124: a
+    # caller-interrupted call is not a call the bound killed.
+    case "$_rb22_sig" in
+        TERM) _rb22_want=143 ;;
+        HUP)  _rb22_want=129 ;;
+    esac
+    RB22_PPF="$SANDBOX/rb22-$_rb22_sig-parent.pid"
+    RB22_CPF="$SANDBOX/rb22-$_rb22_sig-child.pid"
+    rm -f "$RB22_PPF" "$RB22_CPF"
+    _rb_reap_sentinels
+    _RB22_BIN="$(_purebin)"
+    _RB22_START=$(date +%s)
+    PATH="$_RB22_BIN" FAKE_AGY_FORK_HANG=1 FAKE_AGY_PID_FILE="$RB22_PPF" \
+        FAKE_AGY_CHILD_PID_FILE="$RB22_CPF" GEMINI_SHIM_TIMEOUT=4242 \
+        AGY_MODELS_TIMEOUT=4243 GEMINI_SHIM_STDIN_TIMEOUT=4244 \
+        bash "$SHIM" -p "do a thing" >/dev/null 2>&1 &
+    RB22_SHIM=$!
+    for _rb22_i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24; do
+        [[ -s "$RB22_PPF" && -s "$RB22_CPF" ]] && break
+        sleep 0.25
+    done
+    kill -"$_rb22_sig" "$RB22_SHIM" 2>/dev/null
+    RB22_EXITED=0
+    for ((_rb22_j = 0; _rb22_j < 60; _rb22_j++)); do
+        if ! kill -0 "$RB22_SHIM" 2>/dev/null; then RB22_EXITED=1; break; fi
+        sleep 0.25
+    done
+    _RB22_ELAPSED=$(( $(date +%s) - _RB22_START ))
+    RB22_RC=""
+    if [[ "$RB22_EXITED" -eq 1 ]]; then wait "$RB22_SHIM" 2>/dev/null; RB22_RC=$?; fi
+    RB22_PPID="$(cat "$RB22_PPF" 2>/dev/null)" || RB22_PPID=""
+    RB22_CPID="$(cat "$RB22_CPF" 2>/dev/null)" || RB22_CPID=""
+    RB22_PARENT_GONE=1
+    RB22_CHILD_GONE=1
+    # Read AFTER the shim has gone: a signal the helper does not relay lets the
+    # entry point exit while the bounded child runs on, which is the failure this
+    # arm exists to see.
+    sleep 1
+    [[ "$RB22_PPID" =~ ^[0-9]+$ ]] && kill -0 "$RB22_PPID" 2>/dev/null && RB22_PARENT_GONE=0
+    [[ "$RB22_CPID" =~ ^[0-9]+$ ]] && kill -0 "$RB22_CPID" 2>/dev/null && RB22_CHILD_GONE=0
+    _RB22_SLEEPERS="$(_rb_sleepers)"
+    if [[ "$RB22_EXITED" -eq 1 && "$RB22_RC" -eq "$_rb22_want" && "$_RB22_ELAPSED" -lt 20 \
+          && "$RB22_PPID" =~ ^[0-9]+$ && "$RB22_CPID" =~ ^[0-9]+$ \
+          && "$RB22_PARENT_GONE" -eq 1 && "$RB22_CHILD_GONE" -eq 1 \
+          && "$_RB22_SLEEPERS" -eq 0 ]]; then
+        ok "RB22 a relayed SIG$_rb22_sig escalates to SIGKILL and returns $_rb22_want instead of leaving the child running"
+    else
+        bad "RB22 a relayed SIG$_rb22_sig escalates to SIGKILL and returns $_rb22_want instead of leaving the child running" \
+            "exited=$RB22_EXITED rc=$RB22_RC(want $_rb22_want) elapsed=${_RB22_ELAPSED}s parent=$RB22_PPID parent_gone=$RB22_PARENT_GONE child=$RB22_CPID child_gone=$RB22_CHILD_GONE sleepers=$_RB22_SLEEPERS"
+    fi
+    # Only on the failure path, and disowned first: killing a job still in the
+    # table makes bash print a "Killed" notice on the suite's own stdout, which is
+    # noise rather than a result. On the passing path `wait` above reaped it.
+    if [[ "$RB22_EXITED" -eq 0 ]]; then
+        disown "$RB22_SHIM" 2>/dev/null || true
+        kill -KILL "$RB22_SHIM" 2>/dev/null
+    fi
+    kill -KILL "$RB22_PPID" 2>/dev/null
+    kill -KILL "$RB22_CPID" 2>/dev/null
+    # Emptied, not just reaped: the suite's EXIT cleanup re-kills every recorded
+    # pid, and a pid recorded minutes earlier may belong to something else by then.
+    : > "$RB22_PPF"; : > "$RB22_CPF"
+    _rb_reap_sentinels
 done
-kill -TERM "$RB22_SHIM" 2>/dev/null
-RB22_EXITED=0
-for ((_rb22_j = 0; _rb22_j < 60; _rb22_j++)); do
-    if ! kill -0 "$RB22_SHIM" 2>/dev/null; then RB22_EXITED=1; break; fi
-    sleep 0.25
-done
-_RB22_ELAPSED=$(( $(date +%s) - _RB22_START ))
-RB22_RC=""
-if [[ "$RB22_EXITED" -eq 1 ]]; then wait "$RB22_SHIM" 2>/dev/null; RB22_RC=$?; fi
-RB22_PPID="$(cat "$RB22_PPF" 2>/dev/null)" || RB22_PPID=""
-RB22_CPID="$(cat "$RB22_CPF" 2>/dev/null)" || RB22_CPID=""
-RB22_PARENT_GONE=1
-RB22_CHILD_GONE=1
-[[ "$RB22_PPID" =~ ^[0-9]+$ ]] && kill -0 "$RB22_PPID" 2>/dev/null && RB22_PARENT_GONE=0
-[[ "$RB22_CPID" =~ ^[0-9]+$ ]] && kill -0 "$RB22_CPID" 2>/dev/null && RB22_CHILD_GONE=0
-_RB22_SLEEPERS="$(_rb_sleepers)"
-if [[ "$RB22_EXITED" -eq 1 && "$RB22_RC" -eq 143 && "$_RB22_ELAPSED" -lt 20 \
-      && "$RB22_PPID" =~ ^[0-9]+$ && "$RB22_CPID" =~ ^[0-9]+$ \
-      && "$RB22_PARENT_GONE" -eq 1 && "$RB22_CHILD_GONE" -eq 1 \
-      && "$_RB22_SLEEPERS" -eq 0 ]]; then
-    ok "RB22 a relayed SIGTERM escalates to SIGKILL and returns 143 instead of waiting out the child"
-else
-    bad "RB22 a relayed SIGTERM escalates to SIGKILL and returns 143 instead of waiting out the child" \
-        "exited=$RB22_EXITED rc=$RB22_RC elapsed=${_RB22_ELAPSED}s parent=$RB22_PPID parent_gone=$RB22_PARENT_GONE child=$RB22_CPID child_gone=$RB22_CHILD_GONE sleepers=$_RB22_SLEEPERS"
-fi
-# Only on the failure path, and disowned first: killing a job still in the table
-# makes bash print a "Killed" notice on the suite's own stdout, which is noise
-# rather than a result. On the passing path `wait` above has already reaped it.
-if [[ "$RB22_EXITED" -eq 0 ]]; then
-    disown "$RB22_SHIM" 2>/dev/null || true
-    kill -KILL "$RB22_SHIM" 2>/dev/null
-fi
-kill -KILL "$RB22_PPID" 2>/dev/null
-kill -KILL "$RB22_CPID" 2>/dev/null
-_rb_reap_sentinels
 
 echo "== the bounded child inherits none of our descriptors (RB23) =="
 
@@ -1548,6 +1575,67 @@ if [[ "$RB23_OK" -eq 1 ]]; then
 else
     bad "RB23 a capturing caller is not held open by a descendant of the bounded call, on either mechanism" \
         "detail=$RB23_DETAIL"
+fi
+
+echo "== the helper gives the host's traps back (RB24) =="
+
+# RB24: `trap -` resets a signal to its DEFAULT disposition; it does not restore
+# whatever the host had installed. Both entry points install their cleanup trap
+# before the first bounded call, so on the watchdog arm that first call was
+# permanently deleting the host's TERM and INT handlers -- measured
+# `after TERM: []`, with the coreutils arm as the control that keeps them.
+#
+# The consequence is not untidiness. Bash runs no EXIT trap for a process killed
+# by an uncaught signal, so from the stdin read onward a Ctrl-C left
+# /tmp/gemini-shim.XXXXXX/GEMINI.md -- the full user prompt -- on disk, and
+# repeated interrupted runs accumulate prompt-bearing temp dirs. The bridge's
+# window is wider still.
+#
+# Asserted at the block rather than end to end, and the ceiling is stated rather
+# than hidden: reaching the /tmp consequence needs a signal delivered in the few
+# milliseconds BETWEEN two bounded calls, which is a race no assertion can drive
+# deterministically. What is deterministic is the trap table the consequence
+# follows from, so that is what is pinned -- byte-identical before and after,
+# for every signal the helper touches, on both mechanisms. This is the assertion
+# whose absence let the defect ship.
+#
+# HUP is in the set because the relay now takes it (RB22): a signal the helper
+# borrows is a signal it must hand back.
+RB24_OUT="$SANDBOX/rb24-out.log"
+RB24_OK=1
+RB24_DETAIL=""
+for _rb24_mech in watchdog coreutils; do
+    if [[ "$_rb24_mech" == "watchdog" ]]; then _rb24_bin=""; else _rb24_bin="$_TIMEOUT_NET"; fi
+    : > "$RB24_OUT"
+    bash -c '
+        set -euo pipefail
+        exec 9>/dev/null
+        TIMEOUT_BIN="$2"
+        . "$1"
+        trap "echo HOST_CLEANUP_RAN" TERM
+        trap "echo HOST_CLEANUP_RAN" INT
+        trap "echo HOST_CLEANUP_RAN" HUP
+        for _s in TERM INT HUP; do printf "before %s %s\n" "$_s" "$(trap -p $_s)"; done
+        run_bounded 5 2 -- true || true
+        for _s in TERM INT HUP; do printf "after %s %s\n" "$_s" "$(trap -p $_s)"; done
+    ' _ "$_RB_BLOCK" "$_rb24_bin" > "$RB24_OUT" 2>&1 || {
+        RB24_OK=0; RB24_DETAIL="$RB24_DETAIL $_rb24_mech:driver_failed"; }
+    for _rb24_s in TERM INT HUP; do
+        _rb24_b="$(grep "^before $_rb24_s " "$RB24_OUT")" || _rb24_b=""
+        _rb24_a="$(grep "^after $_rb24_s " "$RB24_OUT")" || _rb24_a=""
+        # The host trap must have been THERE to begin with, or "unchanged" is a
+        # statement about nothing.
+        [[ "$_rb24_b" == *"HOST_CLEANUP_RAN"* ]] \
+            || { RB24_OK=0; RB24_DETAIL="$RB24_DETAIL $_rb24_mech:$_rb24_s:not_installed"; }
+        [[ "${_rb24_b#before }" == "${_rb24_a#after }" ]] \
+            || { RB24_OK=0; RB24_DETAIL="$RB24_DETAIL $_rb24_mech:$_rb24_s:destroyed[${_rb24_a:0:60}]"; }
+    done
+done
+if [[ "$RB24_OK" -eq 1 ]]; then
+    ok "RB24 (unit) a bounded call leaves the host's TERM, INT and HUP traps exactly as it found them, on both mechanisms"
+else
+    bad "RB24 (unit) a bounded call leaves the host's TERM, INT and HUP traps exactly as it found them, on both mechanisms" \
+        "detail=$RB24_DETAIL"
 fi
 
 echo "== the bounding invariant, asserted over the files (RB01) =="
