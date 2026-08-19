@@ -40,7 +40,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   1. The divergence is decided and the decision recorded in PROJECT.md's Key Decisions table with its rationale — hard-fail like the bridge, degrade with a loud warning, or degrade for everything except the delegation call itself.
   2. With no `timeout`/`gtimeout` on PATH and an unresponsive fake agy, `gemini` and `agy-bridge` each do exactly what that decision says, proven by a test per entry point; neither leaves an agy process running with no bound unless the recorded decision says it should.
   3. A reader of README's environment-variable section finds both behaviors stated side by side, with the reason they do or do not differ.
-  4. With a `timeout` binary present, no `agy` invocation anywhere in the scripts can outlive its bound against a SIGTERM-ignoring fake. This is enforced as an **invariant, not a count**: a test asserts that every `"$AGY_BIN"` occurrence in `scripts/agy_bridge.sh` and `scripts/gemini_shim.sh` is either wrapped in `"$TIMEOUT_BIN" -k …` or sits in a `TIMEOUT_BIN`-empty fallback branch that Criterion 1's recorded decision explicitly permits — so a call site added later fails the suite instead of slipping through unbounded.
+  4. On either mechanism, no `agy` invocation anywhere in the scripts can outlive its bound against a SIGTERM-ignoring fake. This is enforced as an **invariant, not a count**: a test asserts that every `"$AGY_BIN"` occurrence in `scripts/agy_bridge.sh` and `scripts/gemini_shim.sh` is an argument to `run_bounded`, with zero exceptions — so a call site added later fails the suite instead of slipping through unbounded.
 
 **Plans**: 4/6 plans executed
 
