@@ -390,7 +390,7 @@ if [[ ! -s "$CACHE_FILE" ]] || [[ -n "$(find "$CACHE_FILE" -mmin +60 2>/dev/null
     # 3+ min), so -k escalates to SIGKILL. Its stderr is kept, not discarded --
     # it is the only diagnostic when auth or the network is the real fault.
     _agy_err="$(mktemp -t agy-models-err.XXXXXX)"
-    if _agy_models=$("$TIMEOUT_BIN" -k 3 "$AGY_MODELS_TIMEOUT" \
+    if _agy_models=$(run_bounded "$AGY_MODELS_TIMEOUT" 3 -- \
                      "$AGY_BIN" models </dev/null 2>"$_agy_err"); then
         mkdir -p "${CACHE_FILE%/*}" 2>/dev/null || true
         printf '%s' "$_agy_models" > "$CACHE_FILE.tmp.$$" \
@@ -478,7 +478,12 @@ cat "$_POLICY_FILE" > "$WORK_DIR/GEMINI.md" \
 if [[ ${#PROMPT_ARGS[@]} -gt 0 ]]; then
     printf '%s\n' "${PROMPT_ARGS[@]}" > "$PROMPT_FILE"
 elif [[ ! -t 0 ]]; then
-    "$TIMEOUT_BIN" "$STDIN_TIMEOUT" cat > "$PROMPT_FILE" || {
+    # kill_after is 1, not the 5 the agy calls use: it is a positive integer
+    # because the helper requires one -- a zero would disable bounding -- and no
+    # larger, because the escalation those 5s exist for is agy ignoring SIGTERM
+    # and `cat` does not ignore it. This is the guard interval before SIGKILL,
+    # not a grace period anything here needs.
+    run_bounded "$STDIN_TIMEOUT" 1 -- cat > "$PROMPT_FILE" || {
         echo "ERROR: stdin read timed out after ${STDIN_TIMEOUT}s" >&2; exit 2
     }
 else
@@ -589,7 +594,7 @@ if [[ "${AGY_SKIP_PERMISSIONS:-0}" == "1" ]]; then
 fi
 # -k 5: agy ignores SIGTERM (observed), so plain `timeout` would send the
 # signal and then block forever waiting for a child that never dies.
-( cd "$WORK_DIR" && "$TIMEOUT_BIN" -k 5 "$TIMEOUT" "$AGY_BIN" \
+( cd "$WORK_DIR" && run_bounded "$TIMEOUT" 5 -- "$AGY_BIN" \
     "${AGY_FLAGS[@]}" \
     > "$STDOUT_FILE" \
     2> "$STDERR_FILE" \
