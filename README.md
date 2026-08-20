@@ -34,7 +34,7 @@ echo "Review /path/to/api.py for correctness" | agy-bridge --type review
 | `review` | gemini-*-pro-high (latest) | Read files; adversarial framing |
 | `implement` | gemini-*-pro-high (latest) | Read and write files; no shell execution |
 
-The Model column is a rule, not a pin: the bridge resolves each `--type` to the **latest** matching Gemini id from your live `agy models` list at runtime, so it tracks agy version bumps with no plugin update. Omit `--type` to default to `code`. Override the model with `--model MODEL_ID` — run `agy models` for current CLI ids.
+The Model column is a rule, not a pin: the bridge resolves each `--type` to the **latest** matching Gemini id from your live `agy models` list at runtime, so it tracks agy version bumps with no plugin update. Omit `--type` to default to `code`. Override the model with `--model MODEL_ID` — verified against `agy` 1.1.13 (captured 2026-08-20): `--model` accepts both a bare id (e.g. `gemini-3.1-pro-high`) and a display name (e.g. `Gemini 3.7 Flash (High)`); run `agy models` for the current list of both forms.
 
 ## Requirements
 
@@ -226,12 +226,24 @@ The plugin installs a `SubagentStart` hook (`hooks/agy-subagent-policy.sh`, wire
 | `ERROR: agy-delegate ... is installed, but this launcher is pinned to ...` | The plugin was updated but the wrapper is still pinned to the old version; it refuses to run the stale copy (exit `127`) until you repin — run the command it prints, or re-run `/agy-setup`'s install command |
 | `agy: command not found` | Add `~/.local/bin` to `$PATH`: bash/zsh: `export PATH="$HOME/.local/bin:$PATH"` · fish: `fish_add_path ~/.local/bin` |
 | Response missing source URLs | Use `--type search` |
-| Model name rejected | Run `agy models`; exact string required |
+| Model name rejected | agy rejects an unrecognized id or display name with `Error: invalid model selection (--model "NAME" --effort ""): model NAME is not recognized as a known model or custom model in settings`, followed by an `Available models:` list. Run `agy models` for the current ids and display names. |
 | Exit code 2 (`agy model list contains no 'gemini-' ids; agy may be unauthenticated`) | The fetched (or cached) model list has no `gemini-`-prefixed ids — agy is degraded or unauthenticated, not a bad `--type`. Run `agy models` directly to see its raw output, and re-authenticate if needed. |
 | Exit code 124 | Timeout — simplify the query or pass `--timeout 600` |
 | Exit code 137 (`agy killed (signal 9) after Ns, before its Ms bound -- possible OOM or external kill`) | An external kill (OOM killer, `kill -9`, container preemption) landed before the bridge's own `--timeout` bound elapsed, so it isn't the bridge's own `-k` escalation. Check the host/container for memory pressure — raising `--timeout` won't help. |
 | Exit code 3 (`agy returned empty output`) | agy exited 0 with no output — usually quota `RESOURCE_EXHAUSTED (429)`. The reason (full agy stderr) is surfaced; wait for quota reset or re-auth. Both `agy-bridge` and the `gemini` shim fail loud here rather than reporting empty success. |
 | `WARNING: timeout/gtimeout not found -- bounding agy with the bash watchdog fallback; install coreutils for process-group kill` | Not a failure, and not fatal to either entry point: the call is still bounded, by the bash watchdog. `brew install coreutils` (macOS) upgrades the kill from the direct process to its whole process group, so anything agy forked cannot outlive the bound either. |
+
+### Contract check
+
+`tests/contract-check.sh` is a repo-only operator tool — run `bash tests/contract-check.sh` from a clone. It is not part of the unit suite and not a release gate: it interrogates the real `agy` binary rather than the fake, so an agy outage never blocks a tag. Running it spends real quota — up to 3 billed delegations per full run — with the actual count printed in the ledger's closing summary line.
+
+Its exit codes are disjoint from the bridge's codes in the table above — a check verdict is never a bridge exit:
+
+| Exit | Meaning |
+|------|---------|
+| `0` | Every assumption in the ledger reports `verified` |
+| `10` | At least one assumption reports `unverified`, none `contradicted` |
+| `11` | At least one assumption reports `contradicted` (outranks `10`) |
 
 ## Security
 
@@ -378,6 +390,8 @@ config/policies/               — GEMINI.md tool restriction policies (one file
   shim-yolo.md                 — gemini shim --yolo (read + write, no shell)
   shim-sandbox.md              — gemini shim --sandbox (read only)
   shim-default.md              — gemini shim default (read only)
+tests/contract-check.sh        — real-agy contract check (repo-only, spends quota, see Contract check above)
+tests/fixtures/                — captured real-agy output the fake and CC05 are pinned against
 ```
 
 ## Changelog
