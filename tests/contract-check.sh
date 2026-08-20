@@ -944,6 +944,132 @@ _cc_probe_gemini_md_binds() {
     rm -rf "$scratch" "$decoy_dir"
 }
 
+# _cc_probe_sigterm_and_model_arg -- D-09's assumption 6 (sigterm-ignored)
+# plus assumption 2 (model-arg-accepts), from ONE billed call. The two ride
+# together because model-arg-accepts's display-name half needs a call that
+# reaches agy's OWN model validation with a display name -- the bridge
+# validates --model against the id column (scripts/agy_bridge.sh:528-531)
+# and would reject a display name before agy ever saw it, so this probe
+# calls agy directly, which is exactly what D-12's SIGTERM probe needs too.
+#
+# model-arg-accepts aggregates TWO observations (the F6 fix): _CC_ID_ACCEPTED
+# / _CC_ID_MODEL, set for free by the gemini-md-binds probe's already-billed
+# bridge call (a bare id always reaches agy's argv there), and this task's
+# own direct display-name call. No fourth delegation.
+_cc_probe_sigterm_and_model_arg() {
+    local name="sigterm-ignored" name2="model-arg-accepts"
+
+    if [[ -z "$AGY_BIN" ]]; then
+        _cc_row "$name" unverified "no agy on PATH; command -v agy did not resolve"
+        _cc_row "$name2" unverified "no agy on PATH; command -v agy did not resolve"
+        return 0
+    fi
+    if [[ "$_CC_PREFLIGHT_OK" -ne 1 ]]; then
+        _cc_row "$name" unverified "preflight failed: $_CC_PREFLIGHT_REASON"
+        _cc_row "$name2" unverified "preflight failed: $_CC_PREFLIGHT_REASON"
+        return 0
+    fi
+
+    # Display name read from tests/fixtures/agy-models.tsv's second column,
+    # paired with a gemini- id -- never typed, so the probe cannot go stale.
+    local model_row display_name
+    model_row="$(grep -E '^gemini-' "$FIXTURES/agy-models.tsv" 2>/dev/null | head -n1)"
+    display_name="$(printf '%s' "$model_row" | cut -f2)"
+    if [[ -z "$display_name" ]]; then
+        _cc_row "$name" unverified "tests/fixtures/agy-models.tsv missing or has no gemini- row to read a display name from"
+        _cc_row "$name2" unverified "tests/fixtures/agy-models.tsv missing or has no gemini- row to read a display name from"
+        return 0
+    fi
+
+    local scratch work_dir gemini_md out_f err_f
+    scratch="$(mktemp -d "${TMPDIR:-/tmp}/cc-sigterm.XXXXXX")"
+    work_dir="$scratch/work"; mkdir -p "$work_dir"
+    gemini_md="$work_dir/GEMINI.md"
+    out_f="$scratch/stdout"; err_f="$scratch/stderr"
+
+    # config/policies/code.md again -- the shipped configuration, not a
+    # bespoke one, matching the gemini-md-binds and invalid-model-rejection
+    # probes above.
+    if ! cat "$ROOT/config/policies/code.md" > "$gemini_md" 2>/dev/null; then
+        _cc_row "$name" unverified "policy file missing: $ROOT/config/policies/code.md"
+        _cc_row "$name2" unverified "policy file missing: $ROOT/config/policies/code.md"
+        rm -rf "$scratch"
+        return 0
+    fi
+
+    # D-12a's payload shape: a large synthetic output whose generation is
+    # unavoidably slow, size stated so a non-reproduction can be judged.
+    local payload_words=50000
+    {
+        printf '\n\n---\nTASK:\n'
+        printf 'Write a detailed synthetic essay of at least %s words on the history of distributed systems. Do not summarize or stop early -- keep generating prose until you reach the requested length.\n' "$payload_words"
+    } >> "$gemini_md"
+    chmod 600 "$gemini_md"
+
+    local AGY_POINTER='Complete the TASK described in your GEMINI.md context. Output only the result.'
+    local bound=8 kill_after=5 rc elapsed start
+    start=$SECONDS
+    ( cd "$work_dir" && run_bounded "$bound" "$kill_after" -- "$AGY_BIN" \
+        --print "$AGY_POINTER" --sandbox --model "$display_name" \
+        --add-dir "$work_dir" \
+        > "$out_f" 2> "$err_f" < /dev/null )
+    rc=$?
+    elapsed=$(( SECONDS - start ))
+
+    local ev_common="model=\"$display_name\" bound=${bound}s kill_after=${kill_after}s elapsed=${elapsed}s rc=$rc payload=~${payload_words}w essay"
+
+    # ── model-arg-accepts: aggregate the free id observation with this
+    #    task's own display-name observation. No extra spend either way.
+    local display_result="unobserved"
+    if [[ "$rc" -eq 0 ]]; then
+        display_result="yes"
+    elif [[ "$rc" -eq 124 || "$rc" -eq 137 ]]; then
+        # The bound fired while agy was running -- reaching the bound
+        # requires the model to have already been accepted.
+        display_result="yes"
+    elif [[ "$elapsed" -lt 3 ]] && grep -qiE 'unknown .?--model|Available models' "$out_f" "$err_f" 2>/dev/null; then
+        display_result="no"
+    fi
+
+    case "$_CC_ID_ACCEPTED:$display_result" in
+        yes:yes)
+            _cc_row "$name2" verified "both accepted -- id \"${_CC_ID_MODEL:-<unrecorded>}\" and display name \"$display_name\""
+            ;;
+        yes:no)
+            _cc_row "$name2" contradicted "ids only -- id \"${_CC_ID_MODEL:-<unrecorded>}\" accepted, display name \"$display_name\" rejected: \"$(head -n1 "$err_f" 2>/dev/null)\""
+            ;;
+        no:yes)
+            _cc_row "$name2" contradicted "display names only -- id \"${_CC_ID_MODEL:-<unrecorded>}\" rejected, display name \"$display_name\" accepted -- contradicts README.md's documented --model MODEL_ID"
+            ;;
+        *)
+            local missing="the id"
+            [[ "$_CC_ID_ACCEPTED" != "unobserved" ]] && missing="the display name"
+            _cc_row "$name2" unverified "missing $missing observation -- id=\"$_CC_ID_ACCEPTED\" display=\"$display_result\"; $ev_common"
+            ;;
+    esac
+
+    # ── sigterm-ignored ──────────────────────────────────────────────────
+    if [[ -z "$TIMEOUT_BIN" ]]; then
+        _cc_row "$name" unverified "bash watchdog fallback active (no timeout/gtimeout on PATH) -- run_bounded normalizes every kill to 124 and cannot discriminate SIGTERM from SIGKILL; $ev_common"
+    elif [[ "$rc" -eq 0 ]]; then
+        _cc_row "$name" unverified "agy answered before the bound fired; $ev_common"
+    elif [[ "$elapsed" -lt "$bound" ]]; then
+        _cc_row "$name" unverified "a kill arrived before the bound elapsed -- not this check's own escalation; $ev_common"
+    elif [[ "$rc" -eq 137 ]]; then
+        _cc_row "$name" verified "coreutils rc=137 at/after the bound -- SIGTERM alone did not end agy, the SIGKILL escalation was needed; $ev_common"
+    elif [[ "$rc" -eq 124 ]]; then
+        _cc_row "$name" contradicted "coreutils rc=124 at/after the bound -- SIGTERM alone sufficed; R11's -k rationale rests on an observation this run did not reproduce; $ev_common"
+    else
+        _cc_row "$name" unverified "call never reached the bound (rc=$rc before ${bound}s); $ev_common"
+    fi
+
+    if [[ "$rc" -eq 0 || "$rc" -eq 124 || "$rc" -eq 137 ]]; then
+        _CC_BILLED=$((_CC_BILLED + 1))
+    fi
+
+    rm -rf "$scratch"
+}
+
 # _cc_summary -- the trailing summary block, called ONCE, after every probe
 # has returned, and never before. D-04 calls this content "the header"; it is
 # emitted LAST here because the billed count and final status are only known
@@ -972,6 +1098,7 @@ _cc_probe_models_format
 _cc_probe_non_gemini_rows
 _cc_probe_invalid_model_rejection
 _cc_probe_gemini_md_binds
+_cc_probe_sigterm_and_model_arg
 
 # ── Summary, exactly once, after every probe has returned ───────────────────
 _cc_summary
