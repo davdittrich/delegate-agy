@@ -80,6 +80,26 @@ if ! [[ "$AGY_MODELS_TIMEOUT" =~ ^[1-9][0-9]*$ ]]; then
     AGY_MODELS_TIMEOUT=20
 fi
 
+# ── Scratch-dir cleanup ──────────────────────────────────────────────────────
+# A single, cumulative EXIT trap covering every probe's scratch dir(s): `trap
+# ... EXIT` is not cumulative in bash, so a probe that installed its own trap
+# would silently replace whichever one ran first. Every `mktemp -d` call site
+# in this file registers its path here immediately after creation via
+# _cc_register_cleanup; each probe's tail `rm -rf` remains as a fast path
+# (removing as soon as the probe returns rather than waiting for script
+# exit), and this trap is the last line of defense if the script is
+# interrupted (Ctrl-C, an external kill, an outer CI timeout) before a probe
+# reaches its tail. Re-removing an already-cleaned dir is a harmless no-op.
+_CC_CLEANUP_DIRS=()
+_cc_register_cleanup() { _CC_CLEANUP_DIRS+=("$1"); }
+_cc_cleanup_all() {
+    local d
+    for d in "${_CC_CLEANUP_DIRS[@]:-}"; do
+        [[ -n "$d" ]] && rm -rf "$d"
+    done
+}
+trap _cc_cleanup_all EXIT
+
 # --- BEGIN run_bounded ---
 # Bounded invocation, redirect-transparent: the command runs in the caller's own
 # stdio, so command substitution, direct file redirects, a cd-subshell and a
@@ -497,7 +517,7 @@ _CC_MODELS_OUT="" _CC_MODELS_ERR="" _CC_MODELS_RC=1
 
 _cc_preflight() {
     _CC_SCRATCH="$(mktemp -d "${TMPDIR:-/tmp}/cc-preflight.XXXXXX")"
-    trap '[[ -n "${_CC_SCRATCH:-}" ]] && rm -rf "$_CC_SCRATCH"' EXIT
+    _cc_register_cleanup "$_CC_SCRATCH"
 
     _CC_VERSION_OUT="$_CC_SCRATCH/version.stdout"
     _CC_VERSION_ERR="$_CC_SCRATCH/version.stderr"
@@ -686,6 +706,7 @@ _cc_probe_invalid_model_rejection() {
 
     local scratch work_dir gemini_md out_f err_f rc
     scratch="$(mktemp -d "${TMPDIR:-/tmp}/cc-invalid-model.XXXXXX")"
+    _cc_register_cleanup "$scratch"
     work_dir="$scratch/work"
     mkdir -p "$work_dir"
     gemini_md="$work_dir/GEMINI.md"
@@ -818,6 +839,7 @@ _cc_probe_gemini_md_binds() {
 
     local scratch bin_dir argv_dump
     scratch="$(mktemp -d "${TMPDIR:-/tmp}/cc-gmb.XXXXXX")"
+    _cc_register_cleanup "$scratch"
     bin_dir="$scratch/bin"
     mkdir -p "$bin_dir/fixtures"
     cp "$HERE/fake-agy.sh" "$bin_dir/agy"
@@ -875,6 +897,7 @@ _cc_probe_gemini_md_binds() {
     local gmb_dir decoy_dir
     gmb_dir="$scratch/work"; mkdir -p "$gmb_dir"
     decoy_dir="$(mktemp -d "${TMPDIR:-/tmp}/agy-bridge-decoy.XXXXXX")"
+    _cc_register_cleanup "$decoy_dir"
 
     local nonce_token
     nonce_token="$(tr -dc '[:alnum:]' < /dev/urandom 2>/dev/null | head -c 24)"
@@ -997,6 +1020,7 @@ _cc_probe_sigterm_and_model_arg() {
 
     local scratch work_dir gemini_md out_f err_f
     scratch="$(mktemp -d "${TMPDIR:-/tmp}/cc-sigterm.XXXXXX")"
+    _cc_register_cleanup "$scratch"
     work_dir="$scratch/work"; mkdir -p "$work_dir"
     gemini_md="$work_dir/GEMINI.md"
     out_f="$scratch/stdout"; err_f="$scratch/stderr"
