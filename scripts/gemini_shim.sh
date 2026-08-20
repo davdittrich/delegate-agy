@@ -454,7 +454,7 @@ map_model() {
     # must never be silently upgraded to a newer version. Checked before the
     # map, so map keys that are also live ids (gemini-3.1-pro-high …) stay
     # pass-through while they exist and only fall to their class once retired.
-    if [[ -n "$LIVE_MODELS" ]] && printf '%s\n' "$LIVE_MODELS" | grep -qxF "$m"; then
+    if [[ -n "$LIVE_MODELS" ]] && grep -qxF "$m" <<< "$LIVE_MODELS"; then
         printf '%s\n' "$m"; return 0
     fi
     map_file="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)/../config/model-map.json"
