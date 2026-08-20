@@ -80,7 +80,7 @@ Plans:
   3. Its captured output lands in `tests/` fixtures in a form the fake agy can be regenerated from, so the suite's fake tracks real output instead of a hypothesis. At minimum the fixtures carry the `id<TAB>display name` model list, the invalid-model rejection (which renders its "Available models:" list in display names), and the rc=0-with-empty-stdout response that R6 exists to catch.
   4. README states the verified behavior as fact — that `--model` accepts both ids and display names — carrying the `agy` version and the date it was verified against, and the check re-confirms it rather than the docs disclaiming it. No document may claim the assumption is unverified.
 
-**Plans**: 3/6 plans executed
+**Plans**: 4/6 plans executed
 
 Plans:
 **Wave 1**
@@ -97,7 +97,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 01.5-04-PLAN.md — The fake reads the captured list through D-14a's tiered lookup and fails loudly when no tier resolves; fixtures plumbed to all five copy sites; R2/R4 derive their expected id from the fixture; CC04a-c and CC06 pin the tiers and the derivation's edges
+- [x] 01.5-04-PLAN.md — The fake reads the captured list through D-14a's tiered lookup and fails loudly when no tier resolves; fixtures plumbed to all five copy sites; R2/R4 derive their expected id from the fixture; CC04a-c and CC06 pin the tiers and the derivation's edges
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -206,7 +206,7 @@ Phases 1, 1.5, 3, and 4 have no dependencies on each other and may be planned or
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. The missing-`timeout` decision | 6/6 | In Progress|  |
-| 1.5. Contract check against a real agy | 3/6 | In Progress|  |
+| 1.5. Contract check against a real agy | 4/6 | In Progress|  |
 | 2. Model-list handling, end to end | 0/TBD | Not started | - |
 | 3. The exit-code contract | 0/TBD | Not started | - |
 | 4. Installer and launcher surface | 0/TBD | Not started | - |

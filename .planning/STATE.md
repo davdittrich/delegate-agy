@@ -4,16 +4,16 @@ milestone: v1.6.2
 current_phase: 01.5
 current_phase_name: Contract check against a real agy
 status: executing
-stopped_at: Completed 01.5-03-PLAN.md
-last_updated: "2026-08-20T03:31:19.463Z"
+stopped_at: Completed 01.5-04-PLAN.md
+last_updated: "2026-08-20T04:10:05.022Z"
 last_activity: 2026-08-20
 last_activity_desc: Phase 01.5 plan 02 (CC02, CC03/CC03m) executed
-state_head: b47755b471cc9a329cd8c844d1bf95877bcaa3bd
+state_head: 072a8ae3a1773352e635ccd4930e2683d194594f
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 12
-  completed_plans: 9
+  completed_plans: 10
 milestone_name: milestone
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 01.5 (Contract check against a real agy) — EXECUTING
-Plan: 4 of 6
+Plan: 5 of 6
 Status: Ready to execute
 Last activity: 2026-08-20 — Plan 01.5-02 (CC02, CC03/CC03m) executed
 
@@ -68,6 +68,7 @@ Progress: [██████████] 100%
 | Phase 01.5 P01 | 1h20m | 3 tasks | 3 files |
 | Phase 01.5 P02 | 55min | 2 tasks | 1 files |
 | Phase 01.5 P03 | 45min | 2 tasks | 3 files |
+| Phase 01.5 P04 | 30min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -101,6 +102,8 @@ Recent decisions affecting current work:
 - [Phase 01.5]: 01.5-02: CC03m's mutation payloads are assembled from separator-free arguments joined inside the harness function's own code, not as a literal `;` in a probe's call-site text, because that text is itself part of the file the scan reads
 - [Phase 01.5]: 01.5-03: preflight-once design -- agy --version and agy models each called exactly once per run, reused by three probes; agy models requires </dev/null or it hangs indefinitely
 - [Phase 01.5]: 01.5-03: invalid-model-rejection derives its verdict from whether agy's rejection names the impossible id WE supplied, never from pinned message text
+- [Phase 01.5]: 01.5-04: fake-agy.sh reads tests/fixtures/agy-models.tsv at runtime via _fake_fixture (three-tier resolution: AGY_FIXTURES_DIR, dirname $0/fixtures, $AGY_PLUGIN_DIR/tests/fixtures), loud non-zero on total failure or zero-row fixture -- never a silent empty list (D-14, D-14a)
+- [Phase 01.5]: 01.5-04: R2, R4, and CC06 all derive their expected model id via _cc_expect_model (shipped grep|sort -V|tail -1 rule) instead of pinning a literal, so a fixture recapture cannot leave a stale expectation passing silently (D-15a)
 
 ### Pending Todos
 
@@ -131,6 +134,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-20T03:31:19.443Z
-Stopped at: Completed 01.5-03-PLAN.md
+Last session: 2026-08-20T04:10:05.004Z
+Stopped at: Completed 01.5-04-PLAN.md
 Resume file: None
