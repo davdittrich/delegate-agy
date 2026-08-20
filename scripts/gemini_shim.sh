@@ -61,6 +61,15 @@ SHIM_TIMEOUT="${GEMINI_SHIM_TIMEOUT:-600}"
     exit 2
 }
 
+# Shared literal tail of the external-kill (a SIGKILL landing BEFORE our own
+# $SHIM_TIMEOUT bound -- OOM killer, `kill -9`, cgroup/container preemption)
+# message. Byte-identical to scripts/agy_bridge.sh's EC_KILL9_TAIL by design
+# (03-CONTEXT.md D-01) -- this shim shadows `gemini` on PATH for every caller
+# on the box, so its wording has exactly one place to change, same as the
+# bridge's. Held in a variable because tests/run-tests.sh pins these bytes
+# (EC03) against both scripts and README.
+EC_KILL9_TAIL=' -- possible OOM or external kill'
+
 # --- BEGIN run_bounded ---
 # Bounded invocation, redirect-transparent: the command runs in the caller's own
 # stdio, so command substitution, direct file redirects, a cd-subshell and a
@@ -670,8 +679,9 @@ if [[ "$EXIT_CODE" -eq 137 && "$DURATION" -lt "$SHIM_TIMEOUT" ]]; then
     # escalation above -- that can only fire at/after $SHIM_TIMEOUT elapses. It's
     # an external kill (OOM killer, `kill -9`, cgroup/container preemption).
     # Report it distinctly: "raise the timeout" is useless advice against an OOM.
-    printf 'ERROR: agy killed (signal 9) after %ds, before its %ds bound -- possible OOM or external kill: %s\n' \
-        "$DURATION" "$SHIM_TIMEOUT" "$(cat "$STDERR_FILE" 2>/dev/null || true)" >&2
+    _err_txt="$(cat "$STDERR_FILE" 2>/dev/null || true)"
+    printf 'ERROR: agy killed (signal 9) after %ds, before its %ds bound%s%s\n' \
+        "$DURATION" "$SHIM_TIMEOUT" "$EC_KILL9_TAIL" "${_err_txt:+: $_err_txt}" >&2
     exit "$EXIT_CODE"
 elif [[ "$EXIT_CODE" -eq 124 || "$EXIT_CODE" -eq 137 ]]; then
     echo "ERROR: agy timeout after ${SHIM_TIMEOUT}s" >&2
