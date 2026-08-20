@@ -122,12 +122,12 @@ Plans:
   3. A caller who hits a `gemini-`less model list is told agy is degraded or unauthenticated, and shown agy's own stderr — not told their `--type` did not match.
   4. A tab-suffixed or extra-column `agy models` reply still resolves a model: the input is normalized, and the anchored `^gemini-[0-9.]+-<class>$` matchers are byte-identical to what shipped.
 
-**Plans**: 2 plans
+**Plans**: 1/2 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 02-01-PLAN.md — Tracer: gate the bridge's cache write on the shipped degraded-list test, fall back to a good stale cache with a distinctly-worded warning, and prove extra-column normalization end to end (R9, R9b, R9c)
+- [x] 02-01-PLAN.md — Tracer: gate the bridge's cache write on the shipped degraded-list test, fall back to a good stale cache with a distinctly-worded warning, and prove extra-column normalization end to end (R9, R9b, R9c)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -220,7 +220,7 @@ Phases 1, 1.5, 3, and 4 have no dependencies on each other and may be planned or
 |-------|----------------|--------|-----------|
 | 1. The missing-`timeout` decision | 6/6 | Complete    | 2026-08-20 |
 | 1.5. Contract check against a real agy | 6/6 | Complete    | 2026-08-20 |
-| 2. Model-list handling, end to end | 0/TBD | Not started | - |
+| 2. Model-list handling, end to end | 1/2 | In Progress|  |
 | 3. The exit-code contract | 0/TBD | Not started | - |
 | 4. Installer and launcher surface | 0/TBD | Not started | - |
 | 5. The shim's failure-mode contract | 0/TBD | Not started | - |

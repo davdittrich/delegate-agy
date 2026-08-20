@@ -4,16 +4,16 @@ milestone: v1.6.2
 current_phase: 02
 current_phase_name: model-list-handling-end-to-end
 status: executing
-stopped_at: Phase 2 context gathered
-last_updated: "2026-08-20T11:12:21.478Z"
+stopped_at: Completed 02-01-PLAN.md
+last_updated: "2026-08-20T12:00:00.000Z"
 last_activity: 2026-08-20
-last_activity_desc: Phase 01 complete, transitioned to Phase 01.5
+last_activity_desc: Phase 02 plan 01 (bridge cache-poisoning gate) complete, plan 02 (shim mirror) next
 state_head: 529aa7308869de1c68edc6e797dc7e4a26880458
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 14
-  completed_plans: 12
+  completed_plans: 13
 milestone_name: milestone
 ---
 
@@ -24,16 +24,16 @@ milestone_name: milestone
 See: .planning/PROJECT.md (updated 2026-08-20)
 
 **Core value:** Delegation must never break the caller — the shim shadows `gemini` for every PATH caller, so a hang, crash, or silent empty-success here is not scoped to this plugin.
-**Current focus:** Phase 01.5 — Contract check against a real agy
+**Current focus:** Phase 02 — Model-list handling, end to end
 
 ## Current Position
 
-Phase: 02 (model-list-handling-end-to-end) — READY TO EXECUTE
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-08-20 — Phase 01 complete, transitioned to Phase 01.5
+Phase: 02 (model-list-handling-end-to-end) — IN PROGRESS
+Plan: 02-01 complete (bridge cache-poisoning gate); 02-02 (shim mirror) next, blocked on 02-01
+Status: Executing
+Last activity: 2026-08-20 — Phase 02 plan 01 complete: D-03 write gate, D-04 stale-cache fallback, D-05 distinct warning, D-06 extra-column/trailing-tab proof, D-07 unconditional stderr relay, D-08 herestring fix, all on `scripts/agy_bridge.sh`. Suite PASS=138 FAIL=0.
 
-Progress: [██████████] 100%
+Progress: [████████░░] 1/2 plans in Phase 02 (13/14 plans overall)
 
 ## Performance Metrics
 
@@ -110,6 +110,11 @@ Recent decisions affecting current work:
 - [Phase 01.5]: [Phase 01.5]: 01.5-05: sigterm-ignored (D-12) contradicted -- real agy 1.1.13 died on SIGTERM alone (rc=124) under a strict 8s bound; R11's -k escalation rationale not reproduced this run; delegate-agy-i43 filed rather than changing run_bounded/R11 in this phase (phase boundary)
 - [Phase 01.5]: [Phase 01.5]: 01.5-05: model-arg-accepts aggregates two observations (F6) -- a bare id harvested free from the gemini-md-binds probe's already-billed bridge call, plus a direct display-name call -- keeping the whole run's billed count at 2 (within D-13's budget of 3), both accepted against real agy
 - [Phase 01.5]: S5 corrected: README states the verified --model fact (both ids and display names) with agy 1.1.13/2026-08-20; REQUIREMENTS.md moves S5 to Phase 1.5, status met, naming the one contradicted assumption (sigterm-ignored, delegate-agy-i43) plainly
+- [Phase 02]: 02-01: D-03's write gate lives on the fetch-success branch only; the no-cache degraded path leaves `$_agy_models` untouched so the shipped criterion-3 check (now use-time, herestring form under D-08) is what reports the degraded-list message -- clearing it unconditionally would let the generic retrieval-failure fatal fire first and lose R8's distinct message
+- [Phase 02]: 02-01: D-08's herestring exception is scoped to exactly two sites in `agy_bridge.sh` (the new write-gate and the existing `:515`-era use-time check) -- a narrow, user-approved carve-out of D-01/D-02's closed-criteria boundary after Codex found the `printf | grep -q` pipe form shares the same SIGPIPE hazard class it was chosen to avoid (reproduced empirically, bash 5.3.15)
+- [Phase 02]: 02-01: D-07's stderr relay is relocated (one line moved to fire unconditionally after the whole fetch if/elif/else), not duplicated per branch -- folded into this plan's Task 2 rather than raised as a follow-up bd issue, closing the last open half of criterion 3 in this phase instead of a later one
+- [Phase 02]: 02-01: D-06's synthetic 3-column/trailing-tab fixture lives in a scratch `AGY_FIXTURES_DIR`, never in `tests/fixtures/agy-models.tsv` (D-14/D-14a's captured-vs-synthetic separation)
+- [Phase 02]: 02-01: S4 (`delegate-agy-8ph`) and S1 both stay "partial" in REQUIREMENTS.md, not "met" -- `8ph` explicitly forbids a one-sided fix, so both requirements close only after plan 02-02 mirrors the same gate/fallback into `gemini_shim.sh`
 
 ### Pending Todos
 
@@ -140,6 +145,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-20T10:23:14.435Z
-Stopped at: Phase 2 context gathered
-Resume file: .planning/phases/02-model-list-handling-end-to-end/02-CONTEXT.md
+Last session: 2026-08-20T12:00:00.000Z
+Stopped at: Completed 02-01-PLAN.md
+Resume file: .planning/phases/02-model-list-handling-end-to-end/02-02-PLAN.md
