@@ -207,7 +207,7 @@ Phases 1, 1.5, 3, and 4 have no dependencies on each other and may be planned or
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. The missing-`timeout` decision | 6/6 | In Progress|  |
+| 1. The missing-`timeout` decision | 6/6 | Complete    | 2026-08-20 |
 | 1.5. Contract check against a real agy | 6/6 | Complete    | 2026-08-20 |
 | 2. Model-list handling, end to end | 0/TBD | Not started | - |
 | 3. The exit-code contract | 0/TBD | Not started | - |

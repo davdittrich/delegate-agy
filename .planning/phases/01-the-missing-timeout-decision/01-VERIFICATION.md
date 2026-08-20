@@ -1,39 +1,46 @@
 ---
 phase: 01-the-missing-timeout-decision
 verified: 2026-08-19T17:05:00Z
-status: human_needed
+status: passed
 score: 4/4 success criteria verified
 behavior_unverified: 0
 overrides_applied: 0
 verifier_ran:
+
   - "bash .worktrees/agy-1.6.2/tests/run-tests.sh -> PASS=118 FAIL=0, exit 0"
   - "independent re-implementation of RB01's _rb_agy_scan against 7 mutants of gemini_shim.sh"
   - "independent M1b-equivalent mutation (_rb_signal forced to its direct-pid branch), plain and under an allocated pty"
   - "independent coreutils-arm mutation (-k dropped) and fd-9->fd-2 diagnostic mutation"
+
 gaps: []
 deferred: []
 findings:
+
   - id: F1
     severity: warning
     title: "RB01's scan is per-logical-line, so a bounded and an unbounded `$AGY_BIN` on ONE line reports zero violations"
     evidence: "_rb_agy_scan counts violating LINES via `grep -cvE`, not violating OCCURRENCES. Measured on a copy of the shim with `run_bounded 5 2 -- \"$AGY_BIN\" foo; \"$AGY_BIN\" --version` appended: `0 4` — zero violations. Also `echo \"run_bounded x -- $AGY_BIN\"` -> `0 4`."
     impact: "The invariant holds on the files as they stand today (independently confirmed: bridge `0 2`, shim `0 3`). This is a hole in the guard, not a live violation — but criterion 4's own wording is 'zero exceptions', and RB01's stated ceiling claims the scan 'errs toward failing loudly', which is the opposite bias from what these two shapes produce."
     action: "File a follow-up ticket. Not phase-goal-blocking; release-blocking under PROJECT.md's own 'follow-ups discovered during work block the release' decision."
+
   - id: F2
     severity: warning
     title: "Plan 01-01's must_have 'run_bounded returns 124 if and only if RUN_BOUNDED_KILLED is 1' is false as written and should be corrected in the record"
     evidence: "gemini_shim.sh:221-225 coreutils arm sets the flag on 124|137 and returns rc UNCHANGED. Measured directly: `coreutils[pristine]: saw='137 1'`. Present since 01-01 (`git show 079d787` lines 135-136 are identical), so not a later regression."
     impact: "Record defect, NOT a code gap — see the adjudication section."
     action: "Amend 01-01-SUMMARY/PLAN must_have to scope the biconditional to the watchdog arm and state the caller-visible unify-124 contract separately."
+
   - id: F3
     severity: warning
     title: "R11 cannot be marked complete until delegate-agy-8k0's one edit lands"
     evidence: "REQUIREMENTS.md:41 Evidence still reads 'tests/run-tests.sh R5/R6/R7, T4/T5, SH4/SH5/SH6'; REQUIREMENTS.md:88 coverage cell still says R11 'Stays open only for the enforcement half'. Both halves landed."
     action: "One edit rewriting both lines to cite RB01/RB01m/RB02/RB02m/RB03/RB04/RB05/RB06a-d/RB07/RB08/RB09a-b/RB10a-b/RB11/RB12/RB13/RB14/RB20-22, then mark R11 complete and close 8k0."
 human_verification:
+
   - test: "On a stock macOS with no coreutils and a PATH lacking timeout/gtimeout, run `gemini -p 'x'` against a hung agy."
     expected: "The warning literal appears; no shell job-control notice ('Terminated', '[1]+ ...') leaks to stderr; the call returns 124 within its bound."
     why_human: "No macOS host is reachable from this project and the job-control notice could not be reproduced on Linux under any tested shape. Broken Window #1. This is the one assumption neither the suite nor this verification can settle."
+
   - test: "Confirm the judgment-tier prohibitions carried by plans 01-01 through 01-06 (no test-only override switch in the shipped scripts; helper diagnostics never in a caller-parsed stream; no --no-verify / git add -A)."
     expected: "All resolved."
     why_human: "Prohibitions are judgment-tier by declaration. Verifier findings: no env/flag override of the mechanism exists outside the block (only the three probe assignments at gemini_shim.sh:33-38 / agy_bridge.sh:24-29); RB09a/RB09b pin the diagnostic isolation and I confirmed the fd-9 -> fd-2 mutant is caught; the worktree is clean at bb54c6f. Recorded as a NON-AUTHORITATIVE verdict — human confirmation recommended."
@@ -250,18 +257,22 @@ the contract.** Evidence, in order:
    fi
    ```
    I measured it, not inferred it: `coreutils[pristine]: saw='137 1'` — flag set, rc 137.
+
 2. **It was false when it was written.** `git show 079d787:scripts/gemini_shim.sh` lines 135-136
    are the same two lines. This is not drift introduced by a later plan; the must_have described
    the watchdog arm and mistook it for the helper.
+
 3. **The caller-visible contract holds, at every host site.** `gemini_shim.sh:578-581` and
    `agy_bridge.sh:622-631` both map `124|137 -> exit 124`; the shim's `--version` site does the
    same at `:436-439`. RB13 pins it at the entry point, deliberately making no claim about the
    mechanism's own code (`run-tests.sh:1839-1844`).
+
 4. **Normalising 137 -> 124 inside the helper would break a different requirement.** Both scripts
    discriminate an external kill from their own escalation with
    `EXIT_CODE -eq 137 && DURATION < TIMEOUT` (`gemini_shim.sh:571`, `agy_bridge.sh:607`). That is
    R5 / Phase 3 criterion 2. A helper that swallowed the 137 would delete the discriminator's
    input. The code is right; the sentence is wrong.
+
 5. **The suite already scopes the claim correctly.** RB12 (`run-tests.sh:2216-2229`) drives the
    biconditional only under `TIMEOUT_BIN=""`, and 01-06-SUMMARY's first key-decision states the
    split in the same terms.
@@ -358,13 +369,17 @@ Worktree clean at `bb54c6f` (only untracked `.serena/`). No shipped script was m
 
 1. **F3 — `delegate-agy-8k0`**: rewrite R11's `Evidence:` line and its coverage-table cell, then
    mark R11 complete. Gating.
+
 2. **F2** — correct plan 01-01's `run_bounded returns 124 iff RUN_BOUNDED_KILLED` must_have. The
    code is right; the record is not, and it is the only false statement I found in the phase's
    audit trail.
+
 3. **F1** — file a follow-up for RB01's per-line blind spot (two occurrences on one logical line;
    a decoy string). Release-blocking under PROJECT.md's own follow-up rule, not phase-blocking.
+
 4. **`delegate-agy-cy5`** — close with the resolution; its description asserts behaviour that no
    longer exists.
+
 5. **WINDOWS.md** — dispose of #2, #3, #4 (fixed) and #5 (-> F3). #1 stays open, human-blocked.
 6. **ROADMAP.md** — Phase 1's checkbox is still `[ ]` and the progress table still reads
    `In Progress`.

@@ -21,6 +21,9 @@ A Claude Code plugin that routes tasks to `agy` (Google's Antigravity CLI), givi
 - ✓ Installer refuses root, writes only under `~/.local/bin`, `~` (rc backups), `~/.config/agy-delegate`, `~/.gemini` — 1.6.0
 - ✓ SubagentStart hook: opt-in, default off, advisory-only, never changes routing — 1.6.0
 - ✓ Model resolution from the live `agy models` list rather than a pinned name — 1.5.1, corrected 1.6.1
+- ✓ R11 — every `agy` invocation bounded through `run_bounded`, on every host, with or without a coreutils binary — Phase 1 (UAT 28/29 direct pass + 1 explicitly accepted gap, 15/15 threats closed)
+  - Caveat: R11's stated premise ("agy ignores SIGTERM, so every bound escalates to SIGKILL") is the worst-case design assumption the mechanism is built and tested against (proven via a fake agy that ignores SIGTERM). Phase 1.5's real-agy probe *contradicted* the premise for agy 1.1.13 — it died on SIGTERM alone, rc=124, under a strict 8s bound; the `-k` escalation rationale was not reproduced. Tracked as `delegate-agy-i43`, deliberately left open at the Phase 1/1.5 boundary rather than rewriting R11 or `run_bounded` mid-phase. The escalation ladder itself is still correct defense-in-depth (it's what any *future* SIGTERM-ignoring agy version, or a wedged descendant process, needs) — it just isn't proven necessary for the specific agy version currently observed.
+  - Accepted gap: UAT test 29 (does a stock macOS host print no shell job-control notice when it hits this same code path?) was explicitly accepted unverified rather than tested — no macOS host is available to this project. See `01-UAT.md` test 29 and `01-SECURITY.md`'s disposition:accept pattern (same rationale class as T-01-09).
 
 ### Active
 
@@ -28,7 +31,6 @@ A Claude Code plugin that routes tasks to `agy` (Google's Antigravity CLI), givi
 
 **Finish 1.6.2** — the release is written and reverted from `master` pending these:
 
-- [ ] R11 — every `agy` invocation bounded through `run_bounded`, with or without a coreutils binary; agy ignores SIGTERM, so every bound escalates to SIGKILL
 - [ ] R5 — exit codes are a contract: 2, 3, 124, 127, 137 each mean exactly one thing and say so
 - [ ] R6 — never report empty success; agy exiting 0 with no stdout is a failure
 - [ ] R8 — registry read is comparison-only: exact key match, repin path built from install-time literals
@@ -82,4 +84,4 @@ What the probe did **not** establish: whether agy ignores SIGTERM. Every call re
 | Follow-ups discovered during work block the release | A release shipping known defects it surfaced itself misrepresents what it fixes | — Pending — first applied to 1.6.2 |
 
 ---
-*Last updated: 2026-08-19 after GSD onboarding (codebase map + docs ingest)*
+*Last updated: 2026-08-20 after Phase 1 (the-missing-timeout-decision) — UAT + security verification*

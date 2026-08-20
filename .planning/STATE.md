@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.6.2
-current_phase: 2
-current_phase_name: Model-list handling, end to end
+current_phase: 01.5
+current_phase_name: Contract check against a real agy
 status: planning
-stopped_at: Phase 01.5 complete, ready to plan Phase 2
-last_updated: "2026-08-20T05:48:08.984Z"
+stopped_at: Phase 01 complete, ready to plan Phase 01.5
+last_updated: "2026-08-20T09:24:39.056Z"
 last_activity: 2026-08-20
-last_activity_desc: Phase 01.5 complete, transitioned to Phase 2
-state_head: e14ec554ece647a8733653b8e445144d159bd38f
+last_activity_desc: Phase 01 complete, transitioned to Phase 01.5
+state_head: 8535726280594c83e134ffaa222f20fd008662f3
 progress:
   total_phases: 7
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 12
   completed_plans: 12
 milestone_name: milestone
@@ -21,17 +21,17 @@ milestone_name: milestone
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-08-19)
+See: .planning/PROJECT.md (updated 2026-08-20)
 
 **Core value:** Delegation must never break the caller — the shim shadows `gemini` for every PATH caller, so a hang, crash, or silent empty-success here is not scoped to this plugin.
 **Current focus:** Phase 01.5 — Contract check against a real agy
 
 ## Current Position
 
-Phase: 2 — Model-list handling, end to end
+Phase: 01.5 — Contract check against a real agy
 Plan: Not started
 Status: Ready to plan
-Last activity: 2026-08-20 — Phase 01.5 complete, transitioned to Phase 2
+Last activity: 2026-08-20 — Phase 01 complete, transitioned to Phase 01.5
 
 Progress: [██████████] 100%
 
@@ -39,7 +39,7 @@ Progress: [██████████] 100%
 
 **Velocity:**
 
-- Total plans completed: 6
+- Total plans completed: 12
 - Average duration: —
 - Total execution time: —
 
@@ -48,6 +48,7 @@ Progress: [██████████] 100%
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01.5 | 6 | - | - |
+| 01 | 6 | - | - |
 
 **Recent Trend:**
 
@@ -82,7 +83,6 @@ Recent decisions affecting current work:
 - Follow-ups discovered during work block the release they belong to — first applied to 1.6.2, so all 7 open tickets gate Phase 6.
 - Resolve models from the live `agy models` list, never a frozen display-name map.
 - The launcher's exec target is an install-time literal; the registry read is comparison-only.
-- OPEN (Phase 1 must settle): bridge treats a missing `timeout` binary as fatal while the shim degrades to unbounded. Both defensible; the divergence is undocumented.
 - The stdin read gets an explicit positive `kill_after`, not a zero mirroring the bare `timeout <secs> cat` it replaces — so `run_bounded` validates every bound with one rule and no site can pass a value coreutils reads as *no timeout*. (Phase 1, plan 02)
 - The missing-binary warning is emitted at the `TIMEOUT_BIN` probe, never inside `run_bounded` — the probe runs once per invocation while the helper runs up to three times, and plain stderr rather than fd 9 puts the line ahead of every bounded call's output. (Phase 1, plan 02)
 - [Phase ?]: 01-03: deleted the bridge's startup fatal on a missing timeout/gtimeout rather than documenting the divergence -- its only justification was that an unbounded call beats a refusal, and the watchdog leaves no unbounded call to refuse
@@ -122,9 +122,9 @@ None yet.
 - **The per-run GEMINI.md policy may not be authoritative.** A probe from a throwaway CWD had agy answer that it found `GEMINI.md` in five unrelated projects, so agy discovers context outside its working directory. `agy_bridge.sh`'s per-type tool restriction assumes its own GEMINI.md binds. Not yet reproduced through the bridge, which also passes `--sandbox` and `--add-dir` (`delegate-agy-xfa`, P1, Phase 1.5).
 - **R6's empty-success case is real, not hypothetical.** The same probe saw agy exit rc=0 with completely empty stdout when a tool hit a headless permission gate (`jetski: no output produced -- a tool required the "command" permission ... auto-denied`). Phase 3's exit-3 requirement is grounded in observed behavior.
 - **agy is live; the docs that said otherwise are corrected, the phases are not yet re-read.** Verified 2026-08-19 against agy 1.1.13: `--version` and `agy models` both return in seconds, and a real `--type review` delegation returned 4721 bytes. `agy --model` accepts BOTH ids and display names; a bogus name gives rc=1 with an `Available models:` list rendered in display names. PROJECT.md and ROADMAP.md are corrected and Phase 7 moved to Phase 1.5; `delegate-agy-9qp` stays open until Phase 1.5 lands the fixtures and the README statement. **Not established:** whether agy ignores SIGTERM -- every probe call returned on its own, so no bound fired and the `-k` rationale rests on its original observation, untested.
-- delegate-agy-vtx (P0): run_bounded's watchdog timer leaks one 'sleep <bound>' process per bounded call, reparented to init and alive for the full bound -- up to 3 per gemini invocation with the shim's defaults. Inside the marker block, so 01-02 could not fix it; 01-03 copies the block byte-for-byte and will double the blast radius. Fix both copies in one commit.
-- delegate-agy-84e (P1): run_bounded's self-kill guard prints 'no process group of its own; descendants may survive' deterministically for any bounded child that exits before the PGID read -- i.e. every fast successful watchdog-path call. False, and it masks the real signal. Inside the marker block; same both-copies constraint.
-- **Phase 1 did not pass on the first attempt, and the record must not read as if it did.** The code review of `bb54c6f` found two Criticals in `run_bounded` itself, both reproduced at runtime, both introduced by this phase: (1) `exec 9>&2` was inherited by the bounded child and every descendant, so under `out=$(gemini ... 2>&1)` -- the commonest capture shape for a CLI that shadows `gemini` box-wide -- a surviving agy descendant held the caller's capture pipe open forever, on a run that exited 0 in under a second, on BOTH mechanisms; (2) SIGHUP was not relayed, so on the watchdog arm a HUP returned from `wait` as 129, cancelled the timer and left agy running with no bound on it at all, while the coreutils arm reaped -- a direct break of the mechanism parity the whole phase rests on. Also fixed in the same round: `trap - TERM INT` destroyed the host's cleanup handlers instead of restoring them (a later Ctrl-C then left the full user prompt in `/tmp/gemini-shim.XXXXXX/GEMINI.md`, since bash runs no EXIT trap for a signal-killed process); the pgid lookup shelled out to `awk`/`ps` and silently stopped reaping descendants where neither resolved; its `/proc` parse returned the PPID for any comm containing whitespace, which then became a `kill -- -<pgid>` operand aimed at an unrelated process group; and RB01 counted violating LINES rather than OCCURRENCES, so two occurrences on one line and a decoy string both scanned clean. **The lesson worth carrying: the suite was green, mutation-checked in five places, and none of it saw any of this** -- every gap was structural (`_PUREBIN_TOOLS` hardcodes the binaries the pgid lookup needed; no case ever sent HUP; no case ever asserted the trap table; the harness fixed fd 9 for ITSELF and left the shipped scripts alone). Regression cases RB23-RB26 and RB22-over-HUP now exist, each demonstrated red against the shipped code before its fix. Suite PASS=123 FAIL=0. R11 is deliberately still open: its acceptance was met before this round, but the runtime guarantee it states did not hold, so the completion call is the human's.
+- **Phase 1 did not pass on the first attempt, and the record must not read as if it did.** The code review of `bb54c6f` found two Criticals in `run_bounded` itself, both reproduced at runtime, both introduced by this phase: (1) `exec 9>&2` was inherited by the bounded child and every descendant, so under `out=$(gemini ... 2>&1)` -- the commonest capture shape for a CLI that shadows `gemini` box-wide -- a surviving agy descendant held the caller's capture pipe open forever, on a run that exited 0 in under a second, on BOTH mechanisms; (2) SIGHUP was not relayed, so on the watchdog arm a HUP returned from `wait` as 129, cancelled the timer and left agy running with no bound on it at all, while the coreutils arm reaped -- a direct break of the mechanism parity the whole phase rests on. Also fixed in the same round: `trap - TERM INT` destroyed the host's cleanup handlers instead of restoring them (a later Ctrl-C then left the full user prompt in `/tmp/gemini-shim.XXXXXX/GEMINI.md`, since bash runs no EXIT trap for a signal-killed process); the pgid lookup shelled out to `awk`/`ps` and silently stopped reaping descendants where neither resolved; its `/proc` parse returned the PPID for any comm containing whitespace, which then became a `kill -- -<pgid>` operand aimed at an unrelated process group; and RB01 counted violating LINES rather than OCCURRENCES, so two occurrences on one line and a decoy string both scanned clean. **The lesson worth carrying: the suite was green, mutation-checked in five places, and none of it saw any of this** -- every gap was structural (`_PUREBIN_TOOLS` hardcodes the binaries the pgid lookup needed; no case ever sent HUP; no case ever asserted the trap table; the harness fixed fd 9 for ITSELF and left the shipped scripts alone). Regression cases RB23-RB26 and RB22-over-HUP now exist, each demonstrated red against the shipped code before its fix. Suite PASS=135 FAIL=0 (re-confirmed 2026-08-20). R11 is now Validated (PROJECT.md, Phase 1): 28/29 UAT checks passed directly, 1 (macOS job-control notice) explicitly accepted unverified (no macOS host available), 15/15 security threats closed. Two bugs surfaced by this phase's own code review (delegate-agy-vtx, delegate-agy-84e) are fixed and closed, guarded by RB20a/b and RB21a/b.
+
+- **RB01's static scan doesn't cover `tests/contract-check.sh`.** T-01-06's regression guard (RB01) scans only the two shipped scripts. `contract-check.sh` (added Phase 1.5) carries 3 agy call sites, hand-verified `run_bounded`-wrapped, but not in RB01's loop — a future edit there could add an unbounded call site with the suite staying green. `delegate-agy-d4t` filed (Phase 1 security audit, 2026-08-20).
 
 ### Roadmap Evolution
 
@@ -140,6 +140,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-20T05:18:32.906Z
-Stopped at: Phase 01.5 complete, ready to plan Phase 2
+Last session: 2026-08-20T09:27:18.000Z
+Stopped at: Phase 01 complete, ready to plan Phase 01.5
 Resume file: None
