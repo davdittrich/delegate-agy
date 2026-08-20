@@ -4,11 +4,11 @@ milestone: v1.6.2
 current_phase: 3
 current_phase_name: The exit-code contract
 status: planning
-stopped_at: Phase 02 complete, ready to plan Phase 3
-last_updated: "2026-08-20T16:24:10.669Z"
+stopped_at: Phase 3 context gathered
+last_updated: "2026-08-20T16:47:56.076Z"
 last_activity: 2026-08-20
 last_activity_desc: Phase 02 complete, transitioned to Phase 3
-state_head: 54d47722accdd0c046df2c5b03b5e2520ada1480
+state_head: e6b68292bb522596973bbc8aba5eaaf257f77155
 progress:
   total_phases: 7
   completed_phases: 3
@@ -150,6 +150,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-20T17:05:00Z
-Stopped at: Phase 02 complete (UAT passed 1/1, verification passed, security verified 0 threats open), transitioned to Phase 3 -- ready to plan
-Resume file: None
+Last session: 2026-08-20T16:47:56.044Z
+Stopped at: Phase 3 context gathered
+Resume file: .planning/phases/03-the-exit-code-contract/03-CONTEXT.md
