@@ -4,16 +4,16 @@ milestone: v1.6.2
 current_phase: 03
 current_phase_name: the-exit-code-contract
 status: executing
-stopped_at: Phase 3 context gathered
-last_updated: "2026-08-20T18:03:36.076Z"
+stopped_at: Completed 03-01-PLAN.md
+last_updated: "2026-08-20T21:02:13.594Z"
 last_activity: 2026-08-20
-last_activity_desc: Phase 02 complete, transitioned to Phase 3
-state_head: 56bc10cb046af156eec8adcc3cfd79a0f7ebc914
+last_activity_desc: Phase 03 execution started
+state_head: 55c009de4a71dac3bd78e74433142e472293fe9d
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 18
-  completed_plans: 14
+  completed_plans: 15
 milestone_name: milestone
 ---
 
@@ -24,14 +24,14 @@ milestone_name: milestone
 See: .planning/PROJECT.md (updated 2026-08-20)
 
 **Core value:** Delegation must never break the caller — the shim shadows `gemini` for every PATH caller, so a hang, crash, or silent empty-success here is not scoped to this plugin.
-**Current focus:** Phase 3 — The exit-code contract
+**Current focus:** Phase 03 — the-exit-code-contract
 
 ## Current Position
 
-Phase: 03 (the-exit-code-contract) — READY TO EXECUTE
-Plan: Not started
+Phase: 03 (the-exit-code-contract) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
-Last activity: 2026-08-20 — Phase 02 complete, transitioned to Phase 3
+Last activity: 2026-08-20 — Phase 03 execution started
 
 Progress: [░░░░░░░░░░░░░░░░░░░░] 14/14 plans overall (Phase 02 complete: 2/2 plans; Phase 3 not yet planned)
 
@@ -73,6 +73,7 @@ Progress: [░░░░░░░░░░░░░░░░░░░░] 14/14 p
 | Phase 01.5 P04 | 30min | 3 tasks | 2 files |
 | Phase 01.5 P05 | 55min | 3 tasks | 1 files |
 | Phase 01.5 P06 | 31min | 3 tasks | 4 files |
+| Phase 03 P01 | 40min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -120,6 +121,9 @@ Recent decisions affecting current work:
 - [Phase 02]: 02-02: unlike the bridge, the shim adds no stderr line on the degraded-fallback path (D-05) -- this script shadows `gemini` on PATH, so a warning here would land in every Octopus/Metaswarm log line; the bridge's D-07 stderr-relocation gap does not apply here since `load_models()`'s fetch already redirects agy's own stderr to `2>/dev/null`
 - [Phase 02]: 02-02: D-08's herestring conversion touches exactly two sites in `gemini_shim.sh` -- the new write-gate and the existing `map_model` warning-gate check (formerly a `printf | grep -q` pipe) -- mirroring plan 02-01's identical, narrow D-01/D-02 exception on `agy_bridge.sh`; `map_model`'s verbatim-id and class-resolution matchers are untouched
 - [Phase 02]: 02-02: `delegate-agy-8ph` closed -- both writers of `~/.cache/agy-bridge-models` (`agy_bridge.sh` plan 02-01, `gemini_shim.sh` plan 02-02) now carry the write gate, the D-04 stale-cache fallback and atomic-write preservation; S1 and S4 both move to "met" in REQUIREMENTS.md. Suite PASS=141 FAIL=0.
+- [Phase 03]: 03-01: EC_KILL9_TAIL holds only the fixed variable-free tail ' -- possible OOM or external kill', not the whole sentence -- both output forms keep their existing, already-differing prefixes untouched
+- [Phase 03]: 03-01: _err_txt is computed once via $(cat "$STDERR_FILE" 2>/dev/null || true) immediately before the plain-text/JSON branch, guarded once via ${_err_txt:+...}, and is the single normalization point both output forms defer to -- the JSON path's open(sys.argv[5]).read() is deleted, not guarded
+- [Phase 03]: 03-01: the JSON path's error string is now trailing-newline-stripped (decided behavior change, not a bug fix) -- text\n\n now yields ': text', matching the plain-text arm's pre-existing $(cat ...) behavior
 
 ### Pending Todos
 
@@ -150,6 +154,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-20T16:47:56.044Z
-Stopped at: Phase 3 context gathered
-Resume file: .planning/phases/03-the-exit-code-contract/03-CONTEXT.md
+Last session: 2026-08-20T21:02:13.560Z
+Stopped at: Completed 03-01-PLAN.md
+Resume file: None
