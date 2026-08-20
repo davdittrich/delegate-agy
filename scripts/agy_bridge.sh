@@ -474,14 +474,22 @@ if [[ ! -s "$CACHE_FILE" ]] || [[ -n "$(find "$CACHE_FILE" -mmin +60 2>/dev/null
     _agy_err="$(mktemp -t agy-models-err.XXXXXX)"
     if _agy_models=$(run_bounded "$AGY_MODELS_TIMEOUT" 3 -- \
                      "$AGY_BIN" models </dev/null 2>"$_agy_err"); then
-        # stderr suppressed across the whole write: an unwritable cache dir
-        # (HOME unset, read-only FS) otherwise makes bash print the failed
-        # redirect on every single invocation. Caching is best-effort — the
-        # fetched list in $_agy_models is already usable without it.
-        mkdir -p "${CACHE_FILE%/*}" 2>/dev/null || true
-        { printf '%s' "$_agy_models" > "$CACHE_FILE.tmp.$$" \
-            && mv "$CACHE_FILE.tmp.$$" "$CACHE_FILE"; } 2>/dev/null || true
-        chmod 600 "$CACHE_FILE" 2>/dev/null || true
+        # A gemini--less reply is degraded (unauthenticated agy, or an output
+        # format change) and must never overwrite a good cache the shim also
+        # reads (D-03, delegate-agy-8ph). Reuses the same cut -f1 + ^gemini-
+        # test criterion 3 already performs at use time below, not a second
+        # definition of "is this list degraded".
+        _agy_ids="$(printf '%s\n' "$_agy_models" | cut -f1)"
+        if grep -q '^gemini-' <<< "$_agy_ids"; then
+            # stderr suppressed across the whole write: an unwritable cache dir
+            # (HOME unset, read-only FS) otherwise makes bash print the failed
+            # redirect on every single invocation. Caching is best-effort — the
+            # fetched list in $_agy_models is already usable without it.
+            mkdir -p "${CACHE_FILE%/*}" 2>/dev/null || true
+            { printf '%s' "$_agy_models" > "$CACHE_FILE.tmp.$$" \
+                && mv "$CACHE_FILE.tmp.$$" "$CACHE_FILE"; } 2>/dev/null || true
+            chmod 600 "$CACHE_FILE" 2>/dev/null || true
+        fi
     else
         _agy_rc=$?
         _agy_models=""
@@ -512,7 +520,7 @@ VALID_MODELS=$(printf '%s\n' "$VALID_MODELS" | cut -f1)
 # A list with no gemini ids at all is a degraded agy (unauthenticated, or an
 # output format change), NOT a bad --type. Say which, so the next reader does
 # not go hunting through --type and --model flags.
-if ! printf '%s\n' "$VALID_MODELS" | grep -q '^gemini-'; then
+if ! grep -q '^gemini-' <<< "$VALID_MODELS"; then
     echo "ERROR: agy model list contains no 'gemini-' ids; agy may be unauthenticated" >&2
     echo "       or its 'agy models' output format changed. Run 'agy models' to inspect." >&2
     exit 2
