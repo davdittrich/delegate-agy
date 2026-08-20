@@ -80,7 +80,7 @@ Plans:
   3. Its captured output lands in `tests/` fixtures in a form the fake agy can be regenerated from, so the suite's fake tracks real output instead of a hypothesis. At minimum the fixtures carry the `id<TAB>display name` model list, the invalid-model rejection (which renders its "Available models:" list in display names), and the rc=0-with-empty-stdout response that R6 exists to catch.
   4. README states the verified behavior as fact — that `--model` accepts both ids and display names — carrying the `agy` version and the date it was verified against, and the check re-confirms it rather than the docs disclaiming it. No document may claim the assumption is unverified.
 
-**Plans**: 4/6 plans executed
+**Plans**: 5/6 plans executed
 
 Plans:
 **Wave 1**
@@ -101,7 +101,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 01.5-05-PLAN.md — The billed probes: whether the per-run policy binds and whether the headless gate produces R6's shape (one shared delegation), and whether agy ignores SIGTERM while `--model` takes a display name (one more); the ledger completed and its gaps stated as gaps
+- [x] 01.5-05-PLAN.md — The billed probes: whether the per-run policy binds and whether the headless gate produces R6's shape (one shared delegation), and whether agy ignores SIGTERM while `--model` takes a display name (one more); the ledger completed and its gaps stated as gaps
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
@@ -206,7 +206,7 @@ Phases 1, 1.5, 3, and 4 have no dependencies on each other and may be planned or
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. The missing-`timeout` decision | 6/6 | In Progress|  |
-| 1.5. Contract check against a real agy | 4/6 | In Progress|  |
+| 1.5. Contract check against a real agy | 5/6 | In Progress|  |
 | 2. Model-list handling, end to end | 0/TBD | Not started | - |
 | 3. The exit-code contract | 0/TBD | Not started | - |
 | 4. Installer and launcher surface | 0/TBD | Not started | - |

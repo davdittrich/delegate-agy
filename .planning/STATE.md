@@ -4,16 +4,16 @@ milestone: v1.6.2
 current_phase: 01.5
 current_phase_name: Contract check against a real agy
 status: executing
-stopped_at: Completed 01.5-04-PLAN.md
-last_updated: "2026-08-20T04:10:05.022Z"
+stopped_at: Completed 01.5-05-PLAN.md
+last_updated: "2026-08-20T04:44:45.002Z"
 last_activity: 2026-08-20
 last_activity_desc: Phase 01.5 plan 02 (CC02, CC03/CC03m) executed
-state_head: 072a8ae3a1773352e635ccd4930e2683d194594f
+state_head: 4db7cdd3bc8699e5bac6beabfd07476bd266ecdb
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 12
-  completed_plans: 10
+  completed_plans: 11
 milestone_name: milestone
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 01.5 (Contract check against a real agy) — EXECUTING
-Plan: 5 of 6
+Plan: 6 of 6
 Status: Ready to execute
 Last activity: 2026-08-20 — Plan 01.5-02 (CC02, CC03/CC03m) executed
 
@@ -69,6 +69,7 @@ Progress: [██████████] 100%
 | Phase 01.5 P02 | 55min | 2 tasks | 1 files |
 | Phase 01.5 P03 | 45min | 2 tasks | 3 files |
 | Phase 01.5 P04 | 30min | 3 tasks | 2 files |
+| Phase 01.5 P05 | 55min | 3 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -104,6 +105,9 @@ Recent decisions affecting current work:
 - [Phase 01.5]: 01.5-03: invalid-model-rejection derives its verdict from whether agy's rejection names the impossible id WE supplied, never from pinned message text
 - [Phase 01.5]: 01.5-04: fake-agy.sh reads tests/fixtures/agy-models.tsv at runtime via _fake_fixture (three-tier resolution: AGY_FIXTURES_DIR, dirname $0/fixtures, $AGY_PLUGIN_DIR/tests/fixtures), loud non-zero on total failure or zero-row fixture -- never a silent empty list (D-14, D-14a)
 - [Phase 01.5]: 01.5-04: R2, R4, and CC06 all derive their expected model id via _cc_expect_model (shipped grep|sort -V|tail -1 rule) instead of pinning a literal, so a fixture recapture cannot leave a stale expectation passing silently (D-15a)
+- [Phase 01.5]: [Phase 01.5]: 01.5-05: gemini-md-binds (D-10) verified against real agy 1.1.13 with a competing decoy GEMINI.md present -- forbidden run_shell_command declined, cksum discriminator absent, decoy marker did not leak; delegate-agy-xfa updated with evidence, left open for 01.5-06 (D-18) to close
+- [Phase 01.5]: [Phase 01.5]: 01.5-05: sigterm-ignored (D-12) contradicted -- real agy 1.1.13 died on SIGTERM alone (rc=124) under a strict 8s bound; R11's -k escalation rationale not reproduced this run; delegate-agy-i43 filed rather than changing run_bounded/R11 in this phase (phase boundary)
+- [Phase 01.5]: [Phase 01.5]: 01.5-05: model-arg-accepts aggregates two observations (F6) -- a bare id harvested free from the gemini-md-binds probe's already-billed bridge call, plus a direct display-name call -- keeping the whole run's billed count at 2 (within D-13's budget of 3), both accepted against real agy
 
 ### Pending Todos
 
@@ -134,6 +138,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-20T04:10:05.004Z
-Stopped at: Completed 01.5-04-PLAN.md
+Last session: 2026-08-20T04:44:44.983Z
+Stopped at: Completed 01.5-05-PLAN.md
 Resume file: None
