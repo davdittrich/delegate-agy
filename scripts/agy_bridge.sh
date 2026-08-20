@@ -738,8 +738,8 @@ if [[ "$EXIT_CODE" -eq 137 && "$DURATION" -lt "$TIMEOUT" ]]; then
     if [[ "$JSON_OUTPUT" -eq 1 ]]; then
         python3 -c "
 import json, sys
-print(json.dumps({'success':False,'model_used':sys.argv[1],'type':sys.argv[2],'duration_seconds':int(sys.argv[3]),'error':sys.argv[4] + ': ' + open(sys.argv[5]).read()}))
-" "$MODEL" "$TYPE" "$DURATION" "Killed (signal 9) after ${DURATION}s, before its ${TIMEOUT}s bound -- possible OOM or external kill" "$STDERR_FILE" || true
+print(json.dumps({'success':False,'model_used':sys.argv[1],'type':sys.argv[2],'duration_seconds':int(sys.argv[3]),'error':sys.argv[4]}))
+" "$MODEL" "$TYPE" "$DURATION" "Killed (signal 9) after ${DURATION}s, before its ${TIMEOUT}s bound${EC_KILL9_TAIL}${_err_txt:+: $_err_txt}" || true
     else
         printf 'ERROR: agy killed (signal 9) after %ds, before its %ds bound%s%s\n' \
             "$DURATION" "$TIMEOUT" "$EC_KILL9_TAIL" "${_err_txt:+: $_err_txt}" >&2
