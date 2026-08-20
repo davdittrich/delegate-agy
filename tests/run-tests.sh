@@ -2554,6 +2554,33 @@ else
         "detail=$RB03_DETAIL"
 fi
 
+# EC05 (delegate-agy-6q1, D-11): EC_KILL9_TAIL -- the tail literal EC01/EC03
+# pin as shared byte-for-byte between the bridge's and the shim's
+# external-kill messages -- is defined exactly ONCE per script (comment lines
+# filtered, RB03 precedent above) and quoted VERBATIM in README's exit-137
+# row. This is the exact seam that let delegate-agy-6q1 happen: code moved,
+# docs didn't. Assignment count is exactly 1, not "at least one" (Codex LOW,
+# accepted) -- a second definition trips this even where every reference
+# still resolves; the reference count is asserted separately (>=1) so a
+# refactor that adds a second USE does not.
+_EC_KILL9_LITERAL=' -- possible OOM or external kill'
+
+EC05_OK=1
+EC05_DETAIL=""
+for _ec05_f in "$BRIDGE" "$SHIM"; do
+    _ec05_defs="$(grep -v '^[[:space:]]*#' "$_ec05_f" | grep -cF "EC_KILL9_TAIL='$_EC_KILL9_LITERAL'")" || _ec05_defs=0
+    [[ "$_ec05_defs" -eq 1 ]] || { EC05_OK=0; EC05_DETAIL="$EC05_DETAIL ${_ec05_f##*/}:defines_${_ec05_defs}"; }
+    _ec05_refs="$(grep -cE '\$EC_KILL9_TAIL|\$\{EC_KILL9_TAIL' "$_ec05_f")" || _ec05_refs=0
+    [[ "$_ec05_refs" -ge 1 ]] || { EC05_OK=0; EC05_DETAIL="$EC05_DETAIL ${_ec05_f##*/}:refs_${_ec05_refs}"; }
+done
+grep -qF "$_EC_KILL9_LITERAL" "$_RB_README" || { EC05_OK=0; EC05_DETAIL="$EC05_DETAIL readme:literal_missing"; }
+if [[ "$EC05_OK" -eq 1 ]]; then
+    ok "EC05 EC_KILL9_TAIL defined exactly once per script, referenced, and quoted verbatim in README"
+else
+    bad "EC05 EC_KILL9_TAIL defined exactly once per script, referenced, and quoted verbatim in README" \
+        "detail=$EC05_DETAIL"
+fi
+
 echo "== the docs are held to the captured evidence (CC05) =="
 
 # CC05: README's dated --model fact is a claim about the model list captured in
