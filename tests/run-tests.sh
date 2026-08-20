@@ -33,6 +33,7 @@ BRIDGE="$ROOT/scripts/agy_bridge.sh"
 SHIM="$ROOT/scripts/gemini_shim.sh"
 INSTALL="$ROOT/scripts/install.sh"
 UNINSTALL="$ROOT/scripts/uninstall.sh"
+CONTRACT_CHECK="$HERE/contract-check.sh"
 
 SANDBOX="$(mktemp -d -t agy-tests.XXXXXX)"
 # Reap anything a fixture left running before removing the sandbox. Every
@@ -1199,12 +1200,13 @@ echo "== bounded delegation, no bounding binary on PATH (RB04) =="
 # contract the run below is held to.
 _RB_GUARD_MSG='has no process group of its own'
 
-# _rb_extract FILE -> the marker-delimited run_bounded block on stdout. The one
-# extraction in this suite: RB02 compares the two copies with it, RB21 and the
-# unit cases below source what it produces. Defined here, ahead of its first use,
-# so there is a single expression to keep right -- a second copy of this sed is
-# exactly the drift RB02 exists to catch, one level up. Anchored at both ends so
-# an indented or embedded lookalike line cannot open or close the range.
+# _rb_extract FILE -> the marker-delimited run_bounded block on stdout. RB02
+# compares three copies with it (bridge, shim, and tests/contract-check.sh, the
+# check's own third consumer of the block, D-03); RB21 and the unit cases below
+# source what it produces. Defined here, ahead of its first use, so there is a
+# single expression to keep right -- a second copy of this sed is exactly the
+# drift RB02 exists to catch, one level up. Anchored at both ends so an
+# indented or embedded lookalike line cannot open or close the range.
 _rb_extract() {
     sed -n '/^# --- BEGIN run_bounded ---$/,/^# --- END run_bounded ---$/p' "$1"
 }
@@ -1973,27 +1975,41 @@ else
 fi
 rm -rf "$RB01M_DIR"
 
-echo "== the helper is one artifact in two files (RB02) =="
+echo "== the helper is one artifact in three files (RB02) =="
 
-# RB02: run_bounded is duplicated verbatim into both scripts on purpose -- each
-# is installed as a standalone launcher and neither may source the other -- so
-# the two copies are one artifact living in two files. Three defects were found
-# inside that helper AFTER it was first written; the hazard this case guards is
-# the fourth being fixed in one copy and not the other, which nothing else in
-# the suite would notice. Same one-sided-fix hazard delegate-agy-8ph names for
-# the two model-cache writers. (_rb_extract itself is defined once, up at RB04.)
+# RB02: run_bounded is duplicated verbatim into both shipped scripts on purpose
+# -- each is installed as a standalone launcher and neither may source the
+# other -- so the copies are one artifact living in multiple files. Three
+# defects were found inside that helper AFTER it was first written; the hazard
+# this case guards is the fourth being fixed in one copy and not the others,
+# which nothing else in the suite would notice. Same one-sided-fix hazard
+# delegate-agy-8ph names for the two model-cache writers. (_rb_extract itself
+# is defined once, up at RB04.)
+#
+# tests/contract-check.sh (Phase 1.5, D-03) is a third consumer of the same
+# block: the check bounds agy by exactly the mechanism it audits. It is a
+# test-side artifact, not a shipped standalone launcher, but it still cannot
+# source the block -- sourcing would cost gemini_shim.sh its standalone
+# property, the reason D-08 chose duplication in the first place -- so it
+# carries its own verbatim copy too, and this case widens to compare all three.
 
 RB02_B="$(_rb_extract "$BRIDGE")"
 RB02_S="$(_rb_extract "$SHIM")"
-# Both ranges must be non-empty AND must actually contain the definition, so two
-# absent or two truncated blocks cannot pass trivially by both being nothing.
-if [[ -n "$RB02_B" && -n "$RB02_S" \
+RB02_C="$(_rb_extract "$CONTRACT_CHECK")"
+# All three ranges must be non-empty AND must actually contain the definition,
+# so any absent or truncated block cannot pass trivially by all being nothing.
+if [[ -n "$RB02_B" && -n "$RB02_S" && -n "$RB02_C" \
       && "$RB02_B" == *"run_bounded() {"* && "$RB02_S" == *"run_bounded() {"* \
-      && "$RB02_B" == "$RB02_S" ]]; then
-    ok "RB02 the two run_bounded blocks are byte-identical and non-empty"
+      && "$RB02_C" == *"run_bounded() {"* \
+      && "$RB02_B" == "$RB02_S" && "$RB02_S" == "$RB02_C" ]]; then
+    ok "RB02 the three run_bounded blocks (bridge, shim, contract-check) are byte-identical and non-empty"
 else
-    bad "RB02 the two run_bounded blocks are byte-identical and non-empty" \
-        "bridge_lines=$(printf '%s' "$RB02_B" | grep -c '' ) shim_lines=$(printf '%s' "$RB02_S" | grep -c '') diff=$(diff <(printf '%s\n' "$RB02_B") <(printf '%s\n' "$RB02_S") | head -6 | tr '\n' ';')"
+    RB02_WHICH=""
+    [[ "$RB02_B" != "$RB02_S" ]] && RB02_WHICH="$RB02_WHICH bridge!=shim"
+    [[ "$RB02_S" != "$RB02_C" ]] && RB02_WHICH="$RB02_WHICH shim!=contract-check"
+    [[ "$RB02_B" != "$RB02_C" ]] && RB02_WHICH="$RB02_WHICH bridge!=contract-check"
+    bad "RB02 the three run_bounded blocks (bridge, shim, contract-check) are byte-identical and non-empty" \
+        "bridge_lines=$(printf '%s' "$RB02_B" | grep -c '' ) shim_lines=$(printf '%s' "$RB02_S" | grep -c '') cc_lines=$(printf '%s' "$RB02_C" | grep -c '') mismatched=$RB02_WHICH diff=$(diff <(printf '%s\n' "$RB02_B") <(printf '%s\n' "$RB02_S") | head -6 | tr '\n' ';')"
 fi
 
 # RB02m: prove the comparison can fail before trusting it. One character changed
