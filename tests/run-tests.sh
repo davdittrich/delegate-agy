@@ -59,9 +59,28 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# _cc_fixtures_beside DIR -- copy tests/fixtures/ next to a copied fake `agy`
+# in DIR, so tier 2 of fake-agy.sh's `_fake_fixture` resolution
+# (`$(dirname "$0")/fixtures`) finds the real captured data wherever the fake
+# was copied. Tier 3 (AGY_PLUGIN_DIR) is not a substitute for this: where a
+# case's environment is deliberately bare (RB27), the fixtures travel with
+# the binary or the case is destroyed by the fix. A missing source directory
+# is FATAL, not silent -- the same discipline _purebin() applies to a missing
+# whitelisted tool: a silently-absent fixtures directory would turn every
+# case that resolves a model into a vacuous pass.
+_cc_fixtures_beside() {
+    local dir="$1"
+    if [[ ! -d "$HERE/fixtures" ]]; then
+        printf 'FATAL: tests/fixtures/ missing, cannot plumb fixtures beside copied fake at %s\n' "$dir" >&2
+        exit 1
+    fi
+    cp -R "$HERE/fixtures" "$dir/fixtures"
+}
+
 mkdir -p "$SANDBOX/bin" "$SANDBOX/home"
 cp "$HERE/fake-agy.sh" "$SANDBOX/bin/agy"
 chmod +x "$SANDBOX/bin/agy"
+_cc_fixtures_beside "$SANDBOX/bin"
 
 export PATH="$SANDBOX/bin:$PATH"
 export HOME="$SANDBOX/home"
@@ -118,6 +137,7 @@ _purebin() {
     d="$(mktemp -d "$SANDBOX/purebin.XXXXXX")"
     cp "$HERE/fake-agy.sh" "$d/agy"
     chmod +x "$d/agy"
+    _cc_fixtures_beside "$d"
     for t in "${_PUREBIN_TOOLS[@]}"; do
         p="$(command -v "$t" 2>/dev/null)" || p=""
         if [[ -z "$p" ]]; then
@@ -2739,6 +2759,7 @@ _fresh_home() {
     mkdir -p "$h/.local/bin" "$h/bin"
     cp "$HERE/fake-agy.sh" "$h/bin/agy"
     chmod +x "$h/bin/agy"
+    _cc_fixtures_beside "$h/bin"
     printf '%s' "$h"
 }
 
@@ -2933,6 +2954,7 @@ for b in bash cat grep sed date mktemp mkdir rm mv cp chmod ls readlink id print
     _src="$(command -v "$b" 2>/dev/null)"; [[ -n "$_src" ]] && ln -sf "$_src" "$IH/nopy/$b" 2>/dev/null || true
 done
 cp "$HERE/fake-agy.sh" "$IH/nopy/agy"; chmod +x "$IH/nopy/agy"
+_cc_fixtures_beside "$IH/nopy"
 printf '#!/bin/sh\nexit 0\n' > "$IH/nopy/tokensave"; chmod +x "$IH/nopy/tokensave"
 printf '%s\n' '{"mcpServers":{}}' > "$IH/.gemini/antigravity-cli/mcp_config.json"
 env -i HOME="$IH" PATH="$IH/nopy" AGY_PLUGIN_DIR="$ROOT" \
@@ -3320,6 +3342,7 @@ echo "== bridge survives a bare environment, HOME unset (RB27) =="
 RB27_BIN="$(mktemp -d "$SANDBOX/rb27bin.XXXXXX")"
 cp "$HERE/fake-agy.sh" "$RB27_BIN/agy"
 chmod +x "$RB27_BIN/agy"
+_cc_fixtures_beside "$RB27_BIN"
 RB27_ERRF="$SANDBOX/rb27.err"
 RB27_OUT="$(env -i PATH="$RB27_BIN:/usr/bin:/bin" FAKE_AGY_STDOUT="rb27 bare ok" \
     bash "$BRIDGE" --type code -- "no home here" 2>"$RB27_ERRF")" && RB27_RC=0 || RB27_RC=$?
