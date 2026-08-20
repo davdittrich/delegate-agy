@@ -2141,6 +2141,101 @@ else
         "detail=$RB03_DETAIL"
 fi
 
+echo "== the docs are held to the captured evidence (CC05) =="
+
+# CC05: README's dated --model fact is a claim about the model list captured in
+# tests/fixtures/agy-models.tsv, so that fixture's header is the evidence the
+# document is pinned against. RB03 (above) is the shape copied here: expected
+# bytes are written HERE, not extracted from one file and grepped for in the
+# other -- extracting a string from a file and then searching that same file
+# for it is a tautology that passes whatever the string becomes. This case is
+# the seam between the captured evidence and the document quoting it.
+_CC_AGY_VERSION='1.1.13'
+_CC_CAPTURE_DATE='2026-08-20'
+# The pre-phase troubleshooting advice task 1 removed, pinned as an absence.
+_CC_DEAD_EXACT_STRING='exact string required'
+# The one fixture README's dated fact is pinned against -- not every fixture
+# under tests/fixtures/ (F8, review round; see below).
+_CC_PINNED_FIXTURE="$HERE/fixtures/agy-models.tsv"
+# The required-fixture manifest: files that must exist and carry a well-formed
+# provenance header. tests/fixtures/empty-success.txt is deliberately absent --
+# D-11 makes it conditional on the headless permission gate actually firing
+# during a real run, and a fixture that may legitimately not exist cannot be
+# required to.
+_CC_REQUIRED_FIXTURES=(
+    "$HERE/fixtures/agy-version.txt"
+    "$HERE/fixtures/agy-models.tsv"
+    "$HERE/fixtures/invalid-model.txt"
+)
+
+CC05_OK=1
+CC05_DETAIL=""
+
+# Non-vacuity (RB01's occurrence-floor discipline, applied to an explicit list
+# instead of a scan): a manifest with fewer than three entries would clear
+# every per-file assertion below by vacuous iteration and report success for
+# the wrong reason.
+[[ "${#_CC_REQUIRED_FIXTURES[@]}" -ge 3 ]] \
+    || { CC05_OK=0; CC05_DETAIL="$CC05_DETAIL manifest_too_short(${#_CC_REQUIRED_FIXTURES[@]})"; }
+
+# Two assertions of different strengths, deliberately (F8). README's dated fact
+# is a claim about what --model accepts, and the captured model list is its
+# evidence -- so equality is pinned against _CC_PINNED_FIXTURE alone. The other
+# required fixtures are captured by different probes across different plans and
+# may legitimately be recaptured independently (a retry, an exhausted quota, an
+# agy version bump mid-phase); a rule that turns a truthful partial recapture
+# red would teach the next contributor to hand-edit a provenance stamp, which is
+# the one thing this case exists to prevent. So those get a header SHAPE
+# assertion only, no cross-file equality.
+
+# Equality, over _CC_PINNED_FIXTURE and README only.
+[[ -f "$_CC_PINNED_FIXTURE" ]] \
+    || { CC05_OK=0; CC05_DETAIL="$CC05_DETAIL ${_CC_PINNED_FIXTURE##*/}:missing"; }
+[[ "$(grep -cF "# agy-version: $_CC_AGY_VERSION" "$_CC_PINNED_FIXTURE" 2>/dev/null)" -eq 1 ]] \
+    || { CC05_OK=0; CC05_DETAIL="$CC05_DETAIL ${_CC_PINNED_FIXTURE##*/}:version_mismatch"; }
+[[ "$(grep -cF "# captured: $_CC_CAPTURE_DATE" "$_CC_PINNED_FIXTURE" 2>/dev/null)" -eq 1 ]] \
+    || { CC05_OK=0; CC05_DETAIL="$CC05_DETAIL ${_CC_PINNED_FIXTURE##*/}:date_mismatch"; }
+grep -qF "$_CC_AGY_VERSION" "$_RB_README" \
+    || { CC05_OK=0; CC05_DETAIL="$CC05_DETAIL readme:version_missing"; }
+grep -qF "$_CC_CAPTURE_DATE" "$_RB_README" \
+    || { CC05_OK=0; CC05_DETAIL="$CC05_DETAIL readme:date_missing"; }
+
+# Shape, over every entry in _CC_REQUIRED_FIXTURES: must exist (checked first,
+# so a manifest whose files are all missing cannot pass this loop vacuously)
+# and carry exactly one well-formed line of each provenance field. No
+# cross-file equality -- a probe may legitimately be re-run alone, and this is
+# the F8 fix.
+for _cc05_f in "${_CC_REQUIRED_FIXTURES[@]}"; do
+    if [[ ! -f "$_cc05_f" ]]; then
+        CC05_OK=0
+        CC05_DETAIL="$CC05_DETAIL ${_cc05_f##*/}:missing"
+        continue
+    fi
+    [[ "$(grep -cE '^# agy-version: .+' "$_cc05_f")" -eq 1 ]] \
+        || { CC05_OK=0; CC05_DETAIL="$CC05_DETAIL ${_cc05_f##*/}:no_version_header"; }
+    [[ "$(grep -cE '^# captured: [0-9]{4}-[0-9]{2}-[0-9]{2}$' "$_cc05_f")" -eq 1 ]] \
+        || { CC05_OK=0; CC05_DETAIL="$CC05_DETAIL ${_cc05_f##*/}:no_captured_header"; }
+done
+
+# Negative half (RB03's own precedent, above: "equally load-bearing"). Every
+# other assertion here is positive, so a stale sentence reintroduced beside a
+# correct one would keep the suite green.
+grep -qiF "$_CC_DEAD_EXACT_STRING" "$_RB_README" \
+    && { CC05_OK=0; CC05_DETAIL="$CC05_DETAIL readme:dead_claim_returned"; }
+
+# Scope: README and tests/fixtures/ only, matching RB03's own scope comment
+# above -- the requirements and roadmap records live outside this worktree,
+# in the tree this suite does not run from, and the suite must also pass from
+# a release tarball that carries neither. Their D-18 correction is verified by
+# human read, per the phase's validation record.
+
+if [[ "$CC05_OK" -eq 1 ]]; then
+    ok "CC05 README's dated --model fact matches the captured fixture header, and the pre-phase claim stays gone"
+else
+    bad "CC05 README's dated --model fact matches the captured fixture header, and the pre-phase claim stays gone" \
+        "detail=$CC05_DETAIL"
+fi
+
 echo "== one warning per run, before any bounded output (RB08) =="
 
 # RB08: the missing-binary warning is announced at the PROBE, which runs once
