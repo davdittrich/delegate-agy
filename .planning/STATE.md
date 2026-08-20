@@ -4,16 +4,16 @@ milestone: v1.6.2
 current_phase: 02
 current_phase_name: model-list-handling-end-to-end
 status: executing
-stopped_at: Completed 02-01-PLAN.md
-last_updated: "2026-08-20T12:00:00.000Z"
+stopped_at: Completed 02-02-PLAN.md
+last_updated: "2026-08-20T15:20:00.000Z"
 last_activity: 2026-08-20
-last_activity_desc: Phase 02 plan 01 (bridge cache-poisoning gate) complete, plan 02 (shim mirror) next
+last_activity_desc: Phase 02 plan 02 (shim mirror) complete -- S4 (delegate-agy-8ph) and S1 both closed on both writers
 state_head: 529aa7308869de1c68edc6e797dc7e4a26880458
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 14
-  completed_plans: 13
+  completed_plans: 14
 milestone_name: milestone
 ---
 
@@ -28,12 +28,12 @@ See: .planning/PROJECT.md (updated 2026-08-20)
 
 ## Current Position
 
-Phase: 02 (model-list-handling-end-to-end) — IN PROGRESS
-Plan: 02-01 complete (bridge cache-poisoning gate); 02-02 (shim mirror) next, blocked on 02-01
+Phase: 02 (model-list-handling-end-to-end) — plans complete, phase-level verification pending
+Plan: 02-01 complete (bridge cache-poisoning gate); 02-02 complete (shim mirror) -- both plans in Phase 02 done
 Status: Executing
-Last activity: 2026-08-20 — Phase 02 plan 01 complete: D-03 write gate, D-04 stale-cache fallback, D-05 distinct warning, D-06 extra-column/trailing-tab proof, D-07 unconditional stderr relay, D-08 herestring fix, all on `scripts/agy_bridge.sh`. Suite PASS=138 FAIL=0.
+Last activity: 2026-08-20 — Phase 02 plan 02 complete: D-03 write gate, D-04 stale-cache fallback (silent, D-05), D-08 herestring fix (2 sites), D-06 extra-column/trailing-tab proof, all mirrored onto `scripts/gemini_shim.sh`'s `load_models()`. `delegate-agy-8ph` closed -- both writers of `~/.cache/agy-bridge-models` now gate the same way. S1 and S4 both moved to "met" in REQUIREMENTS.md. Suite PASS=141 FAIL=0.
 
-Progress: [████████░░] 1/2 plans in Phase 02 (13/14 plans overall)
+Progress: [██████████] 2/2 plans in Phase 02 (14/14 plans overall)
 
 ## Performance Metrics
 
@@ -115,6 +115,10 @@ Recent decisions affecting current work:
 - [Phase 02]: 02-01: D-07's stderr relay is relocated (one line moved to fire unconditionally after the whole fetch if/elif/else), not duplicated per branch -- folded into this plan's Task 2 rather than raised as a follow-up bd issue, closing the last open half of criterion 3 in this phase instead of a later one
 - [Phase 02]: 02-01: D-06's synthetic 3-column/trailing-tab fixture lives in a scratch `AGY_FIXTURES_DIR`, never in `tests/fixtures/agy-models.tsv` (D-14/D-14a's captured-vs-synthetic separation)
 - [Phase 02]: 02-01: S4 (`delegate-agy-8ph`) and S1 both stay "partial" in REQUIREMENTS.md, not "met" -- `8ph` explicitly forbids a one-sided fix, so both requirements close only after plan 02-02 mirrors the same gate/fallback into `gemini_shim.sh`
+- [Phase 02]: 02-02: the shim's write gate lives entirely inside `load_models()` -- a new `ids` local (cut -f1-normalized) gates the existing tmp-then-mv write; the D-04 fallback is one `elif [[ -s "$MODELS_CACHE" ]]; then raw=""; fi` on the same if, no new branch, no second cache read
+- [Phase 02]: 02-02: unlike the bridge, the shim adds no stderr line on the degraded-fallback path (D-05) -- this script shadows `gemini` on PATH, so a warning here would land in every Octopus/Metaswarm log line; the bridge's D-07 stderr-relocation gap does not apply here since `load_models()`'s fetch already redirects agy's own stderr to `2>/dev/null`
+- [Phase 02]: 02-02: D-08's herestring conversion touches exactly two sites in `gemini_shim.sh` -- the new write-gate and the existing `map_model` warning-gate check (formerly a `printf | grep -q` pipe) -- mirroring plan 02-01's identical, narrow D-01/D-02 exception on `agy_bridge.sh`; `map_model`'s verbatim-id and class-resolution matchers are untouched
+- [Phase 02]: 02-02: `delegate-agy-8ph` closed -- both writers of `~/.cache/agy-bridge-models` (`agy_bridge.sh` plan 02-01, `gemini_shim.sh` plan 02-02) now carry the write gate, the D-04 stale-cache fallback and atomic-write preservation; S1 and S4 both move to "met" in REQUIREMENTS.md. Suite PASS=141 FAIL=0.
 
 ### Pending Todos
 
@@ -145,6 +149,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-20T12:00:00.000Z
-Stopped at: Completed 02-01-PLAN.md
-Resume file: .planning/phases/02-model-list-handling-end-to-end/02-02-PLAN.md
+Last session: 2026-08-20T15:20:00.000Z
+Stopped at: Completed 02-02-PLAN.md
+Resume file: None -- Phase 02's plans are both complete; phase-level verification is the next step, handled by the orchestrator, not this executor

@@ -122,7 +122,7 @@ Plans:
   3. A caller who hits a `gemini-`less model list is told agy is degraded or unauthenticated, and shown agy's own stderr — not told their `--type` did not match.
   4. A tab-suffixed or extra-column `agy models` reply still resolves a model: the input is normalized, and the anchored `^gemini-[0-9.]+-<class>$` matchers are byte-identical to what shipped.
 
-**Plans**: 1/2 plans executed
+**Plans**: 2/2 plans executed
 
 Plans:
 **Wave 1**
@@ -131,7 +131,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 02-02-PLAN.md — Mirror the gate and the fallback into `gemini_shim.sh`'s `load_models()`, silently per its degrade-quietly design, closing S4 on both writers (SH15, SH15b, SH15c)
+- [x] 02-02-PLAN.md — Mirror the gate and the fallback into `gemini_shim.sh`'s `load_models()`, silently per its degrade-quietly design, closing S4 on both writers (SH15, SH15b, SH15c)
 
 **Note**: `delegate-agy-8ph` forbids a one-sided fix and forbids changing the 60-minute TTL as a substitute. Both writers change together or neither does.
 
@@ -220,7 +220,7 @@ Phases 1, 1.5, 3, and 4 have no dependencies on each other and may be planned or
 |-------|----------------|--------|-----------|
 | 1. The missing-`timeout` decision | 6/6 | Complete    | 2026-08-20 |
 | 1.5. Contract check against a real agy | 6/6 | Complete    | 2026-08-20 |
-| 2. Model-list handling, end to end | 1/2 | In Progress|  |
+| 2. Model-list handling, end to end | 2/2 | In Progress|  |
 | 3. The exit-code contract | 0/TBD | Not started | - |
 | 4. Installer and launcher surface | 0/TBD | Not started | - |
 | 5. The shim's failure-mode contract | 0/TBD | Not started | - |
