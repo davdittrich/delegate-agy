@@ -1432,6 +1432,22 @@ else
     bad "SH15c an extra column and a trailing tab both normalize through the real fetch path" "$SH15C_DETAIL"
 fi
 
+# SH15d (WR-01): map_model's "is $m already a live id" check reads the same
+# untrusted $LIVE_MODELS as SH15/SH15b's herestring-converted write-gate, but
+# was deliberately left as a `printf | grep -qxF` pipe (same "different
+# mechanism" carve-out as CR-01's twin on the bridge -- 02-02-PLAN.md:42). A
+# SIGPIPE'd printf under `&&` short-circuits to false even when $m IS live,
+# producing a spurious "did not resolve" warning for a model that in fact
+# resolved. Structural twin of R9d.
+SH15D_PIPE="$(grep -cF '"$LIVE_MODELS" | grep -qxF "$m"' "$SHIM")" || SH15D_PIPE=0
+SH15D_HERE="$(grep -cF 'grep -qxF "$m" <<< "$LIVE_MODELS"' "$SHIM")" || SH15D_HERE=0
+if [[ "$SH15D_PIPE" -eq 0 && "$SH15D_HERE" -eq 1 ]]; then
+    ok "SH15d map_model's live-id check uses the SIGPIPE-safe herestring form, not printf|grep (WR-01)"
+else
+    bad "SH15d map_model's live-id check uses the SIGPIPE-safe herestring form, not printf|grep (WR-01)" \
+        "pipe_form_count=$SH15D_PIPE herestring_form_count=$SH15D_HERE"
+fi
+
 echo "== watchdog fixtures (RB00) =="
 
 # RB00a: the sanitized PATH must genuinely resolve no bounding binary, AND still
