@@ -762,7 +762,8 @@ import json, sys
 print(json.dumps({'success':False,'model_used':sys.argv[1],'type':sys.argv[2],'duration_seconds':int(sys.argv[3]),'error':open(sys.argv[4]).read()}))
 " "$MODEL" "$TYPE" "$DURATION" "$STDERR_FILE" || true
     else
-        printf 'ERROR: agy exit %d: %s\n' "$EXIT_CODE" "$(cat "$STDERR_FILE" 2>/dev/null || true)" >&2
+        _err_txt="$(cat "$STDERR_FILE" 2>/dev/null || true)"
+        printf 'ERROR: agy exit %d%s\n' "$EXIT_CODE" "${_err_txt:+: $_err_txt}" >&2
     fi
     exit "$EXIT_CODE"
 elif [[ ! -s "$STDOUT_FILE" ]]; then
