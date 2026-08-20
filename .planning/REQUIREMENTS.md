@@ -74,7 +74,7 @@ An output-format change must fail loudly and diagnosably, never silently resolve
 
 - Acceptance: a contract check, runnable on demand and separate from the unit suite, that exercises the real binary and reports which assumptions hold — at minimum whether `--model` accepts ids, display names, or both, and what `agy models` actually emits.
 - Origin: three independent reviews could not settle the id-vs-display-name question because nothing in the repo can ask it. The fake is deterministic and fast, which is why the suite stayed green while the real integration was broken. **This is the requirement that would have caught the originating bug.**
-- Constraint: cannot be satisfied on the current machine — agy is unresponsive and returns 124.
+- Constraint: satisfied by `tests/contract-check.sh` — a repo-only tool, run on demand and separate from the unit suite, that spends real quota against the live binary. The "could not ask" path (a hung or absent agy reported as `unverified`, never a false pass) remains a required, tested capability rather than the expected outcome: agy was unreachable a week before this requirement was verified against it, and may be again.
 
 ---
 
@@ -90,8 +90,10 @@ An output-format change must fail loudly and diagnosably, never silently resolve
 | S2 | Phase 4 | — | shipped on branch |
 | S3 | Phase 5 | `cy5` (shared with R11) | open — contract table and per-mode tests not written |
 | S4 | Phase 2 | `8ph` | open |
-| S5 | Phase 7 | — | open, externally blocked (agy returns 124 on every call) |
+| S5 | Phase 1.5 | `xfa` | met — `tests/contract-check.sh` (plans 01.5-01 through 01.5-06) exercises real agy 1.1.13 and reports which of D-09's seven assumptions hold, run once against the live binary on 2026-08-20: 6 **verified** (`agy-version-shape`, `models-format`, `non-gemini-rows`, `invalid-model-rejection`, `gemini-md-binds`, `model-arg-accepts` — both a bare id and a display name were accepted), 1 **contradicted** (`sigterm-ignored`: agy died on `SIGTERM` alone this run, contradicting R11's `-k` escalation rationale — `delegate-agy-i43` filed against it, not acted on in this phase by design, a phase-boundary deferral). `empty-success-capture` is a stated, honest capture-attempt gap (the headless permission gate did not fire this run), not a scored assumption. S5's acceptance is that the check *reports* which assumptions hold, not that every one does — the contradicted row is a success of this requirement, not a failure of it, and is visible here without opening the ledger. |
 
 **Tickets with no requirement mapping.** `delegate-agy-30m` (P1, unguarded `$HOME` crashes the bridge), `delegate-agy-4vy` and `delegate-agy-4xn` (P3, install and docs hardening) are release-blocking defects surfaced by 1.6.2 work rather than requirement gaps. They are absorbed by Phases 2 and 4 respectively and gated by Phase 6.
 
 **Correction against the tracker (2026-08-19).** `delegate-agy-62x`, previously listed here as S5's open ticket, is CLOSED — closed without ever being verified, so the id-vs-display-name question it raised remains a hypothesis. S5 has no open ticket backing it.
+
+**S5's tickets, updated (2026-08-20).** `delegate-agy-9qp` (the stale blocker claiming agy could not be reached, previously repeated in this document, `PROJECT.md` and `STATE.md`) closes with this correction landing — see `bd` for the closure. `delegate-agy-xfa` (does the per-run `GEMINI.md` policy actually bind against a competing `GEMINI.md` outside the granted work dir?) resolves `verified` on this phase's `gemini-md-binds` evidence: the decoy's marker did not leak and the forbidden tool was declined. It stays open pending its own closure step; the run's evidence is recorded in the ticket's comment, not repeated here.

@@ -196,6 +196,8 @@ Plans:
 
 **Plans**: TBD
 
+**Note**: criterion 3's "both suites pass" gate covers `bash tests/run-tests.sh` and the installer suite, and is deliberately **not** widened to include `bash tests/contract-check.sh` (D-05). Making a release gate depend on a live third-party binary means an agy outage blocks a tag; the contract check's verdicts inform the release, they do not gate it.
+
 ## Progress
 
 **Execution Order:**
