@@ -70,8 +70,23 @@
 #                         `agy models` exits 0 but with no gemini ids in its
 #                         output. Ignored outside `models`.
 #
-# The `models` and `--version` subcommands are answered deterministically so the
-# bridge's model-allowlist check and the shim's --version path work under test.
+#   AGY_FIXTURES_DIR      NOT a FAKE_AGY_* knob -- deliberately: this is a
+#                         resolution path, not a behavior-simulation knob.
+#                         Tier 1 of the three-tier lookup `_fake_fixture` uses
+#                         to find `agy-models.tsv`: when set and naming a
+#                         directory, that directory is read first. Tier 2 is
+#                         `$(dirname "$0")/fixtures` (wherever this script was
+#                         copied); tier 3 is `$AGY_PLUGIN_DIR/tests/fixtures`.
+#                         A total resolution failure -- no tier resolves, or
+#                         the resolved fixture is unreadable or carries no
+#                         data rows -- is loud and non-zero, naming every path
+#                         tried, never a silent empty list.
+#
+# The `models` subcommand's real-shaped rows come from a captured fixture
+# (tests/fixtures/agy-models.tsv), read at runtime by _fake_fixture -- this
+# stub carries no independent copy of a model list, so it cannot disagree
+# with the fixture because it has nothing to disagree with. `--version` stays
+# a fixed literal below; SH12 asserts it verbatim.
 set -u
 
 # Observational argv dump (env-gated, additive). Runs first so it captures the
@@ -80,6 +95,54 @@ set -u
 if [[ -n "${FAKE_AGY_DUMP_ARGV:-}" ]]; then
     printf '%s\n' "$@" > "$FAKE_AGY_DUMP_ARGV"
 fi
+
+# _fake_fixture NAME -- resolve tests/fixtures/NAME through the three-tier
+# lookup documented above (AGY_FIXTURES_DIR, then $(dirname "$0")/fixtures,
+# then $AGY_PLUGIN_DIR/tests/fixtures), read it as DATA ONLY -- grep, never
+# sourced or eval'd -- strip its `# `-prefixed provenance header, and write
+# the remaining bytes to stdout unchanged. One function, not three: the
+# resolution has exactly one caller.
+#
+# Failure handling is the load-bearing part. If no tier resolves, the file is
+# absent/unreadable, or nothing but header lines survive the strip, this
+# fails LOUD -- a diagnostic naming every path tried goes to stderr and the
+# function returns non-zero. It must never fall through to printing nothing:
+# an empty `agy models` is the degraded-list shape S1 exists to catch, and a
+# silent empty emission would make a resolution bug look like a passing test
+# of the wrong thing.
+_fake_fixture() {
+    local name="$1"
+    local cand1="AGY_FIXTURES_DIR=${AGY_FIXTURES_DIR:-<unset>}"
+    local cand2="$(dirname "$0")/fixtures"
+    local cand3="${AGY_PLUGIN_DIR:-<AGY_PLUGIN_DIR unset>}/tests/fixtures"
+    local dir=""
+
+    if [[ -n "${AGY_FIXTURES_DIR:-}" && -d "${AGY_FIXTURES_DIR:-}" ]]; then
+        dir="$AGY_FIXTURES_DIR"
+    elif [[ -d "$cand2" ]]; then
+        dir="$cand2"
+    elif [[ -n "${AGY_PLUGIN_DIR:-}" && -d "$cand3" ]]; then
+        dir="$cand3"
+    fi
+
+    if [[ -z "$dir" ]]; then
+        printf 'FATAL: fake-agy.sh could not resolve a fixtures directory for %s; tried: %s | %s | %s\n' \
+            "$name" "$cand1" "$cand2" "$cand3" >&2
+        return 1
+    fi
+
+    local path="$dir/$name" rows
+    if [[ ! -r "$path" ]]; then
+        printf 'FATAL: fake-agy.sh could not read fixture %s\n' "$path" >&2
+        return 1
+    fi
+    rows="$(grep -v '^#' "$path")"
+    if [[ -z "$rows" ]]; then
+        printf 'FATAL: fake-agy.sh fixture %s has no data rows\n' "$path" >&2
+        return 1
+    fi
+    printf '%s\n' "$rows"
+}
 
 case "${1:-}" in
     models)

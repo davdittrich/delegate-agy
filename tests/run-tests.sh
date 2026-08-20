@@ -112,6 +112,32 @@ _run() {
     printf -v "$__rcvar" '%s' "$__rc"
 }
 
+# _cc_expect_model CLASS [FIXTURE_PATH] -- derive the expected model id for
+# CLASS (e.g. flash-high, pro-high) from a fixture with the shipped rule,
+# byte-for-byte: scripts/agy_bridge.sh's
+# grep -E '^gemini-[0-9.]+-<class>$' | sort -V | tail -1. FIXTURE_PATH is
+# optional and defaults to $HERE/fixtures/agy-models.tsv, so R2 and R4 read
+# the real capture while CC06 (task 3) drives this same byte-identical
+# derivation over synthetic lists it writes into the sandbox (F3) -- one
+# parameter, two callers, no override variable and no reimplementation of the
+# rule at either call site. An unreadable fixture or an empty result is
+# FATAL naming the path read, following _purebin()'s missing-tool discipline
+# -- a vacuous expectation would make both repaired cases (and CC06) compare
+# nothing to nothing.
+_cc_expect_model() {
+    local class="$1" fixture="${2:-$HERE/fixtures/agy-models.tsv}" id
+    if [[ ! -r "$fixture" ]]; then
+        printf 'FATAL: _cc_expect_model cannot read fixture %s\n' "$fixture" >&2
+        exit 1
+    fi
+    id="$(grep -v '^#' "$fixture" | cut -f1 | grep -E "^gemini-[0-9.]+-${class}\$" | sort -V | tail -1)"
+    if [[ -z "$id" ]]; then
+        printf 'FATAL: _cc_expect_model found no gemini-*-%s id in %s\n' "$class" "$fixture" >&2
+        exit 1
+    fi
+    printf '%s' "$id"
+}
+
 # ── Sanitized PATH ────────────────────────────────────────────────────────────
 # The suite-wide `export PATH="$SANDBOX/bin:$PATH"` above PREPENDS, so the
 # host's timeout/gtimeout stays reachable through every case and the scripts'
