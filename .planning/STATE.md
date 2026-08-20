@@ -4,16 +4,16 @@ milestone: v1.6.2
 current_phase: 03
 current_phase_name: the-exit-code-contract
 status: executing
-stopped_at: Completed 03-02-PLAN.md
-last_updated: "2026-08-20T21:40:48.608Z"
+stopped_at: Completed 03-03-PLAN.md
+last_updated: "2026-08-20T22:10:29.897Z"
 last_activity: 2026-08-20
 last_activity_desc: Phase 03 execution started
-state_head: fcdec5e5b2f944ebd6959bad9aa91c9a6544953a
+state_head: 94fb465c914a56c27395c455ca05871021174074
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 18
-  completed_plans: 16
+  completed_plans: 17
 milestone_name: milestone
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-20)
 ## Current Position
 
 Phase: 03 (the-exit-code-contract) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-08-20 — Phase 03 execution started
 
@@ -75,6 +75,7 @@ Progress: [░░░░░░░░░░░░░░░░░░░░] 14/14 p
 | Phase 01.5 P06 | 31min | 3 tasks | 4 files |
 | Phase 03 P01 | 40min | 2 tasks | 3 files |
 | Phase 03 P02 | ~30min | 3 tasks | 4 files |
+| Phase 03 P03 | ~1h10min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -127,6 +128,8 @@ Recent decisions affecting current work:
 - [Phase 03]: 03-01: the JSON path's error string is now trailing-newline-stripped (decided behavior change, not a bug fix) -- text\n\n now yields ': text', matching the plain-text arm's pre-existing $(cat ...) behavior
 - [Phase 03]: [Phase 03]: 03-02: the shim's EC_KILL9_TAIL mirrors the bridge's literal exactly (not just equivalent wording) so EC03's cross-script comparison is a meaningful byte-identity check, not two independently-written expected strings
 - [Phase 03]: [Phase 03]: 03-02: EC05's mutation-red proof (T-03-08) is a manual, git-status-tracked verification of the real file during task execution, not a permanent self-mutating suite case -- matches RB03's own static-provenance shape
+- [Phase 03]: [Phase 03]: 03-03: README's exit-124 row quotes both timeout literals as bridge-text-vs-bridge-JSON divergence, not bridge-vs-shim -- the two entry points' TEXT forms are byte-identical
+- [Phase 03]: [Phase 03]: 03-03: D-09 exit-2 consistency pass found zero inconsistencies among 25 call sites in agy_bridge.sh; delegate-agy-b7g recorded with explicit left-for-another-phase disposition, no production change
 
 ### Pending Todos
 
@@ -157,6 +160,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-20T21:40:48.575Z
-Stopped at: Completed 03-02-PLAN.md
+Last session: 2026-08-20T22:10:29.870Z
+Stopped at: Completed 03-03-PLAN.md
 Resume file: None
