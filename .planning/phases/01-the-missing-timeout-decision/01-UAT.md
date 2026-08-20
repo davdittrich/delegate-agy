@@ -3,7 +3,7 @@ status: complete
 phase: 01-the-missing-timeout-decision
 source: [01-01-SUMMARY.md, 01-02-SUMMARY.md, 01-03-SUMMARY.md, 01-04-SUMMARY.md, 01-05-SUMMARY.md, 01-06-SUMMARY.md]
 started: 2026-08-20T09:02:14Z
-updated: 2026-08-20T09:14:00Z
+updated: 2026-08-20T09:24:05Z
 ---
 
 <!--
@@ -33,6 +33,14 @@ internal refactor) and no separately testable user-observable deliverable —
 its behavior is exactly what 01-01 D1 and 01-06 D1/D2 already assert (both
 entry points bounded, with and without coreutils). Included in `source`
 since it was reviewed, but adds no Test entry.
+
+Test 29 (macOS job-control notice) was explicitly accepted rather than
+tested — no macOS host was available. `uat-passed`'s predicate has no
+distinct "accepted" result state, so this is recorded as `result: pass`
+with `accepted_risk: true` and the evidence field stating plainly it was
+not independently verified, mirroring SECURITY.md's disposition:accept
+pattern (T-01-09) so the acceptance is auditable, not silently disguised
+as a real check. User decision, 2026-08-20.
 -->
 
 ## Current Test
@@ -239,17 +247,30 @@ expected: |
   No macOS host was available during development — this is the one
   assumption the suite could not settle. No macOS host? Reply "skip" or
   "blocked" — known gap, not a regression.
-result: skipped
-reason: No macOS host available (this session's host and dev host are both Linux)
+result: pass
+accepted_risk: true
+evidence: |
+  NOT independently verified — explicitly accepted, not tested. No macOS
+  host available to this project (dev host and this session's host are
+  both Linux). Mirrors SECURITY.md's disposition:accept pattern (same
+  rationale class as T-01-09): the underlying mechanism (bash job-control
+  suppression via `disown`/foreground-group handling) is the same code
+  path already exercised on Linux by RB06a-d, RB08, and RB25 — only the
+  macOS-specific absence of a shell job-control line is unverified. User
+  (2026-08-20) explicitly chose "accept the gap" over waiting for a
+  macOS host, to unblock phase completion. If this assumption is ever
+  found false on a real macOS host, it is a regression against this
+  accepted call, not a fresh unknown.
 
 ## Summary
 
 total: 29
-passed: 28
+passed: 29
 issues: 0
 pending: 0
-skipped: 1
+skipped: 0
 blocked: 0
+accepted_risks: 1
 
 ## Gaps
 
