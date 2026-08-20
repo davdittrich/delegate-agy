@@ -489,6 +489,14 @@ if [[ ! -s "$CACHE_FILE" ]] || [[ -n "$(find "$CACHE_FILE" -mmin +60 2>/dev/null
             { printf '%s' "$_agy_models" > "$CACHE_FILE.tmp.$$" \
                 && mv "$CACHE_FILE.tmp.$$" "$CACHE_FILE"; } 2>/dev/null || true
             chmod 600 "$CACHE_FILE" 2>/dev/null || true
+        elif [[ -s "$CACHE_FILE" ]]; then
+            # Treat a degraded-but-successful fetch like a fetch failure for
+            # THIS call (D-04): fall back to the stale cache read below rather
+            # than delegating off a garbage list. The cache file itself is
+            # never touched here, so its mtime -- and the TTL window -- stay
+            # exactly as they were.
+            echo "WARNING: 'agy models' returned a list with no 'gemini-' ids (agy may be unauthenticated); using the stale cached list." >&2
+            _agy_models=""
         fi
     else
         _agy_rc=$?
@@ -503,8 +511,12 @@ if [[ ! -s "$CACHE_FILE" ]] || [[ -n "$(find "$CACHE_FILE" -mmin +60 2>/dev/null
         else
             echo "ERROR: 'agy models' $_agy_why and no cached list is available." >&2
         fi
-        [[ -s "$_agy_err" ]] && sed 's/^/       agy: /' "$_agy_err" >&2
     fi
+    # Relocated (not duplicated): agy's own stderr is the only diagnostic for
+    # an auth/network fault, and was previously shown only on outright fetch
+    # failure. It now fires unconditionally whenever agy wrote anything,
+    # success (degraded or not) or failure alike (D-07, criterion 3).
+    [[ -s "$_agy_err" ]] && sed 's/^/       agy: /' "$_agy_err" >&2
     rm -f "$_agy_err"
 fi
 VALID_MODELS="${_agy_models:-}"

@@ -162,6 +162,7 @@ case "${1:-}" in
         fi
         # Garbage mode: exit 0 with output carrying no gemini ids at all.
         if [[ -n "${FAKE_AGY_MODELS_GARBAGE:-}" ]]; then
+            echo "FAKE-AGY-DEGRADED: not authenticated" >&2
             printf '%s\n' "Please run 'agy auth login' first." "no models available"
             exit 0
         fi
