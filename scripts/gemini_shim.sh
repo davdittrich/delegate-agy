@@ -427,6 +427,16 @@ load_models() {
                 { printf '%s' "$raw" > "$MODELS_CACHE.tmp.$$" \
                     && mv "$MODELS_CACHE.tmp.$$" "$MODELS_CACHE"; } 2>/dev/null || true
                 chmod 600 "$MODELS_CACHE" 2>/dev/null || true
+            elif [[ -s "$MODELS_CACHE" ]]; then
+                # A gemini--less reply resolves nothing, so a good list already
+                # on disk is strictly better (D-04): treat it like a fetch
+                # failure for THIS call and fall through to the cache read
+                # below. The cache file itself is untouched here, so its mtime
+                # -- and the TTL window -- stay exactly as they were. Silent,
+                # unlike the bridge's warning (D-05): this shim shadows
+                # `gemini` on PATH, so a warning here would land in every
+                # Octopus/Metaswarm log line.
+                raw=""
             fi
         fi
     fi
