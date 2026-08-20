@@ -503,10 +503,47 @@ if [[ "$RC" -eq 2 && "$OUT" == *"no 'gemini-' ids"* && "$OUT" != *"for --type"* 
 else
     bad "R8 model list with no gemini ids reports a degraded list, not a bad --type" "rc=$RC out=$OUT"
 fi
-# The garbage fetch above exits 0, so the bridge caches it (same shared $HOME
-# as every other test in this run). Clear it so later tests still see a full
-# model list on their next fetch -- same pattern as R3/R3c/R6.
+# Under D-03 the bridge no longer caches a degraded (gemini--less) reply, so
+# this is now defensive cleanup rather than a required undo -- kept so a
+# later regression in the write gate still leaves later tests seeing a full
+# model list on their next fetch. Same pattern as R3/R3c/R6.
 rm -f "$HOME/.cache/agy-bridge-models"
+
+# R9: a degraded (gemini--less) agy models reply must never reach the cache
+# file the shim also reads (D-03, delegate-agy-8ph) -- absent stays absent,
+# present stays byte-identical, regardless of the outcome of the call itself.
+_R9_CACHE="$HOME/.cache/agy-bridge-models"
+R9_OK=1
+R9_DETAIL=""
+
+# First half: no cache on disk -- outcome unchanged (rc=2, degraded message),
+# and nothing gets created.
+rm -f "$_R9_CACHE"
+FAKE_AGY_MODELS_GARBAGE=1 _run OUT RC bash "$BRIDGE" --type code -- "garbage no cache"
+if [[ "$RC" -ne 2 || "$OUT" != *"no 'gemini-' ids"* || -s "$_R9_CACHE" ]]; then
+    R9_OK=0
+    R9_DETAIL="${R9_DETAIL}absent-half: rc=$RC cache_exists=$( [[ -s "$_R9_CACHE" ]] && echo yes || echo no ) out=$OUT; "
+fi
+
+# Second half: a good cache already on disk survives a degraded reply
+# byte-for-byte -- this is what a poisoned cache would otherwise break.
+mkdir -p "$(dirname "$_R9_CACHE")"
+printf '%s\t%s\n' "gemini-3.1-pro-high" "Gemini 3.1 Pro (High)" > "$_R9_CACHE"
+touch -d '2 hours ago' "$_R9_CACHE"
+_R9_BEFORE="$(cat "$_R9_CACHE")"
+FAKE_AGY_MODELS_GARBAGE=1 _run OUT RC bash "$BRIDGE" --type code -- "garbage with cache"
+_R9_AFTER="$(cat "$_R9_CACHE" 2>/dev/null)"
+if [[ "$_R9_AFTER" != "$_R9_BEFORE" ]]; then
+    R9_OK=0
+    R9_DETAIL="${R9_DETAIL}preservation-half: before=[$_R9_BEFORE] after=[$_R9_AFTER]; "
+fi
+rm -f "$_R9_CACHE"
+
+if [[ "$R9_OK" -eq 1 ]]; then
+    ok "R9 a degraded agy models reply never reaches the cache file, absent or present"
+else
+    bad "R9 a degraded agy models reply never reaches the cache file, absent or present" "$R9_DETAIL"
+fi
 
 # R4: gemini_shim.sh -m flash resolves against the LIVE `agy models` list and
 # hands agy a real ID (delegate-agy-62x purge-guard). The map used to hold
