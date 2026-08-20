@@ -153,7 +153,7 @@ Plans:
   4. README's troubleshooting table quotes each exit-code message as the code emits it, appended stderr suffix included, so an operator matching output against the docs finds their string.
   5. agy exiting 0 with empty stdout yields exit 3 with 0-byte stdout in text mode and an `{"error":…}` envelope carrying no `response` key in JSON mode — a regression test pins both shapes so the failure payload can never become success-shaped.
 
-**Plans**: 1/4 plans executed
+**Plans**: 2/4 plans executed
 
 Plans:
 **Wave 1**
@@ -162,7 +162,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 03-02-PLAN.md — Mirror the guard into `gemini_shim.sh` and the bridge's generic-nonzero arm; pin the shared literal across both scripts and README's exit-137 row (EC03, EC04, EC05)
+- [x] 03-02-PLAN.md — Mirror the guard into `gemini_shim.sh` and the bridge's generic-nonzero arm; pin the shared literal across both scripts and README's exit-137 row (EC03, EC04, EC05)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -238,7 +238,7 @@ Phases 1, 1.5, 3, and 4 have no dependencies on each other and may be planned or
 | 1. The missing-`timeout` decision | 6/6 | Complete    | 2026-08-20 |
 | 1.5. Contract check against a real agy | 6/6 | Complete    | 2026-08-20 |
 | 2. Model-list handling, end to end | 3/2 | Complete    | 2026-08-20 |
-| 3. The exit-code contract | 1/4 | In Progress|  |
+| 3. The exit-code contract | 2/4 | In Progress|  |
 | 4. Installer and launcher surface | 0/TBD | Not started | - |
 | 5. The shim's failure-mode contract | 0/TBD | Not started | - |
 | 6. Ship 1.6.2 | 0/TBD | Not started | - |

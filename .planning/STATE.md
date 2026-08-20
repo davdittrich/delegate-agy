@@ -4,16 +4,16 @@ milestone: v1.6.2
 current_phase: 03
 current_phase_name: the-exit-code-contract
 status: executing
-stopped_at: Completed 03-01-PLAN.md
-last_updated: "2026-08-20T21:02:13.594Z"
+stopped_at: Completed 03-02-PLAN.md
+last_updated: "2026-08-20T21:40:48.608Z"
 last_activity: 2026-08-20
 last_activity_desc: Phase 03 execution started
-state_head: 55c009de4a71dac3bd78e74433142e472293fe9d
+state_head: fcdec5e5b2f944ebd6959bad9aa91c9a6544953a
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 18
-  completed_plans: 15
+  completed_plans: 16
 milestone_name: milestone
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-20)
 ## Current Position
 
 Phase: 03 (the-exit-code-contract) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-08-20 — Phase 03 execution started
 
@@ -74,6 +74,7 @@ Progress: [░░░░░░░░░░░░░░░░░░░░] 14/14 p
 | Phase 01.5 P05 | 55min | 3 tasks | 1 files |
 | Phase 01.5 P06 | 31min | 3 tasks | 4 files |
 | Phase 03 P01 | 40min | 2 tasks | 3 files |
+| Phase 03 P02 | ~30min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -124,6 +125,8 @@ Recent decisions affecting current work:
 - [Phase 03]: 03-01: EC_KILL9_TAIL holds only the fixed variable-free tail ' -- possible OOM or external kill', not the whole sentence -- both output forms keep their existing, already-differing prefixes untouched
 - [Phase 03]: 03-01: _err_txt is computed once via $(cat "$STDERR_FILE" 2>/dev/null || true) immediately before the plain-text/JSON branch, guarded once via ${_err_txt:+...}, and is the single normalization point both output forms defer to -- the JSON path's open(sys.argv[5]).read() is deleted, not guarded
 - [Phase 03]: 03-01: the JSON path's error string is now trailing-newline-stripped (decided behavior change, not a bug fix) -- text\n\n now yields ': text', matching the plain-text arm's pre-existing $(cat ...) behavior
+- [Phase 03]: [Phase 03]: 03-02: the shim's EC_KILL9_TAIL mirrors the bridge's literal exactly (not just equivalent wording) so EC03's cross-script comparison is a meaningful byte-identity check, not two independently-written expected strings
+- [Phase 03]: [Phase 03]: 03-02: EC05's mutation-red proof (T-03-08) is a manual, git-status-tracked verification of the real file during task execution, not a permanent self-mutating suite case -- matches RB03's own static-provenance shape
 
 ### Pending Todos
 
@@ -154,6 +157,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-20T21:02:13.560Z
-Stopped at: Completed 03-01-PLAN.md
+Last session: 2026-08-20T21:40:48.575Z
+Stopped at: Completed 03-02-PLAN.md
 Resume file: None
