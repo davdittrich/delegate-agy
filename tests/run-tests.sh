@@ -3632,6 +3632,228 @@ else
         "$CC02_DETAIL"
 fi
 
+echo "== the suite never reaches a real agy through the check (CC03) =="
+
+# D-02's narrowing, recorded here as well as in the phase's own decision log:
+# criterion 1 (ROADMAP.md, an open item for the user, left unedited by this
+# case) reads "separate from the unit suite and never invoked by it". Taken
+# literally that collides head-on with criterion 2, which requires the
+# "could not ask" path (CC01, CC02 above) to be a TESTED deliverable, and
+# testing it means driving the command. D-02 resolves the collision by
+# narrowing what this suite enforces to the property that actually matters:
+# the unit suite never reaches a real agy through the check. CC03 is that
+# narrower property, asserted mechanically over run-tests.sh's OWN SOURCE --
+# the same self-referential shape RB01 (:1813 above) uses on the shipped
+# scripts, because a call site added six months from now is on no path any
+# behavioural test can see.
+#
+# _cc_check_scan FILE -> "<violations> <occurrences>", the same two-number
+# contract _rb_agy_scan (:1892) returns. Every invocation of the harness's
+# own $CONTRACT_CHECK -- in any expansion form, plus a literal
+# contract-check.sh path used as a command -- is an occurrence. Split into
+# two independently-cleared regions around the cc03-self-exempt bracket
+# (the review round's F4 fix, see 01.5-02-PLAN.md "Alternatives Considered"
+# -- CC03m's own probe payload strings below sit inside the very file CC03
+# scans, unlike RB01m's payloads which live in a file RB01 never reads):
+#   production -- everything outside the bracket. Cleared only when the
+#     SAME segment also carries a PATH= assignment that does not end in
+#     :$PATH/${PATH} (the direct PATH="$(_purebin)"/PATH="$dir" form CC01
+#     and CC02 use), or when the segment's command word is _run_sanitized
+#     (which fully replaces PATH internally for whatever it drives), or
+#     when the segment mentions _rb_extract -- a static sed READ of
+#     contract-check.sh's own source for RB02's byte-identity check
+#     (:1998), never an invocation; D-02 is about reaching a real agy, and
+#     reading source text structurally cannot.
+#   exempt -- the bracketed range, inclusive of both marker lines. Cleared
+#     only when the segment's FIRST WORD is _cc03m_probe -- a payload
+#     argument to the mutation harness, not a real invocation. Anything
+#     else inside the bracket is still a violation, so the bracket narrows
+#     rather than opens an escape hatch.
+# occurrences reports the PRODUCTION region's count only: counting the
+# exempt region's payload strings toward the floor would let the floor be
+# satisfied by the mutation fixtures alone. Reuses _rb_agy_segments (:1876)
+# unchanged, so the unit of judgement stays "one command", never "one
+# line" -- the same reason RB01 needs it for its own twoonone hole.
+# Comment lines are already dropped by _rb_logical_lines before this ever
+# sees them, so a comment naming the variable cannot inflate either count.
+#
+# The marker pair is also asserted here, not only by direct grep in the
+# plan's acceptance criteria: a duplicated or deleted marker forces a
+# violation regardless of what the region split produces, so a widened
+# exemption fails loudly instead of silently passing (the plan's own
+# "delete the END marker" manual proof).
+# _cc_raw_segments FILE -> one COMMAND per line, split at the SAME points
+# _rb_agy_segments uses (the same _rb_logical_lines join, then the same
+# `;|&` split) but WITHOUT that helper's leading-noise-stripping step.
+# CC03's clearing rule needs a segment's OWN leading PATH= assignment
+# intact, and _rb_agy_segments strips exactly that as leading noise -- the
+# same treatment it gives `if`/`VAR=$(` ahead of a bounded call, correct
+# for RB01's "does this segment START WITH run_bounded" check, but it would
+# silently erase the one signal CC03's PATH= rule depends on (CC01 and
+# CC02's invocations both open with a bare `PATH=... cmd`, which is
+# syntactically identical to a plain assignment statement and so is
+# indistinguishable "noise" to that stripping regex). Occurrence counting
+# is unaffected either way -- a `contains` check, not a `starts with` one --
+# and the exempt region's "first word is _cc03m_probe" check never has
+# leading noise to strip in the first place, so this changes nothing but
+# what CC03 specifically needs to see.
+_cc_raw_segments() {
+    _rb_logical_lines "$1" | tr ';|&' '\n\n\n'
+}
+
+_cc_check_scan() {
+    local file="$1"
+    local begin='# --- BEGIN cc03-self-exempt ---'
+    local end='# --- END cc03-self-exempt ---'
+    local prod_f exempt_f
+    prod_f="$(mktemp "$SANDBOX/cc03-prod.XXXXXX")"
+    exempt_f="$(mktemp "$SANDBOX/cc03-exempt.XXXXXX")"
+    sed "/^${begin}\$/,/^${end}\$/d" "$file" > "$prod_f"
+    sed -n "/^${begin}\$/,/^${end}\$/p" "$file" > "$exempt_f"
+
+    # Second alternative excludes a preceding `/` so a PATH FRAGMENT such as
+    # the CONTRACT_CHECK assignment's own "$HERE/contract-check.sh" (a
+    # value being built, never a command) is not mistaken for the literal
+    # path used AS a command; a bare word or one preceded by whitespace/a
+    # quote still matches.
+    local occ_re='\$\{?CONTRACT_CHECK\}?|(^|[^/])contract-check\.sh'
+    local raw_segs seg val
+    local o_prod v_prod v_exempt n_begin n_end marker_viol=0
+
+    # Occurrence floor: the same two-step grep -oE | grep -c '' idiom
+    # _rb_agy_scan (:1892) uses, over _rb_agy_segments' own stripped
+    # output -- noise-agnostic, since an occurrence is a `contains` check,
+    # so reusing that helper here costs nothing and satisfies D-02's "in
+    # any expansion form" over the widest reasonable text.
+    o_prod="$(_rb_agy_segments "$prod_f" | grep -oE "$occ_re" | grep -c '')" || o_prod=0
+
+    # Violations, over the RAW (unstripped) split -- see _cc_raw_segments.
+    raw_segs="$(_cc_raw_segments "$prod_f")"
+    local prod_uncleared=""
+    while IFS= read -r seg; do
+        [[ "$seg" =~ $occ_re ]] || continue
+        # _run_sanitized fully replaces PATH internally for whatever it
+        # drives (no current call site uses this form for CONTRACT_CHECK;
+        # recognised so a future direct call through the helper is cleared
+        # too, per the plan's explicit "recognise both forms").
+        if [[ "$seg" =~ ^[[:space:]]*_run_sanitized([[:space:]]|$) ]]; then continue; fi
+        # A static sed READ of contract-check.sh's own source for RB02's
+        # byte-identity check (:1998) -- never an invocation.
+        if [[ "$seg" == *_rb_extract* ]]; then continue; fi
+        if [[ "$seg" =~ (^|[[:space:];])PATH=([^[:space:]]*) ]]; then
+            val="${BASH_REMATCH[2]}"
+            val="${val%\"}"; val="${val#\"}"
+            case "$val" in
+                *':$PATH'|*':${PATH}') prod_uncleared="$prod_uncleared
+$seg" ;;
+                *) : ;;  # full replacement -- cleared
+            esac
+        else
+            prod_uncleared="$prod_uncleared
+$seg"
+        fi
+    done <<<"$raw_segs"
+    v_prod="$(printf '%s\n' "$prod_uncleared" | grep -oE "$occ_re" | grep -c '')" || v_prod=0
+
+    raw_segs="$(_cc_raw_segments "$exempt_f")"
+    local exempt_uncleared=""
+    while IFS= read -r seg; do
+        [[ "$seg" =~ $occ_re ]] || continue
+        [[ "$seg" =~ ^[[:space:]]*_cc03m_probe([[:space:]]|$) ]] && continue
+        exempt_uncleared="$exempt_uncleared
+$seg"
+    done <<<"$raw_segs"
+    v_exempt="$(printf '%s\n' "$exempt_uncleared" | grep -oE "$occ_re" | grep -c '')" || v_exempt=0
+
+    n_begin="$(grep -cx "$begin" "$file")" || n_begin=0
+    n_end="$(grep -cx "$end" "$file")" || n_end=0
+    [[ "$n_begin" -eq 1 && "$n_end" -eq 1 ]] || marker_viol=1
+
+    rm -f "$prod_f" "$exempt_f"
+    printf '%s %s' "$((v_prod + v_exempt + marker_viol))" "$o_prod"
+}
+
+# --- BEGIN cc03-self-exempt ---
+# CC03: the real file. No occurrence floor number is asserted beyond "at
+# least one" -- RB01's own reasoning, restated here rather than re-derived:
+# a criterion naming an exact count is correct only until the next commit,
+# and the floor exists so a rename empties the scan loudly rather than
+# quietly.
+CC03_V=""; CC03_O=""
+read -r CC03_V CC03_O <<<"$(_cc_check_scan "$HERE/run-tests.sh")"
+CC03_OK=1
+[[ "$CC03_V" -eq 0 ]] || CC03_OK=0
+[[ "$CC03_O" -ge 1 ]] || CC03_OK=0
+if [[ "$CC03_OK" -eq 1 ]]; then
+    ok "CC03 no case in the suite reaches a real agy through the check (isolation scan)"
+else
+    bad "CC03 no case in the suite reaches a real agy through the check (isolation scan)" \
+        "violations=$CC03_V production_occurrences=$CC03_O(floor >=1; exempt region excluded)"
+fi
+
+# CC03m: the scan is proven capable of failing before it is trusted, RB01m's
+# own discipline (:1934) applied to _cc_check_scan. Five probes: RB01m's
+# four holes (mutated/ambient here, commented, twoonone, decoy/appended
+# here) plus the one the exempt region itself introduces (smuggled).
+#
+# _cc03m_probe NAME WANT_VIOLATION LINE [MODE] [EXTRA] -- copies
+# run-tests.sh and injects LINE either appended at the copy's end (MODE
+# "append", the default: the cc03-self-exempt bracket sits earlier in the
+# file, so an appended line always lands in the production region) or,
+# when MODE is the literal word "smuggle", immediately after the BEGIN
+# marker via sed's `r` command -- INSIDE the bracket -- proving the exempt
+# region narrows rather than opens an escape hatch. When EXTRA is given,
+# LINE and EXTRA are joined with a literal `;` HERE, inside this function's
+# own code, rather than in any probe's own payload argument: the twoonone
+# shape needs one raw semicolon-joined logical line in the copy, but a `;`
+# character sitting in the CALL SITE's own text (which is itself part of
+# the file CC03 scans) would split THAT call across two segments and trip
+# a false violation on the real, correct source -- proven live during this
+# plan's own implementation. Neither half-string here ever contains
+# CONTRACT_CHECK text once separated, so joining them here is exactly as
+# safe as _rb_agy_segments' own control-flow stripping. Runs the SAME
+# _cc_check_scan CC03 itself uses and asserts the expected verdict, plus
+# the occurrence floor on every probe (not only the clean ones), exactly
+# as _rb01m_probe does.
+CC03M_DIR="$SANDBOX/cc03m"
+rm -rf "$CC03M_DIR"; mkdir -p "$CC03M_DIR"
+CC03M_OK=1
+CC03M_DETAIL=""
+_cc03m_probe() {
+    local name="$1" want="$2" line="$3" mode="${4:-append}" extra="${5:-}" v o copy inj
+    if [[ -n "$extra" ]]; then line="${line};${extra}"; fi
+    copy="$CC03M_DIR/$name.sh"
+    cp "$HERE/run-tests.sh" "$copy"
+    if [[ "$mode" == "smuggle" ]]; then
+        inj="$CC03M_DIR/$name.inject"
+        printf '%s\n' "$line" > "$inj"
+        sed -i "/^# --- BEGIN cc03-self-exempt ---\$/r $inj" "$copy"
+        rm -f "$inj"
+    else
+        printf '%s\n' "$line" >> "$copy"
+    fi
+    read -r v o <<<"$(_cc_check_scan "$copy")"
+    [[ "$o" -ge 1 ]] || { CC03M_OK=0; CC03M_DETAIL="$CC03M_DETAIL $name:no_occurrences"; }
+    if [[ "$want" -eq 1 ]]; then
+        [[ "$v" -ge 1 ]] || { CC03M_OK=0; CC03M_DETAIL="$CC03M_DETAIL $name:missed(${v}/${o})"; }
+    else
+        [[ "$v" -eq 0 ]] || { CC03M_OK=0; CC03M_DETAIL="$CC03M_DETAIL $name:false_positive(${v}/${o})"; }
+    fi
+}
+_cc03m_probe ambient   1 'bash "$CONTRACT_CHECK" --version'
+_cc03m_probe appended  1 'PATH="/tmp/cc03m-fake:$PATH" bash "$CONTRACT_CHECK"'
+_cc03m_probe commented 0 '# a comment mentioning "$CONTRACT_CHECK" is not a call site'
+_cc03m_probe twoonone  1 'PATH="$(_purebin)" bash "$CONTRACT_CHECK"' append 'bash "$CONTRACT_CHECK"'
+_cc03m_probe smuggled  1 'bash "$CONTRACT_CHECK" --smuggled' smuggle
+if [[ "$CC03M_OK" -eq 1 ]]; then
+    ok "CC03m the scan reports every injected shape, including one smuggled inside the exempt bracket, and ignores a comment"
+else
+    bad "CC03m the scan reports every injected shape, including one smuggled inside the exempt bracket, and ignores a comment" \
+        "detail=$CC03M_DETAIL"
+fi
+rm -rf "$CC03M_DIR"
+# --- END cc03-self-exempt ---
+
 echo
 echo "PASS=$PASS FAIL=$FAIL"
 if [[ "$FAIL" -eq 0 ]]; then
