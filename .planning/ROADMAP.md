@@ -80,7 +80,7 @@ Plans:
   3. Its captured output lands in `tests/` fixtures in a form the fake agy can be regenerated from, so the suite's fake tracks real output instead of a hypothesis. At minimum the fixtures carry the `id<TAB>display name` model list, the invalid-model rejection (which renders its "Available models:" list in display names), and the rc=0-with-empty-stdout response that R6 exists to catch.
   4. README states the verified behavior as fact — that `--model` accepts both ids and display names — carrying the `agy` version and the date it was verified against, and the check re-confirms it rather than the docs disclaiming it. No document may claim the assumption is unverified.
 
-**Plans**: 5/6 plans executed
+**Plans**: 6/6 plans executed
 
 Plans:
 **Wave 1**
@@ -105,7 +105,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 01.5-06-PLAN.md — README states the recorded fact with version and date, names and prices the check, documents its exit codes; CC05 holds the document to the fixture headers; REQUIREMENTS.md's two stale S5 claims corrected and Phase 6's un-widened gate recorded
+- [x] 01.5-06-PLAN.md — README states the recorded fact with version and date, names and prices the check, documents its exit codes; CC05 holds the document to the fixture headers; REQUIREMENTS.md's two stale S5 claims corrected and Phase 6's un-widened gate recorded
 
 **Note**: this phase was Phase 7 until 2026-08-19 and depended on Phase 6. It moved because its blocking premise was disproven, not because its scope shrank. The "could not ask" path in criterion 2 stays mandatory — agy was unreachable last week and may be again — but the phase now has to produce a real verdict, and Phases 2 and 5 consume its fixtures. Verified so far against agy 1.1.13: `agy models` returns 14 lines of `id<TAB>display name` in under 30s; live ids carry a third segment (`gemini-3.1-pro-high`, `gemini-3.7-flash-medium`), so both scripts' anchored matchers and `config/model-map.json`'s `pro-high`/`flash-high` class values still hold.
 
@@ -208,7 +208,7 @@ Phases 1, 1.5, 3, and 4 have no dependencies on each other and may be planned or
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. The missing-`timeout` decision | 6/6 | In Progress|  |
-| 1.5. Contract check against a real agy | 5/6 | In Progress|  |
+| 1.5. Contract check against a real agy | 6/6 | In Progress|  |
 | 2. Model-list handling, end to end | 0/TBD | Not started | - |
 | 3. The exit-code contract | 0/TBD | Not started | - |
 | 4. Installer and launcher surface | 0/TBD | Not started | - |

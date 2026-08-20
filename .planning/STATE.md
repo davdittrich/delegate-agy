@@ -3,17 +3,17 @@ gsd_state_version: 1.0
 milestone: v1.6.2
 current_phase: 01.5
 current_phase_name: Contract check against a real agy
-status: executing
-stopped_at: Completed 01.5-05-PLAN.md
-last_updated: "2026-08-20T04:44:45.002Z"
+status: verifying
+stopped_at: Completed 01.5-06-PLAN.md (phase 01.5 complete, 6/6 plans)
+last_updated: "2026-08-20T05:18:32.925Z"
 last_activity: 2026-08-20
 last_activity_desc: Phase 01.5 plan 02 (CC02, CC03/CC03m) executed
-state_head: 4db7cdd3bc8699e5bac6beabfd07476bd266ecdb
+state_head: 75139a3fe6f0b57e76c060eb7c3d1689b65cfef0
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 12
-  completed_plans: 11
+  completed_plans: 12
 milestone_name: milestone
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 
 Phase: 01.5 (Contract check against a real agy) — EXECUTING
 Plan: 6 of 6
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-08-20 — Plan 01.5-02 (CC02, CC03/CC03m) executed
 
 Progress: [██████████] 100%
@@ -70,6 +70,7 @@ Progress: [██████████] 100%
 | Phase 01.5 P03 | 45min | 2 tasks | 3 files |
 | Phase 01.5 P04 | 30min | 3 tasks | 2 files |
 | Phase 01.5 P05 | 55min | 3 tasks | 1 files |
+| Phase 01.5 P06 | 31min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -108,6 +109,7 @@ Recent decisions affecting current work:
 - [Phase 01.5]: [Phase 01.5]: 01.5-05: gemini-md-binds (D-10) verified against real agy 1.1.13 with a competing decoy GEMINI.md present -- forbidden run_shell_command declined, cksum discriminator absent, decoy marker did not leak; delegate-agy-xfa updated with evidence, left open for 01.5-06 (D-18) to close
 - [Phase 01.5]: [Phase 01.5]: 01.5-05: sigterm-ignored (D-12) contradicted -- real agy 1.1.13 died on SIGTERM alone (rc=124) under a strict 8s bound; R11's -k escalation rationale not reproduced this run; delegate-agy-i43 filed rather than changing run_bounded/R11 in this phase (phase boundary)
 - [Phase 01.5]: [Phase 01.5]: 01.5-05: model-arg-accepts aggregates two observations (F6) -- a bare id harvested free from the gemini-md-binds probe's already-billed bridge call, plus a direct display-name call -- keeping the whole run's billed count at 2 (within D-13's budget of 3), both accepted against real agy
+- [Phase 01.5]: S5 corrected: README states the verified --model fact (both ids and display names) with agy 1.1.13/2026-08-20; REQUIREMENTS.md moves S5 to Phase 1.5, status met, naming the one contradicted assumption (sigterm-ignored, delegate-agy-i43) plainly
 
 ### Pending Todos
 
@@ -138,6 +140,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-20T04:44:44.983Z
-Stopped at: Completed 01.5-05-PLAN.md
+Last session: 2026-08-20T05:18:32.906Z
+Stopped at: Completed 01.5-06-PLAN.md (phase 01.5 complete, 6/6 plans)
 Resume file: None
