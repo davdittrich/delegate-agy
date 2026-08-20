@@ -1,19 +1,19 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.6.2
-current_phase: 1.5
+current_phase: 01.5
 current_phase_name: Contract check against a real agy
-status: completed
-stopped_at: Phase 1.5 context gathered
-last_updated: "2026-08-20T00:08:53.883Z"
-last_activity: 2026-08-19
-last_activity_desc: Roadmap created from REQUIREMENTS.md; 9 requirements mapped across 7 phases, all 7 open bd tickets absorbed
-state_head: 7fe11a9454446f64c49ad3e077885e411c6ce787
+status: executing
+stopped_at: Completed 01.5-01-PLAN.md
+last_updated: "2026-08-20T02:07:25.581Z"
+last_activity: 2026-08-20
+last_activity_desc: Phase 01.5 execution started
+state_head: 555cbd346938decdfc487a32dfb6a637cce69c4a
 progress:
   total_phases: 7
-  completed_phases: 1
+  completed_phases: 0
   total_plans: 12
-  completed_plans: 6
+  completed_plans: 7
 milestone_name: milestone
 ---
 
@@ -24,14 +24,14 @@ milestone_name: milestone
 See: .planning/PROJECT.md (updated 2026-08-19)
 
 **Core value:** Delegation must never break the caller — the shim shadows `gemini` for every PATH caller, so a hang, crash, or silent empty-success here is not scoped to this plugin.
-**Current focus:** Phase 01 — the-missing-timeout-decision
+**Current focus:** Phase 01.5 — Contract check against a real agy
 
 ## Current Position
 
-Phase: 1.5 (Contract check against a real agy) — READY TO EXECUTE
-Plan: 6 of 6
-Status: phase-1-complete
-Last activity: 2026-08-19 — Phase 01 execution started
+Phase: 01.5 (Contract check against a real agy) — EXECUTING
+Plan: 2 of 6
+Status: Ready to execute
+Last activity: 2026-08-20 — Phase 01.5 execution started
 
 Progress: [██████████] 100%
 
@@ -65,6 +65,7 @@ Progress: [██████████] 100%
 | Phase 01 P04 | 18min | 3 tasks | 3 files |
 | Phase 01 P05 | 50min | 3 tasks | 1 files |
 | Phase 01 P06 | 4h 40m | 3 tasks | 2 files |
+| Phase 01.5 P01 | 1h20m | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -90,6 +91,9 @@ Recent decisions affecting current work:
 - [Phase ?]: 01-06: Runtime descendant cases capture into files, not command substitutions: each script's fd 9 is inherited by agy and its forks, so under a command substitution a failing descendant assertion blocks for the fake's full 300s instead of failing
 - [Phase ?]: 01-06: The forking fake ignores SIGHUP as well as SIGTERM: without it the pty session's hangup reaps the pair and the with-terminal descendant assertion passes while asserting nothing
 - [Phase ?]: 01-06: The PTY allocator's argv form is chosen by probing script --version, never by uname, with both flavour branches pinned on one host via a stubbed probe result
+- [Phase 01.5]: 01.5-01: tracer-feedback gate observed -- committed Task 1, paused for human confirmation of real-agy and absent-binary runs, then proceeded to Task 2/3 after approval
+- [Phase 01.5]: 01.5-01: two literal acceptance-criteria shell commands (grep for 'set -euo pipefail' substring; PATH=/nonexistent bash invocation) could not pass/run as literally typed due to D-03's mandated verbatim comment text and bash's own command-prefix PATH lookup semantics -- verified via intent-equivalent checks instead, documented in SUMMARY, no code changed
+- [Phase 01.5]: 01.5-01: CC01's sanitized PATH needed an explicit 'timeout' entry beyond the existing _PUREBIN_TOOLS whitelist -- the outer bounding wrapper itself must resolve under CC01's fully-replaced PATH, unlike every other _purebin() caller which keeps the harness's original PATH available for its own outer safety net
 
 ### Pending Todos
 
@@ -120,6 +124,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-19T19:47:53.935Z
-Stopped at: Phase 1.5 context gathered
-Resume file: /home/dd/Gemini/delegate-agy/.planning/phases/01.5-contract-check-against-a-real-agy/01.5-CONTEXT.md
+Last session: 2026-08-20T02:07:25.563Z
+Stopped at: Completed 01.5-01-PLAN.md
+Resume file: None
