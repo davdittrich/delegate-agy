@@ -656,8 +656,8 @@ _cc_summary() {
 # ── Run the probes, in this fixed declared order ────────────────────────────
 _cc_preflight
 _cc_probe_agy_version_shape
-# RED: _cc_probe_models_format / _cc_probe_non_gemini_rows defined above but
-# not yet wired in -- GREEN commit adds these two calls.
+_cc_probe_models_format
+_cc_probe_non_gemini_rows
 
 # ── Summary, exactly once, after every probe has returned ───────────────────
 _cc_summary
