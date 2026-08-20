@@ -233,6 +233,10 @@ The plugin installs a `SubagentStart` hook (`hooks/agy-subagent-policy.sh`, wire
 | Exit code 3 (`agy returned empty output`) | agy exited 0 with no output — usually quota `RESOURCE_EXHAUSTED (429)`. The reason (full agy stderr) is surfaced; wait for quota reset or re-auth. Both `agy-bridge` and the `gemini` shim fail loud here rather than reporting empty success. |
 | `WARNING: timeout/gtimeout not found -- bounding agy with the bash watchdog fallback; install coreutils for process-group kill` | Not a failure, and not fatal to either entry point: the call is still bounded, by the bash watchdog. `brew install coreutils` (macOS) upgrades the kill from the direct process to its whole process group, so anything agy forked cannot outlive the bound either. |
 
+### Running the tests
+
+`bash tests/run-tests.sh` runs this project's actual regression suite — the mocked, fast, CI-safe entry point — against `tests/fake-agy.sh`, a stand-in `agy`. No real agy, no network calls, no spend. See [Contract check](#contract-check) below for the separate real-`agy`, quota-spending operator tool.
+
 ### Contract check
 
 `tests/contract-check.sh` is a repo-only operator tool — run `bash tests/contract-check.sh` from a clone. It is not part of the unit suite and not a release gate: it interrogates the real `agy` binary rather than the fake, so an agy outage never blocks a tag. Running it spends real quota — up to 3 billed delegations per full run — with the actual count printed in the ledger's closing summary line.
@@ -391,6 +395,8 @@ config/policies/               — GEMINI.md tool restriction policies (one file
   shim-sandbox.md              — gemini shim --sandbox (read only)
   shim-default.md              — gemini shim default (read only)
 tests/contract-check.sh        — real-agy contract check (repo-only, spends quota, see Contract check above)
+tests/run-tests.sh             — mocked regression suite, this project's actual unit tests (see Running the tests, above)
+tests/fake-agy.sh              — mock agy the regression suite drives; the real agy is never reached by this suite
 tests/fixtures/                — captured real-agy output the fake and CC05 are pinned against
 ```
 
