@@ -2682,6 +2682,137 @@ else
         "detail=$EC06_DETAIL"
 fi
 
+echo "== every documented exit code is defended by an exact assertion (EC07) =="
+
+# EC07 (delegate-agy-byv.9, R5 acceptance criterion 1, 03-04-PLAN.md): PROVOKES
+# and asserts the exact numeric value of FOUR documented exit codes -- 3, 124
+# and 137 on both entry points, and 2 on the bridge (the shim has no
+# model-list path) -- and asserts cause-fragment exclusivity over the bridge's
+# four captured messages (the only entry point that reaches all four): a
+# timeout is never reported as a kill, an empty output is never reported as a
+# timeout, a degraded model list is never confused with either.
+#
+# The fifth documented code, 127, is NOT provoked here: it requires the
+# generated-launcher fixture I16 and RB29 already build, and rebuilding it to
+# re-derive a code those cases already pin exactly would be duplicated setup
+# cost for no new evidence. Instead this case pins, by source assertion
+# against tests/run-tests.sh itself, that I16 and RB29 still assert -eq 127
+# exactly and still assert their stale-pin run's stdout empty -- so loosening
+# either cited case fails EC07 instead of quietly hollowing out the citation
+# it depends on (Codex review finding, HIGH). Neither cited case asserts
+# absence of the other three fragments, so EC07 does not extend its
+# exclusivity claim to 127 -- named here, not implied away.
+#
+# EC07 asserts four provoked codes and cites one; its ok/bad label says so,
+# never five provoked.
+_EC07_FRAG_KILL='killed'
+_EC07_FRAG_TIMEOUT='timeout after'
+_EC07_FRAG_EMPTY='empty output'
+_EC07_FRAG_DEGRADED="no 'gemini-' ids"
+
+# _ec07_excl MSG OWNFRAG -- MSG must contain OWNFRAG and none of the other
+# three fragments in the four-way exclusivity set.
+_ec07_excl() {
+    local msg="$1" own="$2" f
+    case "$msg" in *"$own"*) : ;; *) return 1 ;; esac
+    for f in "$_EC07_FRAG_KILL" "$_EC07_FRAG_TIMEOUT" "$_EC07_FRAG_EMPTY" "$_EC07_FRAG_DEGRADED"; do
+        [[ "$f" == "$own" ]] && continue
+        case "$msg" in *"$f"*) return 1 ;; esac
+    done
+    return 0
+}
+
+EC07_OK=1
+EC07_DETAIL=""
+
+# -- 137: external kill, well inside both bounds, both entry points --
+FAKE_AGY_PRINT_KILL9=1 _run EC07_B137 EC07_B137RC bash "$BRIDGE" --type code --timeout 60 -- "ec07 kill check"
+[[ "$EC07_B137RC" -eq 137 ]] || { EC07_OK=0; EC07_DETAIL="$EC07_DETAIL bridge137:rc=$EC07_B137RC"; }
+_ec07_excl "$EC07_B137" "$_EC07_FRAG_KILL" || { EC07_OK=0; EC07_DETAIL="$EC07_DETAIL bridge137:excl:[$EC07_B137]"; }
+
+FAKE_AGY_PRINT_KILL9=1 GEMINI_SHIM_TIMEOUT=60 _run EC07_S137 EC07_S137RC bash "$SHIM" -p "ec07 kill check"
+[[ "$EC07_S137RC" -eq 137 ]] || { EC07_OK=0; EC07_DETAIL="$EC07_DETAIL shim137:rc=$EC07_S137RC"; }
+
+# -- 124: the bridge's/shim's own timeout, both entry points --
+FAKE_AGY_PRINT_HANG=1 _run EC07_B124 EC07_B124RC bash "$BRIDGE" --type code --timeout 1 -- "ec07 timeout check"
+[[ "$EC07_B124RC" -eq 124 ]] || { EC07_OK=0; EC07_DETAIL="$EC07_DETAIL bridge124:rc=$EC07_B124RC"; }
+_ec07_excl "$EC07_B124" "$_EC07_FRAG_TIMEOUT" || { EC07_OK=0; EC07_DETAIL="$EC07_DETAIL bridge124:excl:[$EC07_B124]"; }
+
+FAKE_AGY_PRINT_HANG=1 GEMINI_SHIM_TIMEOUT=1 _run EC07_S124 EC07_S124RC bash "$SHIM" -p "ec07 timeout check"
+[[ "$EC07_S124RC" -eq 124 ]] || { EC07_OK=0; EC07_DETAIL="$EC07_DETAIL shim124:rc=$EC07_S124RC"; }
+
+# -- 3: agy exits 0 with empty stdout, both entry points --
+FAKE_AGY_EXIT=0 FAKE_AGY_STDOUT="" FAKE_AGY_STDERR="ec07 boom" _run EC07_B3 EC07_B3RC bash "$BRIDGE" --type code -- "ec07 empty check"
+[[ "$EC07_B3RC" -eq 3 ]] || { EC07_OK=0; EC07_DETAIL="$EC07_DETAIL bridge3:rc=$EC07_B3RC"; }
+_ec07_excl "$EC07_B3" "$_EC07_FRAG_EMPTY" || { EC07_OK=0; EC07_DETAIL="$EC07_DETAIL bridge3:excl:[$EC07_B3]"; }
+
+FAKE_AGY_EXIT=0 FAKE_AGY_STDOUT="" FAKE_AGY_STDERR="ec07 boom" _run EC07_S3 EC07_S3RC bash "$SHIM" -p "ec07 empty check"
+[[ "$EC07_S3RC" -eq 3 ]] || { EC07_OK=0; EC07_DETAIL="$EC07_DETAIL shim3:rc=$EC07_S3RC"; }
+
+# -- 2: bridge only -- a model list with no gemini- ids at all (shim has no matching check, D-10/EC06) --
+rm -f "$HOME/.cache/agy-bridge-models"
+FAKE_AGY_MODELS_GARBAGE=1 _run EC07_B2 EC07_B2RC bash "$BRIDGE" --type code -- "ec07 degraded check"
+rm -f "$HOME/.cache/agy-bridge-models"
+[[ "$EC07_B2RC" -eq 2 ]] || { EC07_OK=0; EC07_DETAIL="$EC07_DETAIL bridge2:rc=$EC07_B2RC"; }
+_ec07_excl "$EC07_B2" "$_EC07_FRAG_DEGRADED" || { EC07_OK=0; EC07_DETAIL="$EC07_DETAIL bridge2:excl:[$EC07_B2]"; }
+
+# -- source assertion (edge:R5/adjacency): the 137-vs-124 discrimination is
+#    strictly `elapsed < bound` -- the exact strict-less-than comparison is
+#    present once per script and no `-le` variant of it exists anywhere --
+for _ec07_pair in "$BRIDGE:TIMEOUT" "$SHIM:SHIM_TIMEOUT"; do
+    _ec07_f="${_ec07_pair%%:*}"; _ec07_bv="${_ec07_pair##*:}"
+    _ec07_n="$(grep -cF "\"\$EXIT_CODE\" -eq 137 && \"\$DURATION\" -lt \"\$${_ec07_bv}\"" "$_ec07_f")" || _ec07_n=0
+    [[ "$_ec07_n" -eq 1 ]] || { EC07_OK=0; EC07_DETAIL="$EC07_DETAIL ${_ec07_f##*/}:strict_lt_${_ec07_n}"; }
+    _ec07_le="$(grep -cF "\"\$DURATION\" -le" "$_ec07_f")" || _ec07_le=0
+    [[ "$_ec07_le" -eq 0 ]] || { EC07_OK=0; EC07_DETAIL="$EC07_DETAIL ${_ec07_f##*/}:le_variant_present_${_ec07_le}"; }
+done
+
+# -- source assertion (edge:R5/ordering): the error branch's arm order is
+#    fixed -- early-137, then 124-or-137, then generic-nonzero, then
+#    empty-stdout -- a run matching more than one condition takes the
+#    earliest arm --
+_ec07_arm_order() {
+    local f="$1" boundvar="$2" n1 n2 n3 n4 l1 l2 l3 l4
+    n1="$(grep -cF "\"\$EXIT_CODE\" -eq 137 && \"\$DURATION\" -lt \"\$${boundvar}\"" "$f")" || n1=0
+    n2="$(grep -cF '"$EXIT_CODE" -eq 124 || "$EXIT_CODE" -eq 137' "$f")" || n2=0
+    n3="$(grep -cF '"$EXIT_CODE" -ne 0 ]]; then' "$f")" || n3=0
+    n4="$(grep -cF '! -s "$STDOUT_FILE" ]]; then' "$f")" || n4=0
+    [[ "$n1" -eq 1 && "$n2" -eq 1 && "$n3" -eq 1 && "$n4" -eq 1 ]] || return 1
+    l1="$(grep -nF "\"\$EXIT_CODE\" -eq 137 && \"\$DURATION\" -lt \"\$${boundvar}\"" "$f" | cut -d: -f1)"
+    l2="$(grep -nF '"$EXIT_CODE" -eq 124 || "$EXIT_CODE" -eq 137' "$f" | cut -d: -f1)"
+    l3="$(grep -nF '"$EXIT_CODE" -ne 0 ]]; then' "$f" | cut -d: -f1)"
+    l4="$(grep -nF '! -s "$STDOUT_FILE" ]]; then' "$f" | cut -d: -f1)"
+    [[ "$l1" -lt "$l2" && "$l2" -lt "$l3" && "$l3" -lt "$l4" ]]
+}
+_ec07_arm_order "$BRIDGE" TIMEOUT || { EC07_OK=0; EC07_DETAIL="$EC07_DETAIL bridge:arm_order"; }
+_ec07_arm_order "$SHIM" SHIM_TIMEOUT || { EC07_OK=0; EC07_DETAIL="$EC07_DETAIL shim:arm_order"; }
+
+# -- source assertion: exit 127 is CITED, not re-provoked, here. I16 and RB29
+#    (elsewhere in this file) still assert -eq 127 exactly and still assert
+#    their stale-pin run's stdout empty. The patterns below are written with
+#    escaped regex metacharacters (matching ERE syntax, not plain literal
+#    text) so this very grep invocation's own source line can never satisfy
+#    the pattern it searches for -- a plain copy of the target text here
+#    would inflate the "exactly once" count to two and silently defeat the
+#    pin (Codex review finding, HIGH -- citation without this pin is the
+#    failure mode this plan was reviewed for).
+_EC07_SELF="$HERE/run-tests.sh"
+_ec07_n="$(grep -cE -- '-eq 127 \]\].*\|\| I16_OK=0' "$_EC07_SELF")" || _ec07_n=0
+[[ "$_ec07_n" -eq 1 ]] || { EC07_OK=0; EC07_DETAIL="$EC07_DETAIL cite:i16_rc_${_ec07_n}"; }
+_ec07_n="$(grep -cE -- '-eq 127 \]\].*\|\| RB29_OK=0' "$_EC07_SELF")" || _ec07_n=0
+[[ "$_ec07_n" -eq 1 ]] || { EC07_OK=0; EC07_DETAIL="$EC07_DETAIL cite:rb29_rc_${_ec07_n}"; }
+_ec07_n="$(grep -cE -- '\[\[ -z "\$OUT_STALE" \]\]' "$_EC07_SELF")" || _ec07_n=0
+[[ "$_ec07_n" -eq 1 ]] || { EC07_OK=0; EC07_DETAIL="$EC07_DETAIL cite:i16_empty_${_ec07_n}"; }
+_ec07_n="$(grep -cE -- '\[\[ -z "\$RB29_SOUT" \]\]' "$_EC07_SELF")" || _ec07_n=0
+[[ "$_ec07_n" -eq 1 ]] || { EC07_OK=0; EC07_DETAIL="$EC07_DETAIL cite:rb29_empty_${_ec07_n}"; }
+
+if [[ "$EC07_OK" -eq 1 ]]; then
+    ok "EC07 exit codes 2/3/124/137 provoked and asserted exactly (2 bridge-only), cause-fragment exclusive; 127 cited via I16/RB29 with citation pinned, not re-provoked"
+else
+    bad "EC07 exit codes 2/3/124/137 provoked and asserted exactly (2 bridge-only), cause-fragment exclusive; 127 cited via I16/RB29 with citation pinned, not re-provoked" \
+        "detail=$EC07_DETAIL"
+fi
+
 echo "== the docs are held to the captured evidence (CC05) =="
 
 # CC05: README's dated --model fact is a claim about the model list captured in
