@@ -34,13 +34,14 @@ echo "Review /path/to/api.py for correctness" | agy-bridge --type review
 | `review` | gemini-*-pro-high (latest) | Read files; adversarial framing |
 | `implement` | gemini-*-pro-high (latest) | Read and write files; no shell execution |
 
-The Model column is a rule, not a pin: the bridge resolves each `--type` to the **latest** matching Gemini id from your live `agy models` list at runtime, so it tracks agy version bumps with no plugin update. Omit `--type` to default to `code`. Override the model with `--model MODEL_ID` — run `agy models` for current CLI ids.
+The Model column is a rule, not a pin: the bridge resolves each `--type` to the **latest** matching Gemini id from your live `agy models` list at runtime, so it tracks agy version bumps with no plugin update. Omit `--type` to default to `code`. Override the model with `--model MODEL_ID` — verified against `agy` 1.1.13 (captured 2026-08-20): `--model` accepts both a bare id (e.g. `gemini-3.1-pro-high`) and a display name (e.g. `Gemini 3.7 Flash (High)`); run `agy models` for the current list of both forms.
 
 ## Requirements
 
 - [agy](https://github.com/google/agy) installed and authenticated via OAuth
 - `python3` 3.6 or later (standard on all modern systems)
-- `timeout` or `gtimeout` — Linux ships `timeout`; macOS needs `brew install coreutils`
+
+Recommended, not required: `timeout` or `gtimeout` (coreutils). Every agy call is bounded with or without one — see [Bounding without `timeout`/`gtimeout`](#bounding-without-timeoutgtimeout). What coreutils buys is the *kind* of kill: `timeout` isolates its child in its own process group and signals the group, so it reaps whatever agy forked, while the built-in bash watchdog does the same through job control and degrades to killing the direct process only where job control cannot isolate the child. Linux ships `timeout`; on macOS `brew install coreutils` provides `gtimeout`.
 
 ## Installation
 
@@ -51,7 +52,7 @@ Follow the agy project's installation instructions. After installing, run `agy` 
 **2. Install dependencies.**
 
 ```bash
-# macOS — timeout (coreutils); python3 ships with macOS
+# macOS — python3 ships with macOS; coreutils is recommended, not required
 brew install coreutils
 
 # Debian/Ubuntu — timeout is in coreutils, already present on most systems
@@ -78,10 +79,14 @@ claude plugin install ./delegate-agy
 **4. Run the installer.**
 
 Run `/agy-setup` inside Claude Code. It does NOT install anything for you — it
-prints the shadow notice plus one **validated, self-resolving** command you run
-in your own terminal. That command resolves this plugin's `scripts/install.sh`
-from `claude plugin list --json`, checks the resolved path matches
-`*/agy-delegate/*/scripts/install.sh` and is a real file, then runs it.
+prints the shadow notice plus two commands to copy-paste: a `grep` command
+that reads the plugin's install path straight from
+`~/.claude/plugins/installed_plugins.json` (so you read the path yourself
+before anything runs), and the `scripts/install.sh` command to run against
+it. If that registry file is missing, it falls back to a command that
+resolves the path from `claude plugin list --json` instead and validates the
+result before running it, since that path comes from command output rather
+than your own eyes.
 
 ```
 /agy-setup
@@ -100,9 +105,12 @@ path disappears and the wrapper **fails loud** with a "re-run the install"
 message and a non-zero exit. If instead the plugin is **updated** and Claude
 Code's cache leaves the old version directory in place alongside the new one
 (observed behavior — the stale copy is not deleted), the pinned path still
-resolves, so the wrapper keeps running the pinned copy and instead prints a
-**stderr warning** naming both versions; stdout and the exit code are
-unaffected. **Re-run `/agy-setup`'s install command after any plugin update**
+resolves, so the wrapper compares its pinned version against the version Claude
+Code reports as installed and **refuses to run**: it exits `127` naming both
+versions and — when the active version is numeric and the constructed
+installer path exists on disk — the exact command to repin (otherwise a
+generic pointer to `/agy-setup`), rather than silently executing the
+stale copy. **Re-run `/agy-setup`'s install command after any plugin update**
 to repin the wrappers either way.
 
 > **Shadow blast radius.** `~/.local/bin/gemini` shadows the real `gemini`
@@ -215,19 +223,37 @@ The plugin installs a `SubagentStart` hook (`hooks/agy-subagent-policy.sh`, wire
 |-------|-----|
 | `agy-bridge: command not found` | Run `/agy-setup` and its printed install command to create the wrapper |
 | `agy-delegate moved or was updated` (wrapper fails loud) | The plugin was moved, or updated in a way that removed the pinned version dir — re-run `/agy-setup`'s install command to repin the wrappers |
-| `WARNING: agy-delegate ... is pinned but a newer version ... is also installed` | The plugin was updated but Claude Code left the old version dir in the cache; the wrapper keeps running the pinned (old) copy — re-run `/agy-setup`'s install command to repin the newer one |
+| `ERROR: agy-delegate ... is installed, but this launcher is pinned to ...` | The plugin was updated but the wrapper is still pinned to the old version; it refuses to run the stale copy (exit `127`) until you repin — run the command it prints, or re-run `/agy-setup`'s install command |
 | `agy: command not found` | Add `~/.local/bin` to `$PATH`: bash/zsh: `export PATH="$HOME/.local/bin:$PATH"` · fish: `fish_add_path ~/.local/bin` |
 | Response missing source URLs | Use `--type search` |
-| Model name rejected | Run `agy models`; exact string required |
+| Model name rejected | agy rejects an unrecognized id or display name with `Error: invalid model selection (--model "NAME" --effort ""): model NAME is not recognized as a known model or custom model in settings`, followed by an `Available models:` list. Run `agy models` for the current ids and display names. |
+| Exit code 2 (`agy model list contains no 'gemini-' ids; agy may be unauthenticated`) | The fetched (or cached) model list has no `gemini-`-prefixed ids — agy is degraded or unauthenticated, not a bad `--type`. Run `agy models` directly to see its raw output, and re-authenticate if needed. |
 | Exit code 124 | Timeout — simplify the query or pass `--timeout 600` |
+| Exit code 137 (`agy killed (signal 9) after Ns, before its Ms bound -- possible OOM or external kill`) | An external kill (OOM killer, `kill -9`, container preemption) landed before the bridge's own `--timeout` bound elapsed, so it isn't the bridge's own `-k` escalation. Check the host/container for memory pressure — raising `--timeout` won't help. |
 | Exit code 3 (`agy returned empty output`) | agy exited 0 with no output — usually quota `RESOURCE_EXHAUSTED (429)`. The reason (full agy stderr) is surfaced; wait for quota reset or re-auth. Both `agy-bridge` and the `gemini` shim fail loud here rather than reporting empty success. |
-| `ERROR: timeout/gtimeout not found in PATH` | `brew install coreutils` (macOS) |
+| `WARNING: timeout/gtimeout not found -- bounding agy with the bash watchdog fallback; install coreutils for process-group kill` | Not a failure, and not fatal to either entry point: the call is still bounded, by the bash watchdog. `brew install coreutils` (macOS) upgrades the kill from the direct process to its whole process group, so anything agy forked cannot outlive the bound either. |
+
+### Running the tests
+
+`bash tests/run-tests.sh` runs this project's actual regression suite — the mocked, fast, CI-safe entry point — against `tests/fake-agy.sh`, a stand-in `agy`. No real agy, no network calls, no spend. See [Contract check](#contract-check) below for the separate real-`agy`, quota-spending operator tool.
+
+### Contract check
+
+`tests/contract-check.sh` is a repo-only operator tool — run `bash tests/contract-check.sh` from a clone. It is not part of the unit suite and not a release gate: it interrogates the real `agy` binary rather than the fake, so an agy outage never blocks a tag. Running it spends real quota — up to 3 billed delegations per full run — with the actual count printed in the ledger's closing summary line.
+
+Its exit codes are disjoint from the bridge's codes in the table above — a check verdict is never a bridge exit:
+
+| Exit | Meaning |
+|------|---------|
+| `0` | Every assumption in the ledger reports `verified` |
+| `10` | At least one assumption reports `unverified`, none `contradicted` |
+| `11` | At least one assumption reports `contradicted` (outranks `10`) |
 
 ## Security
 
 Don't pipe credentials, API keys, or PII through the bridge. The prompt is written to a 0600 per-run `GEMINI.md` (not passed on the command line), so it stays out of process listings. Per-type tool restrictions are prompt-advisory (not API-enforced) instructing agy not to run shell commands; the API-level floor is `--sandbox`, which confines reads/writes to the granted `--add-dir` paths — a directory granted via `--add-dir` is exposed to the provider and is writable under `--type implement`. Model names are validated at startup against a list fetched from agy and cached for 60 minutes at `~/.cache/agy-bridge-models`. `--add-dir` refuses `/` and `$HOME` (exact resolved match) with exit 2 by default, overridable with `AGY_ALLOW_BROAD_GRANT=1`; this is a speed bump against the two broadest accidental grants, not a containment boundary — it does not stop, for example, a symlink under a granted subdirectory that points back at `$HOME`.
 
-The installer (`scripts/install.sh`) and uninstaller run with `set -euo pipefail`, refuse to run as root, write only under `~/.local/bin`, `~` (rc backups), `~/.config/agy-delegate`, and `~/.gemini`, and never touch the repo. The generated launcher wrappers exec a **pinned absolute path**: that exec target is never a user-writable cache glob and never a per-invocation `claude plugin list`. Wrappers fail loud if that path is missing. If a newer sibling version directory exists alongside the pinned one (a stale plugin-cache leftover after `claude plugin update`), the wrapper still execs only the pinned literal and additionally prints a single stderr warning naming the newer version — the exec target itself is never derived from that check.
+The installer (`scripts/install.sh`) and uninstaller run with `set -euo pipefail`, refuse to run as root, write only under `~/.local/bin`, `~` (rc backups), `~/.config/agy-delegate`, and `~/.gemini`, and never touch the repo. The generated launcher wrappers exec a **pinned absolute path**: that exec target is never a user-writable cache glob and never a per-invocation `claude plugin list`. Wrappers fail loud if that path is missing. They also compare their pinned version against the version Claude Code records in `~/.claude/plugins/installed_plugins.json` (honouring `CLAUDE_CONFIG_DIR`) and exit `127` rather than run a superseded copy; an absent or unparseable registry is silence, so dev installs keep working. That read is **comparison-only**: the registry contributes a version string and nothing else — the exec target is never derived from it, the registry key is matched exactly so a lookalike plugin from another marketplace cannot match, and the repin command printed is constructed from install-time literals, never from a registry-supplied path.
 
 ## Drop-in gemini CLI replacement
 
@@ -257,26 +283,68 @@ The installer (`scripts/install.sh`) and uninstaller run with `set -euo pipefail
 
 | Variable | Default | Notes |
 |----------|---------|-------|
-| `GEMINI_SHIM_STDIN_TIMEOUT` | `30` | Seconds to wait for stdin before failing (exit 2). Must match `^[1-9][0-9]*$`; anything else is rejected at startup. If no `timeout`/`gtimeout` binary is on PATH, the read is unbounded regardless of this value. |
+| `GEMINI_SHIM_STDIN_TIMEOUT` | `30` | Seconds to wait for stdin before failing (exit 2). Must match `^[1-9][0-9]*$`; anything else is rejected at startup. The read is bounded whether or not a `timeout`/`gtimeout` binary is on PATH (see below). |
+| `GEMINI_SHIM_TIMEOUT` | `600` | Seconds to wait for the agy delegation call, escalated to `SIGKILL` 5s after `SIGTERM` (agy ignores `SIGTERM`). Exceeding it exits 124. Must match `^[1-9][0-9]*$`; anything else is rejected at startup. The call is bounded whether or not a `timeout`/`gtimeout` binary is on PATH (see below). |
+| `AGY_MODELS_TIMEOUT` | `20` | Seconds to wait for the `agy models` fetch that resolves model names, escalated to `SIGKILL` after 3s. Shared with `agy_bridge.sh`. Anything not matching `^[1-9][0-9]*$` — including `0`, which coreutils `timeout` treats as "no timeout" — is **corrected to 20 rather than rejected**: an optional knob must not stop a `gemini` that shadows the system binary. Exceeding it is not fatal; the shim falls back to the cache and then to passing the name through. The fetch is bounded whether or not a `timeout`/`gtimeout` binary is on PATH (see below). |
+
+#### Bounding without `timeout`/`gtimeout`
+
+Both entry points do the same thing here, and that sameness is the decision rather than a coincidence. `agy-bridge` and the `gemini` shim each route **every** agy call through one shared `run_bounded` helper, so no call from either script is left without a bound on any host. Earlier releases diverged: the bridge refused to start at all without a coreutils binary, while the shim ran the delegation call with no bound. Those were two ways of paying the same price — the shim's caller got the hang this plugin exists to prevent, and the bridge's caller got that same broken `gemini` moved one step earlier, at startup, which is worse for a binary that shadows the system `gemini` for every PATH caller. Bash can enforce a bound with no external binary, so neither price has to be paid, and neither is.
+
+What a missing coreutils changes is *which* kill you get, not whether you get one:
+
+| | `timeout`/`gtimeout` on PATH | no bounding binary |
+|-|------------------------------|--------------------|
+| `agy-bridge` | coreutils enforces the bound | warns once at startup, then bounds with the bash watchdog |
+| `gemini` shim | coreutils enforces the bound | warns once at startup, then bounds with the bash watchdog |
+
+Coreutils `timeout` isolates its child in a new process group and signals the *group*, so it reaps whatever agy forked. The bash watchdog enforces the same seconds, the same `SIGTERM`-then-`SIGKILL` escalation and the same exit `124`, and reaps the child's process group through job control — but where job control cannot give the child a group of its own it degrades to killing the direct process only, so a descendant agy forked can survive. That single difference is what installing coreutils buys.
+
+Each script prints this once per run, before any agy call, when it finds no bounding binary:
+
+```
+WARNING: timeout/gtimeout not found -- bounding agy with the bash watchdog fallback; install coreutils for process-group kill
+```
+
+and this when the watchdog is the mechanism that killed a call:
+
+```
+NOTICE: bash watchdog fallback killed the bounded call after its bound (exit 124)
+```
 
 ### Model name mapping
 
-| gemini name | agy model |
-|-------------|-----------|
-| `pro` (Metaswarm default) | `Gemini 3.1 Pro (High)` |
-| `gemini-pro` / `gemini-3.1-pro` / `gemini-3.1-pro-high` | `Gemini 3.1 Pro (High)` |
-| `gemini-3.1-pro-low` | `Gemini 3.1 Pro (Low)` |
-| `flash` / `gemini-flash` | `Gemini 3.6 Flash (High)` |
-| `gemini-3.6-flash` / `gemini-3.6-flash-high` | `Gemini 3.6 Flash (High)` |
-| `gemini-3.6-flash-medium` | `Gemini 3.6 Flash (Medium)` |
-| `gemini-3.6-flash-low` | `Gemini 3.6 Flash (Low)` |
-| `gemini-3.5-flash` / `gemini-3.5-flash-high` | `Gemini 3.5 Flash (High)` |
-| `gemini-3.5-flash-medium` | `Gemini 3.5 Flash (Medium)` |
-| `gemini-3.5-flash-low` | `Gemini 3.5 Flash (Low)` |
-| `gemini-2.5-pro` / `gemini-2.5-flash` (legacy) | `Gemini 3.1 Pro (High)` / `Gemini 3.6 Flash (High)` |
-| any other string | pass through unchanged |
+Model names are resolved against the **live `agy models` list**, never against a
+hardcoded version. `config/model-map.json` maps a gemini name to a model *class*;
+the shim then picks the newest live id matching `gemini-<version>-<class>` — the
+same `sort -V | tail -1` rule `agy_bridge.sh` uses for `--type`. A new agy model
+generation is picked up automatically, with no edit to this repo.
 
-Mappings are in `config/model-map.json` — add aliases there without touching scripts.
+| gemini name | agy class | resolves to |
+|-------------|-----------|-------------|
+| `pro` (Metaswarm default) | `pro-high` | newest `gemini-*-pro-high` |
+| `gemini-pro` / `gemini-3.1-pro` / `gemini-3.1-pro-high` | `pro-high` | newest `gemini-*-pro-high` |
+| `gemini-3.1-pro-low` | `pro-low` | newest `gemini-*-pro-low` |
+| `flash` / `gemini-flash` | `flash-high` | newest `gemini-*-flash-high` |
+| `gemini-3.6-flash` / `gemini-3.6-flash-high` | `flash-high` | newest `gemini-*-flash-high` |
+| `gemini-3.6-flash-medium` / `gemini-3.5-flash-medium` | `flash-medium` | newest `gemini-*-flash-medium` |
+| `gemini-3.6-flash-low` / `gemini-3.5-flash-low` | `flash-low` | newest `gemini-*-flash-low` |
+| `gemini-3.5-flash` / `gemini-3.5-flash-high` | `flash-high` | newest `gemini-*-flash-high` |
+| `gemini-2.5-pro` / `gemini-2.5-flash` (legacy) | `pro-high` / `flash-high` | newest of that class |
+| a name that is a live agy id | — | itself, unchanged (an explicit pin is never upgraded) |
+| any other string | — | pass through unchanged, with a warning on stderr |
+
+Aliases are in `config/model-map.json` — add them there without touching scripts.
+Values must be classes, never ids or display names: a pinned name goes stale the
+day agy ships a new model.
+
+The live list is cached for 60 minutes in `~/.cache/agy-bridge-models`, shared
+with `agy_bridge.sh`, and fetched only when a model is actually requested
+(`--help`, `--version` and model-less calls never fetch). The fetch is bounded by
+`AGY_MODELS_TIMEOUT` (see the table above). If agy is unreachable and no cache
+exists — or `HOME` is unset, or agy returns a list with no `gemini-` ids — names
+pass through untouched rather than failing, and no warning is emitted: this shim
+shadows the system `gemini` for every caller on `PATH`.
 
 ### Manual installation
 
@@ -317,7 +385,7 @@ scripts/agy_bridge.sh          — typed bridge (execed by the ~/.local/bin/agy-
 scripts/gemini_shim.sh         — drop-in gemini CLI shim (execed by the ~/.local/bin/gemini wrapper)
 skills/agy-delegate/SKILL.md   — skill definition
 config/provider.md             — provider details, auth, timeout guidance
-config/model-map.json          — gemini alias → agy model name mapping table
+config/model-map.json          — gemini alias → agy model class (resolved live, never pinned)
 config/policies/               — GEMINI.md tool restriction policies (one file per mode)
   search.md                    — web search only
   code.md                      — read + grep, no writes
@@ -326,9 +394,22 @@ config/policies/               — GEMINI.md tool restriction policies (one file
   shim-yolo.md                 — gemini shim --yolo (read + write, no shell)
   shim-sandbox.md              — gemini shim --sandbox (read only)
   shim-default.md              — gemini shim default (read only)
+tests/contract-check.sh        — real-agy contract check (repo-only, spends quota, see Contract check above)
+tests/run-tests.sh             — mocked regression suite, this project's actual unit tests (see Running the tests, above)
+tests/fake-agy.sh              — mock agy the regression suite drives; the real agy is never reached by this suite
+tests/fixtures/                — captured real-agy output the fake and CC05 are pinned against
 ```
 
 ## Changelog
+
+### 1.6.2
+
+- `agy-bridge` no longer hangs when agy does. Both agy invocations now escalate to `SIGKILL`: the model fetch 3s after `$AGY_MODELS_TIMEOUT` (default 20s), the delegation call 5s after `$TIMEOUT`. agy ignores `SIGTERM`, so plain `timeout` sent the signal and then blocked forever — the delegation call outlived even its own 600s bound. Both entry points enforce every bound through one shared helper, using coreutils `timeout -k` where it exists and a bash watchdog where it does not, so a host without coreutils no longer costs the bridge its startup or the shim its bound. A failed fetch now falls back to the stale cached list with a warning instead of hard-failing while a usable list sits on disk.
+- A failed `agy models` surfaces agy's own stderr instead of discarding it. That text is the only diagnostic when the real fault is auth or the network.
+- A model list carrying no `gemini-` ids reports a degraded/unauthenticated agy rather than blaming the `--type` the user picked.
+- An agy killed by something other than its own timeout — an OOM killer, an external `kill -9`, a container preemption — is now named as such rather than surfacing as a bare `agy exit 137`. A 137 arriving before the bound elapsed cannot be the bridge's own `-k` escalation, so it is reported distinctly and the 137 exit status is preserved.
+- Both pinned launchers (`agy-bridge` and the `gemini` shim) refuse to run (exit 127) when Claude Code's install registry reports a different active version, naming both versions; each prints the exact repin command when the active version is numeric and the constructed installer path exists on disk, otherwise a generic pointer to `/agy-setup`. Previously a superseded pin only warned on stderr and kept running the stale copy, so a shipped fix could sit installed-but-never-executed. Replaces the newer-sibling directory scan.
+- `/agy-setup` leads with a readable two-step install (print the path, run it) instead of the 9-line resolve-and-validate pipeline; the pipeline remains as a fallback where no registry file exists.
 
 ### 1.6.1
 

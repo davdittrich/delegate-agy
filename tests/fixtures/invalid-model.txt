@@ -1,0 +1,19 @@
+# invalid-model.txt -- captured by tests/contract-check.sh
+# agy-version: 1.1.13
+# captured: 2026-08-20
+Error: invalid model selection (--model "gemini-99.9-flash-high" --effort ""): model gemini-99.9-flash-high is not recognized as a known model or custom model in settings
+Available models:
+  Gemini 3.7 Flash (High)
+  Gemini 3.7 Flash (Medium)
+  Gemini 3.7 Flash (Low)
+  Gemini 3.6 Flash (High)
+  Gemini 3.6 Flash (Medium)
+  Gemini 3.6 Flash (Low)
+  Gemini 3.5 Flash (High)
+  Gemini 3.5 Flash (Medium)
+  Gemini 3.5 Flash (Low)
+  Gemini 3.1 Pro (High)
+  Gemini 3.1 Pro (Low)
+  Claude Sonnet 4.6 (Thinking)
+  Claude Opus 4.6 (Thinking)
+  GPT-OSS 120B (Medium)
