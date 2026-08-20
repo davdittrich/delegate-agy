@@ -754,6 +754,7 @@ _cc_preflight
 _cc_probe_agy_version_shape
 _cc_probe_models_format
 _cc_probe_non_gemini_rows
+_cc_probe_invalid_model_rejection
 
 # ── Summary, exactly once, after every probe has returned ───────────────────
 _cc_summary
