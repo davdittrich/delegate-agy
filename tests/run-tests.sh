@@ -1291,6 +1291,46 @@ else
 fi
 rm -f "$_SHIM_CACHE"
 
+# SH15: a degraded (gemini--less) agy models reply must never reach the cache
+# file the bridge also reads (D-03, delegate-agy-8ph) -- absent stays absent,
+# present stays byte-identical, regardless of the outcome of the call itself.
+_SH15_CACHE="$HOME/.cache/agy-bridge-models"
+SH15_OK=1
+SH15_DETAIL=""
+
+# First half: no cache on disk -- outcome unchanged from SH14 (rc=0, name
+# passed through, no warning), and nothing gets created.
+rm -f "$_SH15_CACHE"
+SH15_DUMP="$SANDBOX/sh15_argv.log"
+: > "$SH15_DUMP"
+FAKE_AGY_MODELS_GARBAGE=1 FAKE_AGY_DUMP_ARGV="$SH15_DUMP" FAKE_AGY_STDOUT="ok" \
+    _run OUT RC bash "$SHIM" -m flash -p x
+SH15_ID="$(awk '/^--model$/{getline; print; exit}' "$SH15_DUMP")"
+if [[ "$RC" -ne 0 || "$SH15_ID" != "flash" || "$OUT" == *"WARNING"* || -s "$_SH15_CACHE" ]]; then
+    SH15_OK=0
+    SH15_DETAIL="${SH15_DETAIL}absent-half: rc=$RC model=$SH15_ID cache_exists=$( [[ -s "$_SH15_CACHE" ]] && echo yes || echo no ) out=$OUT; "
+fi
+
+# Second half: a good cache already on disk survives a degraded reply
+# byte-for-byte -- this is what a poisoned cache would otherwise break.
+mkdir -p "$(dirname "$_SH15_CACHE")"
+printf '%s\t%s\n' "gemini-3.1-pro-high" "Gemini 3.1 Pro (High)" > "$_SH15_CACHE"
+touch -d '2 hours ago' "$_SH15_CACHE"
+_SH15_BEFORE="$(cat "$_SH15_CACHE")"
+FAKE_AGY_MODELS_GARBAGE=1 FAKE_AGY_STDOUT="ok" _run OUT RC bash "$SHIM" -m flash -p x
+_SH15_AFTER="$(cat "$_SH15_CACHE" 2>/dev/null)"
+if [[ "$_SH15_AFTER" != "$_SH15_BEFORE" ]]; then
+    SH15_OK=0
+    SH15_DETAIL="${SH15_DETAIL}preservation-half: before=[$_SH15_BEFORE] after=[$_SH15_AFTER]; "
+fi
+rm -f "$_SH15_CACHE"
+
+if [[ "$SH15_OK" -eq 1 ]]; then
+    ok "SH15 a degraded agy models reply never reaches the cache file, absent or present"
+else
+    bad "SH15 a degraded agy models reply never reaches the cache file, absent or present" "$SH15_DETAIL"
+fi
+
 echo "== watchdog fixtures (RB00) =="
 
 # RB00a: the sanitized PATH must genuinely resolve no bounding binary, AND still
