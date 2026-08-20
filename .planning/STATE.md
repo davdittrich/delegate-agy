@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.6.2
-current_phase: 03
-current_phase_name: the-exit-code-contract
-status: verifying
-stopped_at: Completed 03-04-PLAN.md
-last_updated: "2026-08-20T22:58:08.672Z"
-last_activity: 2026-08-20
-last_activity_desc: Phase 03 execution started
-state_head: 027a89bc6302964cb409b9719ca3cf3fff3f0505
+current_phase: 4
+current_phase_name: Installer and launcher surface
+status: planning
+stopped_at: Phase 03 complete, ready to plan Phase 4
+last_updated: "2026-08-20T23:22:56.190Z"
+last_activity: 2026-08-21
+last_activity_desc: Phase 03 complete, transitioned to Phase 4
+state_head: 1e858ecf9ac83663ea9c63f325842eb7760a9653
 progress:
   total_phases: 7
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 18
   completed_plans: 18
 milestone_name: milestone
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-08-20)
 
 ## Current Position
 
-Phase: 03 (the-exit-code-contract) — EXECUTING
-Plan: 4 of 4
-Status: Phase complete — ready for verification
-Last activity: 2026-08-20 — Phase 03 execution started
+Phase: 4 — Installer and launcher surface
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-08-21 — Phase 03 complete, transitioned to Phase 4
 
 Progress: [░░░░░░░░░░░░░░░░░░░░] 14/14 plans overall (Phase 02 complete: 2/2 plans; Phase 3 not yet planned)
 
@@ -39,7 +39,7 @@ Progress: [░░░░░░░░░░░░░░░░░░░░] 14/14 p
 
 **Velocity:**
 
-- Total plans completed: 15
+- Total plans completed: 19
 - Average duration: —
 - Total execution time: —
 
@@ -48,8 +48,8 @@ Progress: [░░░░░░░░░░░░░░░░░░░░] 14/14 p
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01.5 | 6 | - | - |
-| 01 | 6 | - | - |
 | 02 | 3 | - | - |
+| 03 | 4 | - | - |
 
 **Recent Trend:**
 
@@ -101,20 +101,6 @@ Recent decisions affecting current work:
 - [Phase ?]: 01-06: Runtime descendant cases capture into files, not command substitutions: each script's fd 9 is inherited by agy and its forks, so under a command substitution a failing descendant assertion blocks for the fake's full 300s instead of failing
 - [Phase ?]: 01-06: The forking fake ignores SIGHUP as well as SIGTERM: without it the pty session's hangup reaps the pair and the with-terminal descendant assertion passes while asserting nothing
 - [Phase ?]: 01-06: The PTY allocator's argv form is chosen by probing script --version, never by uname, with both flavour branches pinned on one host via a stubbed probe result
-- [Phase 01.5]: 01.5-01: tracer-feedback gate observed -- committed Task 1, paused for human confirmation of real-agy and absent-binary runs, then proceeded to Task 2/3 after approval
-- [Phase 01.5]: 01.5-01: two literal acceptance-criteria shell commands (grep for 'set -euo pipefail' substring; PATH=/nonexistent bash invocation) could not pass/run as literally typed due to D-03's mandated verbatim comment text and bash's own command-prefix PATH lookup semantics -- verified via intent-equivalent checks instead, documented in SUMMARY, no code changed
-- [Phase 01.5]: 01.5-01: CC01's sanitized PATH needed an explicit 'timeout' entry beyond the existing _PUREBIN_TOOLS whitelist -- the outer bounding wrapper itself must resolve under CC01's fully-replaced PATH, unlike every other _purebin() caller which keeps the harness's original PATH available for its own outer safety net
-- [Phase 01.5]: 01.5-02: CC02 reuses _purebin()'s directory (fake agy present, no timeout/gtimeout by design per RB00a) and composes an external `timeout 30` via `env PATH=...` rather than mutating that shared directory or reusing _run_sanitized's own safety net as the bound
-- [Phase 01.5]: 01.5-02: CC03's isolation scan needed a dedicated _cc_raw_segments helper (same split as _rb_agy_segments, without its noise-stripping) because that stripping erases the leading PATH= assignment CC01/CC02's own invocations rely on as their clearing signal -- found live when the scan first ran against the real, correct file
-- [Phase 01.5]: 01.5-02: CC03m's mutation payloads are assembled from separator-free arguments joined inside the harness function's own code, not as a literal `;` in a probe's call-site text, because that text is itself part of the file the scan reads
-- [Phase 01.5]: 01.5-03: preflight-once design -- agy --version and agy models each called exactly once per run, reused by three probes; agy models requires </dev/null or it hangs indefinitely
-- [Phase 01.5]: 01.5-03: invalid-model-rejection derives its verdict from whether agy's rejection names the impossible id WE supplied, never from pinned message text
-- [Phase 01.5]: 01.5-04: fake-agy.sh reads tests/fixtures/agy-models.tsv at runtime via _fake_fixture (three-tier resolution: AGY_FIXTURES_DIR, dirname $0/fixtures, $AGY_PLUGIN_DIR/tests/fixtures), loud non-zero on total failure or zero-row fixture -- never a silent empty list (D-14, D-14a)
-- [Phase 01.5]: 01.5-04: R2, R4, and CC06 all derive their expected model id via _cc_expect_model (shipped grep|sort -V|tail -1 rule) instead of pinning a literal, so a fixture recapture cannot leave a stale expectation passing silently (D-15a)
-- [Phase 01.5]: [Phase 01.5]: 01.5-05: gemini-md-binds (D-10) verified against real agy 1.1.13 with a competing decoy GEMINI.md present -- forbidden run_shell_command declined, cksum discriminator absent, decoy marker did not leak; delegate-agy-xfa updated with evidence, left open for 01.5-06 (D-18) to close
-- [Phase 01.5]: [Phase 01.5]: 01.5-05: sigterm-ignored (D-12) contradicted -- real agy 1.1.13 died on SIGTERM alone (rc=124) under a strict 8s bound; R11's -k escalation rationale not reproduced this run; delegate-agy-i43 filed rather than changing run_bounded/R11 in this phase (phase boundary)
-- [Phase 01.5]: [Phase 01.5]: 01.5-05: model-arg-accepts aggregates two observations (F6) -- a bare id harvested free from the gemini-md-binds probe's already-billed bridge call, plus a direct display-name call -- keeping the whole run's billed count at 2 (within D-13's budget of 3), both accepted against real agy
-- [Phase 01.5]: S5 corrected: README states the verified --model fact (both ids and display names) with agy 1.1.13/2026-08-20; REQUIREMENTS.md moves S5 to Phase 1.5, status met, naming the one contradicted assumption (sigterm-ignored, delegate-agy-i43) plainly
 - [Phase 02]: 02-01: D-03's write gate lives on the fetch-success branch only; the no-cache degraded path leaves `$_agy_models` untouched so the shipped criterion-3 check (now use-time, herestring form under D-08) is what reports the degraded-list message -- clearing it unconditionally would let the generic retrieval-failure fatal fire first and lose R8's distinct message
 - [Phase 02]: 02-01: D-08's herestring exception is scoped to exactly two sites in `agy_bridge.sh` (the new write-gate and the existing `:515`-era use-time check) -- a narrow, user-approved carve-out of D-01/D-02's closed-criteria boundary after Codex found the `printf | grep -q` pipe form shares the same SIGPIPE hazard class it was chosen to avoid (reproduced empirically, bash 5.3.15)
 - [Phase 02]: 02-01: D-07's stderr relay is relocated (one line moved to fire unconditionally after the whole fetch if/elif/else), not duplicated per branch -- folded into this plan's Task 2 rather than raised as a follow-up bd issue, closing the last open half of criterion 3 in this phase instead of a later one
@@ -167,5 +153,5 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-08-20T22:58:08.642Z
-Stopped at: Completed 03-04-PLAN.md
+Stopped at: Phase 03 complete, ready to plan Phase 4
 Resume file: None
