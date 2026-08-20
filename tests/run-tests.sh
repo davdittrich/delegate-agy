@@ -3493,6 +3493,74 @@ else
         "rc=$RB29_RC out=${RB29_OUT:0:80} err=${RB29_ERR:0:200} stale_rc=$RB29_SRC stale_err=${RB29_SERR:0:200} unguarded=${RB29_UNGUARDED:0:200}"
 fi
 
+echo "== the check answers 'could not ask' (CC01, CC02) =="
+
+# CC01: with no agy anywhere on PATH -- not the fake, not the real binary --
+# tests/contract-check.sh must return inside its own bound, report the
+# distinct unverified exit code, and name the assumption it could not settle
+# (D-02, D-08b). A directory built from _PUREBIN_TOOLS's exact whitelist,
+# with no agy entry added, is the entire PATH for the invocation (full
+# replacement, no ":$PATH" suffix) -- deliberately not _purebin(), which
+# always adds the fake as "agy".
+#
+# Wrapped in an EXTERNAL 30-second `timeout` -- SH11's shape, not T4/T5's: a
+# regression to unbounded inside contract-check.sh must be caught from
+# outside in seconds, not by trusting the check's own internal bound, which
+# is exactly the thing a regression here would have broken.
+# AGY_CONTRACT_TIMEOUT=2 so a working bound (the case this run expects) still
+# returns fast; it is irrelevant to this path in practice since AGY_BIN never
+# resolves and run_bounded is never called, but it documents the intent for
+# a reader and costs nothing.
+#
+# Captured through a FILE and read back afterward, never through a command
+# substitution -- the same fd-9 rationale as _run_sanitized (tests/run-tests.sh
+# :152-168): contract-check.sh opens its own fd 9 on its original stderr, and
+# a live command substitution wrapping the whole invocation would leave any
+# surviving descendant holding that capture pipe open.
+CC01_DIR="$(mktemp -d "$SANDBOX/cc01-noagy.XXXXXX")"
+# _PUREBIN_TOOLS plus "timeout" itself: unlike _purebin()'s other callers,
+# this invocation replaces PATH wholesale for the outer 30-second bounding
+# wrapper too (there is no harness PATH left to fall back on for it), so the
+# bounding binary must be resolvable inside the replacement directory or the
+# wrapper itself fails to start rather than bounding anything.
+for _cc01_t in "${_PUREBIN_TOOLS[@]}" timeout; do
+    _cc01_p="$(command -v "$_cc01_t" 2>/dev/null)" || _cc01_p=""
+    if [[ -z "$_cc01_p" ]]; then
+        printf 'FATAL: CC01 sanitized PATH cannot resolve required tool: %s\n' "$_cc01_t" >&2
+        exit 1
+    fi
+    ln -sf "$_cc01_p" "$CC01_DIR/$_cc01_t"
+done
+
+CC01_OUT="$SANDBOX/cc01.out"
+CC01_START="$(date +%s)"
+PATH="$CC01_DIR" HOME="$HOME" AGY_CONTRACT_TIMEOUT=2 \
+    timeout 30 bash "$CONTRACT_CHECK" > "$CC01_OUT" 2>&1
+CC01_RC=$?
+_CC01_ELAPSED=$(( $(date +%s) - CC01_START ))
+CC01_TEXT="$(cat "$CC01_OUT" 2>/dev/null)"
+
+rm -f "$HOME/.cache/agy-bridge-models"
+
+CC01_OK=1
+[[ "$CC01_RC" -eq 10 ]] || CC01_OK=0
+[[ "$CC01_TEXT" =~ ^agy-version-shape[[:space:]]+unverified[[:space:]]+[^[:space:]] ]] || CC01_OK=0
+[[ "$_CC01_ELAPSED" -lt 30 ]] || CC01_OK=0
+# Negative half: no ROW line (lines not starting with the "#" summary
+# prefix) reports a bare "verified" verdict -- "unverified" must not be
+# mistaken for a pass by this assertion, so the boundary requires whitespace
+# on both sides of the word.
+CC01_VERIFIED_ROWS="$(printf '%s\n' "$CC01_TEXT" | grep -v '^#' | grep -cE '[[:space:]]verified([[:space:]]|$)')"
+[[ "$CC01_VERIFIED_ROWS" -eq 0 ]] || CC01_OK=0
+
+if [[ "$CC01_OK" -eq 1 ]]; then
+    ok "CC01 with no agy on PATH, the check exits 10 inside its bound and names agy-version-shape unverified"
+else
+    CC01_DETAIL="rc=$CC01_RC elapsed=${_CC01_ELAPSED}s verified_rows=$CC01_VERIFIED_ROWS first_two=$(printf '%s\n' "$CC01_TEXT" | head -2 | tr '\n' '|')"
+    bad "CC01 with no agy on PATH, the check exits 10 inside its bound and names agy-version-shape unverified" \
+        "$CC01_DETAIL"
+fi
+
 echo
 echo "PASS=$PASS FAIL=$FAIL"
 if [[ "$FAIL" -eq 0 ]]; then
