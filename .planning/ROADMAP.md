@@ -122,9 +122,20 @@ Plans:
   3. A caller who hits a `gemini-`less model list is told agy is degraded or unauthenticated, and shown agy's own stderr — not told their `--type` did not match.
   4. A tab-suffixed or extra-column `agy models` reply still resolves a model: the input is normalized, and the anchored `^gemini-[0-9.]+-<class>$` matchers are byte-identical to what shipped.
 
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 02-01-PLAN.md — Tracer: gate the bridge's cache write on the shipped degraded-list test, fall back to a good stale cache with a distinctly-worded warning, and prove extra-column normalization end to end (R9, R9b, R9c)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 02-02-PLAN.md — Mirror the gate and the fallback into `gemini_shim.sh`'s `load_models()`, silently per its degrade-quietly design, closing S4 on both writers (SH15, SH15b, SH15c)
 
 **Note**: `delegate-agy-8ph` forbids a one-sided fix and forbids changing the 60-minute TTL as a substitute. Both writers change together or neither does.
+
+**On criteria 1 and 3**: both are already shipped on `fix/agy-bridge-resilience` and covered by RB27, R8 and SH14 (02-CONTEXT.md D-01, D-02). The planned work is criterion 2 (`delegate-agy-8ph`) plus criterion 4's untested extra-column half. One gap was found and deliberately not folded in: on a degraded-but-successful fetch the bridge discards agy's captured stderr unread, so criterion 3's "shown agy's own stderr" half holds only on the fetch-failure path. Filed as a follow-up rather than reopening a locked decision.
 
 **On the Phase 1.5 dependency**: 1.5's recorded fixtures are what criterion 4's "byte-identical to what shipped" is checked against — without them this phase re-asserts a hypothesis about `agy models` output rather than a fact. Otherwise this phase is independent of Phase 1: same two files, different code region.
 
