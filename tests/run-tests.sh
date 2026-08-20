@@ -851,6 +851,31 @@ else
         "empty_ok=$EC01_EMPTY_OK nonempty_ok=$EC01_NONEMPTY_OK rc=$RC out=$OUT"
 fi
 
+# EC02 (delegate-agy-v5a): the same guard, JSON envelope form. stdout and
+# stderr are captured SEPARATELY into files (not via _run's combined 2>&1),
+# so the JSON payload is parsed with python3's json module rather than
+# substring-matched -- a structurally broken envelope fails the case rather
+# than passing on a lucky substring (RB09 precedent).
+EC02_OUTF="$SANDBOX/ec02-out.json"
+FAKE_AGY_PRINT_KILL9=1 FAKE_AGY_STDERR="" bash "$BRIDGE" --type code --timeout 60 --json -- "oom check" > "$EC02_OUTF" 2>/dev/null
+EC02_EMPTY_RC=$?
+EC02_EMPTY_ERR="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["error"])' "$EC02_OUTF" 2>/dev/null)" || EC02_EMPTY_ERR="UNPARSEABLE"
+EC02_EMPTY_OK=0
+[[ "$EC02_EMPTY_RC" -eq 137 && "$EC02_EMPTY_ERR" == *"or external kill" ]] && EC02_EMPTY_OK=1
+
+FAKE_AGY_PRINT_KILL9=1 FAKE_AGY_STDERR="boom" bash "$BRIDGE" --type code --timeout 60 --json -- "oom check" > "$EC02_OUTF" 2>/dev/null
+EC02_NONEMPTY_RC=$?
+EC02_NONEMPTY_ERR="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["error"])' "$EC02_OUTF" 2>/dev/null)" || EC02_NONEMPTY_ERR="UNPARSEABLE"
+EC02_NONEMPTY_OK=0
+[[ "$EC02_NONEMPTY_RC" -eq 137 && "$EC02_NONEMPTY_ERR" == *"or external kill: boom" ]] && EC02_NONEMPTY_OK=1
+
+if [[ "$EC02_EMPTY_OK" -eq 1 && "$EC02_NONEMPTY_OK" -eq 1 ]]; then
+    ok "EC02 external-kill JSON message: no dangling separator empty, exact suffix non-empty"
+else
+    bad "EC02 external-kill JSON message: no dangling separator empty, exact suffix non-empty" \
+        "empty_ok=$EC02_EMPTY_OK empty_err=$EC02_EMPTY_ERR nonempty_ok=$EC02_NONEMPTY_OK nonempty_err=$EC02_NONEMPTY_ERR"
+fi
+
 echo "== agy_bridge.sh --add-dir passthrough (delegate-agy-0i9.2) =="
 
 # AD1: caller --add-dir reaches agy AND stays before the trailing WORK_DIR
