@@ -498,7 +498,7 @@ fi
 # bad --type. It must say so rather than blaming the type the user picked.
 rm -f "$HOME/.cache/agy-bridge-models"
 FAKE_AGY_MODELS_GARBAGE=1 _run OUT RC bash "$BRIDGE" --type code -- "garbage list"
-if [[ "$RC" -eq 2 && "$OUT" == *"no 'gemini-' ids"* && "$OUT" != *"for --type"* ]]; then
+if [[ "$RC" -eq 2 && "$OUT" == *"no 'gemini-' ids"* && "$OUT" != *"for --type"* && "$OUT" == *"FAKE-AGY-DEGRADED"* ]]; then
     ok "R8 model list with no gemini ids reports a degraded list, not a bad --type"
 else
     bad "R8 model list with no gemini ids reports a degraded list, not a bad --type" "rc=$RC out=$OUT"
@@ -543,6 +543,32 @@ if [[ "$R9_OK" -eq 1 ]]; then
     ok "R9 a degraded agy models reply never reaches the cache file, absent or present"
 else
     bad "R9 a degraded agy models reply never reaches the cache file, absent or present" "$R9_DETAIL"
+fi
+
+# R9b: a degraded (gemini--less) reply with a good stale cache present falls
+# back to that cache and completes at rc 0 (D-04), with a warning an operator
+# can tell apart from a fetch-failure warning (D-05), and now also shows
+# agy's own stderr diagnostic on this same path too (D-07).
+_R9B_EXPECT="gemini-3.1-pro-high"
+_R9B_CACHE="$HOME/.cache/agy-bridge-models"
+mkdir -p "$(dirname "$_R9B_CACHE")"
+printf '%s\t%s\n' "$_R9B_EXPECT" "Gemini 3.1 Pro (High)" > "$_R9B_CACHE"
+touch -d '2 hours ago' "$_R9B_CACHE"
+FAKE_AGY_MODELS_GARBAGE=1 FAKE_AGY_STDOUT="ok" _run OUT RC bash "$BRIDGE" --type code --verbose -- "stale fallback, degraded"
+R9B_OK=1
+R9B_DETAIL=""
+[[ "$RC" -eq 0 ]] || { R9B_OK=0; R9B_DETAIL="${R9B_DETAIL}rc=$RC (want 0); "; }
+[[ "$OUT" == *"model=$_R9B_EXPECT"* ]] || { R9B_OK=0; R9B_DETAIL="${R9B_DETAIL}model not resolved from cache, out=$OUT; "; }
+[[ "$OUT" == *"WARNING"* ]] || { R9B_OK=0; R9B_DETAIL="${R9B_DETAIL}no WARNING in out=$OUT; "; }
+[[ "$OUT" == *"no 'gemini-' ids"* ]] || { R9B_OK=0; R9B_DETAIL="${R9B_DETAIL}degraded-cause wording absent, out=$OUT; "; }
+[[ "$OUT" != *"'agy models' exited"* && "$OUT" != *"'agy models' timed out"* ]] || { R9B_OK=0; R9B_DETAIL="${R9B_DETAIL}fetch-failure wording leaked into degraded warning, out=$OUT; "; }
+[[ -n "$(find "$_R9B_CACHE" -mmin +60 2>/dev/null)" ]] || { R9B_OK=0; R9B_DETAIL="${R9B_DETAIL}cache mtime was refreshed by the fallback; "; }
+[[ "$OUT" == *"FAKE-AGY-DEGRADED"* ]] || { R9B_OK=0; R9B_DETAIL="${R9B_DETAIL}agy's own stderr (FAKE-AGY-DEGRADED) not shown, out=$OUT; "; }
+rm -f "$_R9B_CACHE"
+if [[ "$R9B_OK" -eq 1 ]]; then
+    ok "R9b a degraded reply with a stale cache falls back at rc 0, warns distinctly, shows agy's stderr, mtime untouched"
+else
+    bad "R9b a degraded reply with a stale cache falls back at rc 0, warns distinctly, shows agy's stderr, mtime untouched" "$R9B_DETAIL"
 fi
 
 # R4: gemini_shim.sh -m flash resolves against the LIVE `agy models` list and
