@@ -758,6 +758,20 @@ _cc_probe_invalid_model_rejection() {
     rm -rf "$scratch"
 }
 
+# _cc_fixture_for NAME -- the fixture file a scoring row or note row writes
+# on its own verified path, or "" for a row with no fixture. Used only by the
+# closing gap line to say WHICH fixture an unverified row consequently did
+# not produce (D-12a).
+_cc_fixture_for() {
+    case "$1" in
+        agy-version-shape)       printf 'agy-version.txt' ;;
+        models-format)           printf 'agy-models.tsv' ;;
+        invalid-model-rejection) printf 'invalid-model.txt' ;;
+        empty-success-capture)   printf 'empty-success.txt' ;;
+        *)                       printf '' ;;
+    esac
+}
+
 # _cc_probe_gemini_md_binds -- D-09's assumption 3 (gemini-md-binds) plus
 # D-11's fixture-capture attempt (empty-success-capture), from ONE billed
 # stimulus. This is the phase's one structurally necessary billed delegation
@@ -1074,22 +1088,49 @@ _cc_probe_sigterm_and_model_arg() {
 # has returned, and never before. D-04 calls this content "the header"; it is
 # emitted LAST here because the billed count and final status are only known
 # once the last probe returns -- a leading header could only ever carry a
-# guess later plans would have to retract. The model-cache side-effect note
-# (the gemini-md-binds probe drives the real bridge, which refreshes
-# $HOME/.cache/agy-bridge-models -- this check's own direct probes never
-# write it) is stated so an operator knows before running it (plan 01.5-05).
+# guess later plans would have to retract. Three lines, always in this order:
+# provenance+billed-count+side-effect header, the model-cache side-effect
+# note (the gemini-md-binds probe drives the real bridge, which refreshes
+# $HOME/.cache/agy-bridge-models as a side effect -- this check's own direct
+# probes never write it), the exit-code legend, then the closing gap line.
 _cc_summary() {
     printf '# agy contract check -- agy-version: %s -- captured: %s -- billed delegations: %s -- side effects: %s\n' \
         "${_CC_AGY_VERSION:-unknown}" "$(date +%F 2>/dev/null || echo unknown)" "$_CC_BILLED" "$_CC_SIDE_EFFECTS"
     printf '# a full run may refresh %s/.cache/agy-bridge-models (the gemini-md-binds probe drives the real bridge); this check'"'"'s own direct probes never write that path\n' "${HOME:-\$HOME}"
-    printf '# exit codes: 0=all verified 10=unverified present 11=contradicted present (outranks 10)\n'
-    if [[ "$_CC_N_UNVERIFIED" -gt 0 || "$_CC_N_CONTRADICTED" -gt 0 ]]; then
-        local IFS=', '
-        printf '# gap: %s\n' "${_CC_GAP_NAMES[*]}"
-    else
+    printf '# exit codes: 0=all seven assumptions verified 10=at least one unverified, none contradicted 11=at least one contradicted (outranks 10)\n'
+
+    # Closing gap line (D-12a): every unverified assumption or unverified
+    # capture-attempt row, and -- where its own fixture consequently was not
+    # written -- which fixture. Contradicted rows are listed too (an answer
+    # was obtained, just a bad one) but carry no fixture lookup: D-12a's
+    # "what was attempted" guarantee is specifically about non-reproduction.
+    if [[ "${#_CC_GAP_NAMES[@]}" -eq 0 ]]; then
         printf '# gap: none\n'
+        return 0
     fi
+    local entry bare fx line=""
+    for entry in "${_CC_GAP_NAMES[@]}"; do
+        case "$entry" in
+            *'(unverified)'|*'(unverified, capture attempt)')
+                bare="${entry%% (unverified*}"
+                fx="$(_cc_fixture_for "$bare")"
+                if [[ -n "$fx" && ! -f "$FIXTURES/$fx" ]]; then
+                    entry="$entry -- $fx not written"
+                fi
+                ;;
+        esac
+        if [[ -z "$line" ]]; then line="$entry"; else line="$line; $entry"; fi
+    done
+    printf '# gap: %s\n' "$line"
 }
+
+# ── Row-count assertion (D-09's seven scoring rows, one note row) ──────────
+# The declared print order AND the shape every run must match. A mismatch
+# between what ran and what was declared is diagnosed to fd 9 -- never
+# silently exited over -- and routes the run to unverified rather than
+# reporting a clean status over an incomplete ledger.
+_CC_ASSUMPTIONS=(agy-version-shape models-format non-gemini-rows invalid-model-rejection gemini-md-binds sigterm-ignored model-arg-accepts)
+_CC_NOTE_ROWS=(empty-success-capture)
 
 # ── Run the probes, in this fixed declared order ────────────────────────────
 _cc_preflight
@@ -1106,7 +1147,21 @@ _cc_summary
 # ── Exit-code computation, over the scoring rows only (D-06, D-07) ─────────
 # Read the counters, never the printed text -- re-parsing stdout would
 # silently re-include a _cc_row_note row that never touched a counter.
-if [[ "$_CC_N_CONTRADICTED" -gt 0 ]]; then
+_CC_COUNT_OK=1
+if [[ "${#_CC_ROW_NAMES[@]}" -ne "${#_CC_ASSUMPTIONS[@]}" ]]; then
+    printf 'DIAGNOSTIC: expected %d scoring rows (%s), emitted %d (%s)\n' \
+        "${#_CC_ASSUMPTIONS[@]}" "${_CC_ASSUMPTIONS[*]}" "${#_CC_ROW_NAMES[@]}" "${_CC_ROW_NAMES[*]:-none}" >&9
+    _CC_COUNT_OK=0
+fi
+if [[ "${#_CC_NOTE_NAMES[@]}" -ne "${#_CC_NOTE_ROWS[@]}" ]]; then
+    printf 'DIAGNOSTIC: expected %d note rows (%s), emitted %d (%s)\n' \
+        "${#_CC_NOTE_ROWS[@]}" "${_CC_NOTE_ROWS[*]}" "${#_CC_NOTE_NAMES[@]}" "${_CC_NOTE_NAMES[*]:-none}" >&9
+    _CC_COUNT_OK=0
+fi
+
+if [[ "$_CC_COUNT_OK" -ne 1 ]]; then
+    exit "$CC_EXIT_UNVERIFIED"
+elif [[ "$_CC_N_CONTRADICTED" -gt 0 ]]; then
     exit "$CC_EXIT_CONTRADICTED"
 elif [[ "$_CC_N_UNVERIFIED" -gt 0 ]]; then
     exit "$CC_EXIT_UNVERIFIED"
