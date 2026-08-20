@@ -44,6 +44,13 @@ AGY_MODELS_TIMEOUT="${AGY_MODELS_TIMEOUT:-20}"
     echo "ERROR: AGY_MODELS_TIMEOUT must be a positive integer" >&2; exit 2
 }
 
+# Shared literal tail of the external-kill (a SIGKILL landing BEFORE our own
+# --timeout bound -- OOM killer, `kill -9`, cgroup/container preemption)
+# message, identical in the plain-text and JSON output forms so the wording
+# has exactly one place to change (RB_NO_TIMEOUT_WARN precedent above). Held
+# in a variable because tests/run-tests.sh pins these bytes (EC01, EC02).
+EC_KILL9_TAIL=' -- possible OOM or external kill'
+
 # --- BEGIN run_bounded ---
 # Bounded invocation, redirect-transparent: the command runs in the caller's own
 # stdio, so command substitution, direct file redirects, a cd-subshell and a
@@ -721,13 +728,21 @@ if [[ "$EXIT_CODE" -eq 137 && "$DURATION" -lt "$TIMEOUT" ]]; then
     # escalation above -- that can only fire at/after $TIMEOUT elapses. It's an
     # external kill (OOM killer, `kill -9`, cgroup/container preemption).
     # Report it distinctly: "raise --timeout" is useless advice against an OOM.
+    #
+    # _err_txt: agy's captured stderr, trailing-newline-stripped by the command
+    # substitution itself. Guarded ONCE here via ${_err_txt:+...} and reused by
+    # both output forms below -- a second emptiness test in a second language is
+    # exactly the structure that let this message trail off into a bare colon
+    # (delegate-agy-v5a).
+    _err_txt="$(cat "$STDERR_FILE" 2>/dev/null || true)"
     if [[ "$JSON_OUTPUT" -eq 1 ]]; then
         python3 -c "
 import json, sys
 print(json.dumps({'success':False,'model_used':sys.argv[1],'type':sys.argv[2],'duration_seconds':int(sys.argv[3]),'error':sys.argv[4] + ': ' + open(sys.argv[5]).read()}))
 " "$MODEL" "$TYPE" "$DURATION" "Killed (signal 9) after ${DURATION}s, before its ${TIMEOUT}s bound -- possible OOM or external kill" "$STDERR_FILE" || true
     else
-        printf 'ERROR: agy killed (signal 9) after %ds, before its %ds bound -- possible OOM or external kill: %s\n' "$DURATION" "$TIMEOUT" "$(cat "$STDERR_FILE" 2>/dev/null || true)" >&2
+        printf 'ERROR: agy killed (signal 9) after %ds, before its %ds bound%s%s\n' \
+            "$DURATION" "$TIMEOUT" "$EC_KILL9_TAIL" "${_err_txt:+: $_err_txt}" >&2
     fi
     exit "$EXIT_CODE"
 elif [[ "$EXIT_CODE" -eq 124 || "$EXIT_CODE" -eq 137 ]]; then
