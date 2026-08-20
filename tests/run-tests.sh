@@ -631,6 +631,24 @@ else
         "pipe_form_count=$R9D_PIPE herestring_form_count=$R9D_HERE"
 fi
 
+# R9e (WR-02): the fetch block's `_agy_err="$(mktemp ...)"` is a bare
+# assignment under `set -euo pipefail` -- if mktemp ever fails (unwritable
+# /tmp, misconfigured TMPDIR, disk full), the assignment's own non-zero exit
+# terminates the whole script with no diagnostic, unlike every other line in
+# this block (mkdir -p ... || true, the tmp-then-mv write, chmod), which
+# degrade gracefully. Structural: reproducing a real mktemp failure needs a
+# faked-out PATH; the assertion instead pins the guarded shape by name.
+R9E_ASSIGN="$(grep -cF '_agy_err="$(mktemp -t agy-models-err.XXXXXX)" || _agy_err=""' "$BRIDGE")" || R9E_ASSIGN=0
+R9E_REDIRECT="$(grep -cF '2>"${_agy_err:-/dev/null}"' "$BRIDGE")" || R9E_REDIRECT=0
+R9E_RELAY_GUARD="$(grep -cF '[[ -n "$_agy_err" && -s "$_agy_err" ]]' "$BRIDGE")" || R9E_RELAY_GUARD=0
+R9E_RM_GUARD="$(grep -cF '[[ -n "$_agy_err" ]] && rm -f "$_agy_err"' "$BRIDGE")" || R9E_RM_GUARD=0
+if [[ "$R9E_ASSIGN" -eq 1 && "$R9E_REDIRECT" -eq 1 && "$R9E_RELAY_GUARD" -eq 1 && "$R9E_RM_GUARD" -eq 1 ]]; then
+    ok "R9e a failed mktemp for the stderr-capture file degrades gracefully, not aborting the script (WR-02)"
+else
+    bad "R9e a failed mktemp for the stderr-capture file degrades gracefully, not aborting the script (WR-02)" \
+        "assign_guard=$R9E_ASSIGN redirect_guard=$R9E_REDIRECT relay_guard=$R9E_RELAY_GUARD rm_guard=$R9E_RM_GUARD"
+fi
+
 # R4: gemini_shim.sh -m flash resolves against the LIVE `agy models` list and
 # hands agy a real ID (delegate-agy-62x purge-guard). The map used to hold
 # DISPLAY NAMES ("Gemini 3.6 Flash (High)") frozen at whatever agy shipped that
