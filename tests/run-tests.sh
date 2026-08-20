@@ -1331,6 +1331,38 @@ else
     bad "SH15 a degraded agy models reply never reaches the cache file, absent or present" "$SH15_DETAIL"
 fi
 
+# SH15b: a degraded (gemini--less) reply with a good stale cache present falls
+# back to that cache and completes at rc 0 (D-04), silently -- no new stderr
+# line (D-05): this shim shadows `gemini` on PATH, so a warning on this path
+# would land in every Octopus/Metaswarm log line. gemini-7.7-flash-high exists
+# in no fixture and no other case, so a resolved 7.7 can only have come from
+# the cache (SH10's shape). The cache's mtime is left untouched by the
+# fallback, so the TTL window is unaffected.
+_SH15B_CACHE="$HOME/.cache/agy-bridge-models"
+mkdir -p "$(dirname "$_SH15B_CACHE")"
+printf '%s\t%s\n' "gemini-7.7-flash-high" "Gemini 7.7 Flash (High)" > "$_SH15B_CACHE"
+touch -d '2 hours ago' "$_SH15B_CACHE"
+_SH15B_BEFORE="$(cat "$_SH15B_CACHE")"
+SH15B_DUMP="$SANDBOX/sh15b_argv.log"
+: > "$SH15B_DUMP"
+FAKE_AGY_MODELS_GARBAGE=1 FAKE_AGY_DUMP_ARGV="$SH15B_DUMP" FAKE_AGY_STDOUT="ok" \
+    _run OUT RC bash "$SHIM" -m flash -p x
+SH15B_ID="$(awk '/^--model$/{getline; print; exit}' "$SH15B_DUMP")"
+_SH15B_AFTER="$(cat "$_SH15B_CACHE" 2>/dev/null)"
+SH15B_OK=1
+SH15B_DETAIL=""
+[[ "$RC" -eq 0 ]] || { SH15B_OK=0; SH15B_DETAIL="${SH15B_DETAIL}rc=$RC (want 0); "; }
+[[ "$SH15B_ID" == "gemini-7.7-flash-high" ]] || { SH15B_OK=0; SH15B_DETAIL="${SH15B_DETAIL}model not resolved from cache, got=$SH15B_ID; "; }
+[[ "$OUT" != *"WARNING"* ]] || { SH15B_OK=0; SH15B_DETAIL="${SH15B_DETAIL}unexpected WARNING in out=$OUT; "; }
+[[ "$_SH15B_AFTER" == "$_SH15B_BEFORE" ]] || { SH15B_OK=0; SH15B_DETAIL="${SH15B_DETAIL}cache mutated: before=[$_SH15B_BEFORE] after=[$_SH15B_AFTER]; "; }
+[[ -n "$(find "$_SH15B_CACHE" -mmin +60 2>/dev/null)" ]] || { SH15B_OK=0; SH15B_DETAIL="${SH15B_DETAIL}cache mtime was refreshed by the fallback; "; }
+rm -f "$_SH15B_CACHE"
+if [[ "$SH15B_OK" -eq 1 ]]; then
+    ok "SH15b a degraded reply falls back to a good stale cache, silently, mtime untouched"
+else
+    bad "SH15b a degraded reply falls back to a good stale cache, silently, mtime untouched" "$SH15B_DETAIL"
+fi
+
 echo "== watchdog fixtures (RB00) =="
 
 # RB00a: the sanitized PATH must genuinely resolve no bounding binary, AND still
