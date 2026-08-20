@@ -919,6 +919,34 @@ else
         "detail=$EC03_FAIL_DETAIL fmt_ok=$EC03_FMT_LITERAL_OK last_bline=[$EC03_LAST_BLINE]"
 fi
 
+# EC04 (delegate-agy-v5a, 03-CONTEXT.md D-01/D-03): the bridge's
+# GENERIC-nonzero plain-text branch (agy_bridge.sh's `elif [[ "$EXIT_CODE"
+# -ne 0 ]]` arm, the mirror of EC01's external-kill arm) carries the same
+# unconditional-suffix defect: an exit code with empty stderr must not trail
+# off into a bare "exit N: ". The JSON arm at that same branch is a DIFFERENT
+# output form (raw stderr, no "ERROR: agy exit N:" context -- see
+# 03-02-PLAN.md must_haves.truths) and is deliberately untouched by this
+# case and this plan. A 3rd scenario (a printf format string) pins T-03-04
+# on this second call site, same as EC03's 4th scenario did on the first.
+FAKE_AGY_EXIT=5 FAKE_AGY_STDERR="" _run OUT RC bash "$BRIDGE" --type code -- "generic nonzero"
+EC04_EMPTY_OK=0
+[[ "$RC" -eq 5 && "$OUT" == *"ERROR: agy exit 5" ]] && EC04_EMPTY_OK=1
+
+FAKE_AGY_EXIT=5 FAKE_AGY_STDERR="boom" _run OUT RC bash "$BRIDGE" --type code -- "generic nonzero"
+EC04_NONEMPTY_OK=0
+[[ "$RC" -eq 5 && "$OUT" == *"ERROR: agy exit 5: boom" ]] && EC04_NONEMPTY_OK=1
+
+FAKE_AGY_EXIT=5 FAKE_AGY_STDERR='100%s%d' _run OUT RC bash "$BRIDGE" --type code -- "generic nonzero"
+EC04_FMT_OK=0
+[[ "$RC" -eq 5 && "$OUT" == *"ERROR: agy exit 5: 100%s%d" ]] && EC04_FMT_OK=1
+
+if [[ "$EC04_EMPTY_OK" -eq 1 && "$EC04_NONEMPTY_OK" -eq 1 && "$EC04_FMT_OK" -eq 1 ]]; then
+    ok "EC04 bridge generic-nonzero plain-text message: no dangling separator empty, exact suffix non-empty, format-specifier literal"
+else
+    bad "EC04 bridge generic-nonzero plain-text message: no dangling separator empty, exact suffix non-empty, format-specifier literal" \
+        "empty_ok=$EC04_EMPTY_OK nonempty_ok=$EC04_NONEMPTY_OK fmt_ok=$EC04_FMT_OK rc=$RC out=$OUT"
+fi
+
 echo "== agy_bridge.sh --add-dir passthrough (delegate-agy-0i9.2) =="
 
 # AD1: caller --add-dir reaches agy AND stays before the trailing WORK_DIR
