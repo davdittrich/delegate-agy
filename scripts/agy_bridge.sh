@@ -546,7 +546,7 @@ if [[ -z "$MODEL" ]]; then
     esac
     [[ -n "$MODEL" ]] || { echo "ERROR: no gemini model for --type '$TYPE' in agy models" >&2; exit 2; }
 else
-    if ! printf '%s\n' "$VALID_MODELS" | grep -qxF "$MODEL"; then
+    if ! grep -qxF "$MODEL" <<< "$VALID_MODELS"; then
         echo "ERROR: unknown --model '${MODEL}'; run 'agy models' for valid names" >&2; exit 2
     fi
 fi
