@@ -2813,6 +2813,119 @@ else
         "detail=$EC07_DETAIL"
 fi
 
+echo "== the empty-success failure payload can never become success-shaped (EC08) =="
+
+# _ec_run_split OUTFILE ERRFILE RCVAR cmd... -- captures stdout and stderr
+# into SEPARATE files (T-03-13; _run above merges both via `2>&1`, which would
+# make a zero-byte-stdout assertion pass unconditionally whenever agy's own
+# stderr is non-empty). Callers read OUTFILE back with `wc -c`, never through
+# a command substitution -- `$(...)` strips a trailing newline, which would
+# collapse "empty" and "exactly one newline" into the identical string and
+# destroy the byte-emptiness scenario EC08 exists to pin.
+_ec_run_split() {
+    local __of="$1" __ef="$2" __rcvar="$3"
+    shift 3
+    "$@" > "$__of" 2> "$__ef"
+    printf -v "$__rcvar" '%s' "$?"
+}
+
+# EC08 (delegate-agy-byv.10, R6 acceptance, criterion 5, 03-04-PLAN.md): the
+# failure payload R6 mandates -- zero-byte stdout in text mode, a
+# response-free envelope in JSON mode -- pinned on both entry points, proven
+# with a real JSON parser rather than a substring guess (T-03-12). Also pins
+# that a stdout of exactly one newline byte is NOT empty (`test -s`'s own
+# rule): it passes through as success and round-trips byte-for-byte through
+# all four output shapes, closing the Codex MEDIUM finding that the newline
+# case's actual JSON behavior needed to be asserted, not assumed.
+EC08_OK=1
+EC08_DETAIL=""
+EC08_BOUT="$SANDBOX/ec08-bout"; EC08_BERR="$SANDBOX/ec08-berr"
+EC08_SOUT="$SANDBOX/ec08-sout"; EC08_SERR="$SANDBOX/ec08-serr"
+
+# -- (1) zero-byte stdout, empty stderr -> the fixed fallback sentence, all four output shapes --
+FAKE_AGY_EXIT=0 FAKE_AGY_STDOUT="" FAKE_AGY_STDERR="" \
+    _ec_run_split "$EC08_BOUT" "$EC08_BERR" EC08_BRC bash "$BRIDGE" --type code -- "ec08 fallback check"
+[[ "$EC08_BRC" -eq 3 ]] || { EC08_OK=0; EC08_DETAIL="$EC08_DETAIL bridge_text:rc=$EC08_BRC"; }
+[[ "$(wc -c < "$EC08_BOUT")" -eq 0 ]] || { EC08_OK=0; EC08_DETAIL="$EC08_DETAIL bridge_text:stdout_bytes=$(wc -c < "$EC08_BOUT")"; }
+[[ "$(cat "$EC08_BERR")" == *"agy returned empty output (exit 0, no stdout)"* ]] \
+    || { EC08_OK=0; EC08_DETAIL="$EC08_DETAIL bridge_text:fallback_missing:[$(cat "$EC08_BERR")]"; }
+
+FAKE_AGY_EXIT=0 FAKE_AGY_STDOUT="" FAKE_AGY_STDERR="" \
+    _ec_run_split "$EC08_BOUT" "$EC08_BERR" EC08_BJRC bash "$BRIDGE" --type code --json -- "ec08 fallback check"
+[[ "$EC08_BJRC" -eq 3 ]] || { EC08_OK=0; EC08_DETAIL="$EC08_DETAIL bridge_json:rc=$EC08_BJRC"; }
+EC08_BJ_OK=0
+python3 -c '
+import json, sys
+d = json.load(open(sys.argv[1]))
+assert "response" not in d
+assert not d.get("success")
+assert "agy returned empty output (exit 0, no stdout)" in d.get("error", "")
+assert d.get("error_class") == "empty_output"
+' "$EC08_BOUT" >/dev/null 2>&1 && EC08_BJ_OK=1
+[[ "$EC08_BJ_OK" -eq 1 ]] || { EC08_OK=0; EC08_DETAIL="$EC08_DETAIL bridge_json:envelope:[$(cat "$EC08_BOUT")]"; }
+
+FAKE_AGY_EXIT=0 FAKE_AGY_STDOUT="" FAKE_AGY_STDERR="" \
+    _ec_run_split "$EC08_SOUT" "$EC08_SERR" EC08_SRC bash "$SHIM" -p "ec08 fallback check"
+[[ "$EC08_SRC" -eq 3 ]] || { EC08_OK=0; EC08_DETAIL="$EC08_DETAIL shim_text:rc=$EC08_SRC"; }
+[[ "$(wc -c < "$EC08_SOUT")" -eq 0 ]] || { EC08_OK=0; EC08_DETAIL="$EC08_DETAIL shim_text:stdout_bytes=$(wc -c < "$EC08_SOUT")"; }
+[[ "$(cat "$EC08_SERR")" == *"agy returned empty output (exit 0, no stdout)"* ]] \
+    || { EC08_OK=0; EC08_DETAIL="$EC08_DETAIL shim_text:fallback_missing:[$(cat "$EC08_SERR")]"; }
+
+FAKE_AGY_EXIT=0 FAKE_AGY_STDOUT="" FAKE_AGY_STDERR="" \
+    _ec_run_split "$EC08_SOUT" "$EC08_SERR" EC08_SJRC bash "$SHIM" --output-format json -p "ec08 fallback check"
+[[ "$EC08_SJRC" -eq 3 ]] || { EC08_OK=0; EC08_DETAIL="$EC08_DETAIL shim_json:rc=$EC08_SJRC"; }
+EC08_SJ_OK=0
+python3 -c '
+import json, sys
+d = json.load(open(sys.argv[1]))
+assert "response" not in d
+assert not d.get("success")
+assert "agy returned empty output (exit 0, no stdout)" in d["error"]["message"]
+assert d["error"]["class"] == "empty_output"
+' "$EC08_SOUT" >/dev/null 2>&1 && EC08_SJ_OK=1
+[[ "$EC08_SJ_OK" -eq 1 ]] || { EC08_OK=0; EC08_DETAIL="$EC08_DETAIL shim_json:envelope:[$(cat "$EC08_SOUT")]"; }
+
+# -- (2) exactly one newline byte of stdout is NOT empty: passes through as
+#    success (rc=0) and round-trips byte-for-byte, all four output shapes --
+FAKE_AGY_EXIT=0 FAKE_AGY_STDOUT=$'\n' \
+    _ec_run_split "$EC08_BOUT" "$EC08_BERR" EC08_BNLRC bash "$BRIDGE" --type code -- "ec08 newline check"
+[[ "$EC08_BNLRC" -eq 0 ]] || { EC08_OK=0; EC08_DETAIL="$EC08_DETAIL bridge_text_nl:rc=$EC08_BNLRC"; }
+[[ "$(wc -c < "$EC08_BOUT")" -eq 1 ]] || { EC08_OK=0; EC08_DETAIL="$EC08_DETAIL bridge_text_nl:stdout_bytes=$(wc -c < "$EC08_BOUT")"; }
+
+FAKE_AGY_EXIT=0 FAKE_AGY_STDOUT=$'\n' \
+    _ec_run_split "$EC08_BOUT" "$EC08_BERR" EC08_BJNLRC bash "$BRIDGE" --type code --json -- "ec08 newline check"
+[[ "$EC08_BJNLRC" -eq 0 ]] || { EC08_OK=0; EC08_DETAIL="$EC08_DETAIL bridge_json_nl:rc=$EC08_BJNLRC"; }
+EC08_BJNL_OK=0
+python3 -c '
+import json, sys
+d = json.load(open(sys.argv[1]))
+assert d.get("response") == "\n"
+' "$EC08_BOUT" >/dev/null 2>&1 && EC08_BJNL_OK=1
+[[ "$EC08_BJNL_OK" -eq 1 ]] || { EC08_OK=0; EC08_DETAIL="$EC08_DETAIL bridge_json_nl:envelope:[$(cat "$EC08_BOUT")]"; }
+
+FAKE_AGY_EXIT=0 FAKE_AGY_STDOUT=$'\n' \
+    _ec_run_split "$EC08_SOUT" "$EC08_SERR" EC08_SNLRC bash "$SHIM" -p "ec08 newline check"
+[[ "$EC08_SNLRC" -eq 0 ]] || { EC08_OK=0; EC08_DETAIL="$EC08_DETAIL shim_text_nl:rc=$EC08_SNLRC"; }
+[[ "$(wc -c < "$EC08_SOUT")" -eq 1 ]] || { EC08_OK=0; EC08_DETAIL="$EC08_DETAIL shim_text_nl:stdout_bytes=$(wc -c < "$EC08_SOUT")"; }
+
+FAKE_AGY_EXIT=0 FAKE_AGY_STDOUT=$'\n' \
+    _ec_run_split "$EC08_SOUT" "$EC08_SERR" EC08_SJNLRC bash "$SHIM" --output-format json -p "ec08 newline check"
+[[ "$EC08_SJNLRC" -eq 0 ]] || { EC08_OK=0; EC08_DETAIL="$EC08_DETAIL shim_json_nl:rc=$EC08_SJNLRC"; }
+EC08_SJNL_OK=0
+python3 -c '
+import json, sys
+d = json.load(open(sys.argv[1]))
+assert d.get("response") == "\n"
+' "$EC08_SOUT" >/dev/null 2>&1 && EC08_SJNL_OK=1
+[[ "$EC08_SJNL_OK" -eq 1 ]] || { EC08_OK=0; EC08_DETAIL="$EC08_DETAIL shim_json_nl:envelope:[$(cat "$EC08_SOUT")]"; }
+
+if [[ "$EC08_OK" -eq 1 ]]; then
+    ok "EC08 exit-3 payload never success-shaped (zero-byte stdout, no response key, both entry points, both output modes); one-newline-byte stdout is not empty and round-trips"
+else
+    bad "EC08 exit-3 payload never success-shaped (zero-byte stdout, no response key, both entry points, both output modes); one-newline-byte stdout is not empty and round-trips" \
+        "detail=$EC08_DETAIL"
+fi
+
 echo "== the docs are held to the captured evidence (CC05) =="
 
 # CC05: README's dated --model fact is a claim about the model list captured in
