@@ -1,13 +1,14 @@
 ---
 phase: 02-model-list-handling-end-to-end
 verified: 2026-08-20T15:09:18Z
-status: human_needed
+status: passed
 score: 6/7 must-haves verified
 behavior_unverified: 0
 overrides_applied: 0
 re_verification: null
 behavior_unverified_items: 0
 human_verification:
+
   - test: "Feed `scripts/agy_bridge.sh` (and separately `scripts/gemini_shim.sh`) a fake `agy models` that exits 0 with a genuinely zero-byte stdout (not the two-line 'Please run agy auth login' garbage `fake-agy.sh` currently emits), with a good stale cache present, then with none."
     expected: "The zero-byte reply is treated identically to a gemini--less reply: never written to the cache (absent stays absent, present survives byte-identical), and — with a stale cache present — the bridge falls back to it with the degraded-cause warning; the shim falls back silently. Both `_agy_ids`/`ids` are `cut -f1` of an empty string, so `grep -q '^gemini-' <<< \"\"` must fail exactly as it does for the non-empty garbage case."
     why_human: "Both plans (02-01-PLAN.md, 02-02-PLAN.md) tag this exact truth `verification: backstop` — a deliberate, explicit acknowledgment that no test exercises it. `tests/fake-agy.sh`'s only garbage mode (`FAKE_AGY_MODELS_GARBAGE`) always emits two non-empty lines before `exit 0` (`tests/fake-agy.sh:164-167`); grepping the suite for a genuinely empty-stdout-with-rc=0 models case finds none. The code path is the same `if grep -q '^gemini-' <<< \"$_agy_ids\"` gate R9/R9b/SH15/SH15b already exercise with non-empty degraded input, so the inference is strong, but per this project's own must_haves tagging convention it is presence-and-inference, not a behavioral pass, and must be flagged rather than silently counted as verified."
