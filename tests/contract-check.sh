@@ -636,6 +636,102 @@ _cc_probe_non_gemini_rows() {
     _cc_row "$name" verified "$nongemini non-gemini rows present; both anchored matchers selected gemini-prefixed ids (flash=\"$flash_sel\" pro=\"$pro_sel\")"
 }
 
+# Impossible model id, permanently non-existent by construction (R3d's shape,
+# tests/run-tests.sh:399-405, but a different literal so the two stay
+# independently readable): a well-formed gemini- id whose version segment no
+# release will reach.
+_CC_IMPOSSIBLE_MODEL="gemini-99.9-flash-high"
+
+# _cc_probe_invalid_model_rejection -- D-09's assumption 4: the evidence that
+# the id-vs-display-name answer is not accidental. Reproduces the shipped
+# bridge's own invocation (scripts/agy_bridge.sh:664-689,549-561,611-617)
+# minus the skip-permissions branch, which is never referenced here at all.
+_cc_probe_invalid_model_rejection() {
+    local name="invalid-model-rejection"
+
+    if [[ -z "$AGY_BIN" ]]; then
+        _cc_row "$name" unverified "no agy on PATH; command -v agy did not resolve"
+        return 0
+    fi
+    if [[ "$_CC_PREFLIGHT_OK" -ne 1 ]]; then
+        _cc_row "$name" unverified "preflight failed: $_CC_PREFLIGHT_REASON"
+        return 0
+    fi
+
+    local scratch work_dir gemini_md out_f err_f rc
+    scratch="$(mktemp -d "${TMPDIR:-/tmp}/cc-invalid-model.XXXXXX")"
+    work_dir="$scratch/work"
+    mkdir -p "$work_dir"
+    gemini_md="$work_dir/GEMINI.md"
+    out_f="$scratch/stdout"
+    err_f="$scratch/stderr"
+
+    # Assembled exactly as scripts/agy_bridge.sh:549-561,611-617 does: an
+    # existing tracked policy file (exercises the shipped configuration,
+    # not a bespoke test-only one) plus the TASK: separator and a one-line
+    # body, chmod 600.
+    if ! cat "$ROOT/config/policies/code.md" > "$gemini_md" 2>/dev/null; then
+        _cc_row "$name" unverified "policy file missing: $ROOT/config/policies/code.md"
+        rm -rf "$scratch"
+        return 0
+    fi
+    {
+        printf '\n\n---\nTASK:\n'
+        printf 'Reply with the single word OK.\n'
+    } >> "$gemini_md"
+    chmod 600 "$gemini_md"
+
+    # scripts/agy_bridge.sh:664 -- the bridge's own literal pointer,
+    # reproduced verbatim: the probe measures the shipped configuration, and
+    # a paraphrase would be a second, driftable copy of an operator-facing
+    # string.
+    local AGY_POINTER='Complete the TASK described in your GEMINI.md context. Output only the result.'
+
+    # scripts/agy_bridge.sh:674-685's flag surface, --add-dir last, minus the
+    # skip-permissions branch -- omitted entirely, never gated, never
+    # referenced (T-01.5-03: --sandbox composed with it has an open upstream
+    # sandbox-bypass report). < /dev/null matches the bridge's own call at
+    # :685.
+    ( cd "$work_dir" && run_bounded "$AGY_CONTRACT_TIMEOUT" 5 -- "$AGY_BIN" \
+        --print "$AGY_POINTER" --sandbox --model "$_CC_IMPOSSIBLE_MODEL" \
+        --add-dir "$work_dir" \
+        > "$out_f" 2> "$err_f" < /dev/null )
+    rc=$?
+
+    if [[ "$rc" -eq 124 ]]; then
+        _cc_row "$name" unverified "run_bounded rc=124 bounding agy with --model $_CC_IMPOSSIBLE_MODEL (the bound fired)"
+        rm -rf "$scratch"
+        return 0
+    fi
+
+    if [[ "$rc" -eq 0 ]]; then
+        _CC_BILLED=$((_CC_BILLED + 1))
+        local first_line
+        first_line="$(head -n1 "$out_f" 2>/dev/null)"
+        _cc_row "$name" contradicted "agy exited 0 and produced output for an impossible model id ($_CC_IMPOSSIBLE_MODEL); a real generation happened: \"$first_line\""
+        rm -rf "$scratch"
+        return 0
+    fi
+
+    # Non-zero, not the bound: agy rejected the id. Verdict from whether the
+    # rejection actually names the impossible id WE supplied -- not from
+    # equality against a remembered message -- so a wording change reports
+    # contradicted rather than silently passing.
+    local combined first_line
+    combined="$scratch/combined"
+    cat "$out_f" "$err_f" > "$combined" 2>/dev/null
+    first_line="$(grep -m1 . "$combined" 2>/dev/null)"
+
+    if [[ -s "$combined" ]] && grep -qF "$_CC_IMPOSSIBLE_MODEL" "$combined"; then
+        _cc_row "$name" verified "agy rc=$rc rejected model $_CC_IMPOSSIBLE_MODEL: \"$first_line\""
+        _cc_fixture "invalid-model.txt" "$combined" verified
+    else
+        _cc_row "$name" contradicted "agy rc=$rc but its output did not name the rejected model $_CC_IMPOSSIBLE_MODEL -- rejection wording may have changed: \"$first_line\""
+    fi
+
+    rm -rf "$scratch"
+}
+
 # _cc_summary -- the trailing summary block, called ONCE, after every probe
 # has returned, and never before. D-04 calls this content "the header"; it is
 # emitted LAST here because the billed count and final status are only known
