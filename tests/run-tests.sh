@@ -1363,6 +1363,57 @@ else
     bad "SH15b a degraded reply falls back to a good stale cache, silently, mtime untouched" "$SH15B_DETAIL"
 fi
 
+# SH15c: an extra column and a trailing tab both normalize through cut -f1 on
+# the REAL fetch path (D-06), through the shim's own fetch -> gate -> normalize
+# -> match path -- not merely R9c's proof on the bridge, and not the cache-read
+# normalization SH7/SH10 already exercise via a pre-seeded cache. Synthetic
+# rows, never added to tests/fixtures/agy-models.tsv (D-14/D-14a): ids below
+# appear nowhere else, in different classes so version-sort in one class
+# cannot mask the other. Same three lines as R9c, so the two cases read as
+# twins. Test-only: no production changes in this task.
+SH15C_DIR="$(mktemp -d "$SANDBOX/sh15c.XXXXXX")"
+printf '%s\n' \
+    "# synthetic SH15c fixture -- not captured evidence, see D-06/D-14a" \
+    "$(printf '%s\t%s\t%s' "gemini-9.4-flash-high" "SH15c Flash" "extra-column")" \
+    "$(printf '%s\t' "gemini-9.3-pro-high")" \
+    > "$SH15C_DIR/agy-models.tsv"
+SH15C_OK=1
+SH15C_DETAIL=""
+
+rm -f "$_SHIM_CACHE"
+SH15C_DUMP="$SANDBOX/sh15c_argv.log"
+: > "$SH15C_DUMP"
+AGY_FIXTURES_DIR="$SH15C_DIR" FAKE_AGY_DUMP_ARGV="$SH15C_DUMP" FAKE_AGY_STDOUT="ok" \
+    _run OUT RC bash "$SHIM" -m flash -p x
+SH15C_FLASH="$(awk '/^--model$/{getline; print; exit}' "$SH15C_DUMP")"
+if [[ "$RC" -ne 0 || "$SH15C_FLASH" != "gemini-9.4-flash-high" ]]; then
+    SH15C_OK=0
+    SH15C_DETAIL="${SH15C_DETAIL}extra-column: rc=$RC model=$SH15C_FLASH; "
+fi
+
+rm -f "$_SHIM_CACHE"
+SH15C_DUMP2="$SANDBOX/sh15c_argv2.log"
+: > "$SH15C_DUMP2"
+AGY_FIXTURES_DIR="$SH15C_DIR" FAKE_AGY_DUMP_ARGV="$SH15C_DUMP2" FAKE_AGY_STDOUT="ok" \
+    _run OUT RC bash "$SHIM" -m pro -p x
+SH15C_PRO="$(awk '/^--model$/{getline; print; exit}' "$SH15C_DUMP2")"
+if [[ "$RC" -ne 0 || "$SH15C_PRO" != "gemini-9.3-pro-high" ]]; then
+    SH15C_OK=0
+    SH15C_DETAIL="${SH15C_DETAIL}trailing-tab: rc=$RC model=$SH15C_PRO; "
+fi
+
+# The synthetic ids above are well-formed gemini ids, so the write gate lets
+# them land in the shared $HOME's cache -- clean up so no later case sees a
+# model version that does not exist.
+rm -f "$_SHIM_CACHE"
+rm -rf "$SH15C_DIR"
+
+if [[ "$SH15C_OK" -eq 1 ]]; then
+    ok "SH15c an extra column and a trailing tab both normalize through the real fetch path"
+else
+    bad "SH15c an extra column and a trailing tab both normalize through the real fetch path" "$SH15C_DETAIL"
+fi
+
 echo "== watchdog fixtures (RB00) =="
 
 # RB00a: the sanitized PATH must genuinely resolve no bounding binary, AND still
