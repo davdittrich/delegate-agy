@@ -402,7 +402,7 @@ LIVE_MODELS=""
 # cache exists. Never fails the script: an unresolvable list degrades to
 # pass-through (see map_model), never to a hard error.
 load_models() {
-    local raw=""
+    local raw="" ids=""
     if [[ ! -s "$MODELS_CACHE" ]] || [[ -n "$(find "$MODELS_CACHE" -mmin +60 2>/dev/null)" ]]; then
         # Third agy call site in this script, bounded like the other three. agy
         # ignores SIGTERM (observed, see scripts/agy_bridge.sh), so the second
@@ -411,14 +411,23 @@ load_models() {
         # is guaranteed a positive integer by the check above.
         raw=$(run_bounded "$AGY_MODELS_TIMEOUT" 3 -- "$AGY_BIN" models </dev/null 2>/dev/null) || raw=""
         if [[ -n "$raw" ]]; then
-            # stderr suppressed across the whole write: an unwritable cache dir
-            # (HOME unset, read-only FS) otherwise makes bash print the failed
-            # redirect on every single invocation. Caching is best-effort — the
-            # fetched list in $raw is already usable without it.
-            mkdir -p "${MODELS_CACHE%/*}" 2>/dev/null || true
-            { printf '%s' "$raw" > "$MODELS_CACHE.tmp.$$" \
-                && mv "$MODELS_CACHE.tmp.$$" "$MODELS_CACHE"; } 2>/dev/null || true
-            chmod 600 "$MODELS_CACHE" 2>/dev/null || true
+            # A gemini--less reply is degraded (unauthenticated agy, or an
+            # output format change) and must never overwrite a good cache the
+            # bridge also reads (D-03, delegate-agy-8ph). Reuses the same
+            # cut -f1 + ^gemini- test map_model's warning gate performs at use
+            # time below (herestring form, D-08), not a second definition of
+            # "is this list degraded".
+            ids="$(printf '%s\n' "$raw" | cut -f1)"
+            if grep -q '^gemini-' <<< "$ids"; then
+                # stderr suppressed across the whole write: an unwritable cache dir
+                # (HOME unset, read-only FS) otherwise makes bash print the failed
+                # redirect on every single invocation. Caching is best-effort — the
+                # fetched list in $raw is already usable without it.
+                mkdir -p "${MODELS_CACHE%/*}" 2>/dev/null || true
+                { printf '%s' "$raw" > "$MODELS_CACHE.tmp.$$" \
+                    && mv "$MODELS_CACHE.tmp.$$" "$MODELS_CACHE"; } 2>/dev/null || true
+                chmod 600 "$MODELS_CACHE" 2>/dev/null || true
+            fi
         fi
     fi
     # Failed or hung fetch → fall back to the cache, however stale. Silently:
@@ -456,7 +465,7 @@ print(json.load(open(sys.argv[1])).get(sys.argv[2], ''))
     # a degraded/unauthenticated agy returns (agy_bridge.sh treats that as
     # fatal), every name looks unknown — including real aliases — and the
     # warning would be noise on an already-degraded path, cached for 60 minutes.
-    if printf '%s\n' "$LIVE_MODELS" | grep -q '^gemini-'; then
+    if grep -q '^gemini-' <<< "$LIVE_MODELS"; then
         echo "WARNING: model '$m' did not resolve against the agy model list; passing it through unchanged" >&2
     fi
     printf '%s\n' "$m"
