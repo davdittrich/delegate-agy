@@ -153,7 +153,7 @@ Plans:
   4. README's troubleshooting table quotes each exit-code message as the code emits it, appended stderr suffix included, so an operator matching output against the docs finds their string.
   5. agy exiting 0 with empty stdout yields exit 3 with 0-byte stdout in text mode and an `{"error":…}` envelope carrying no `response` key in JSON mode — a regression test pins both shapes so the failure payload can never become success-shaped.
 
-**Plans**: 3/4 plans executed
+**Plans**: 4/4 plans executed
 
 Plans:
 **Wave 1**
@@ -170,7 +170,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 03-04-PLAN.md — Assert every documented code by its exact value with no cause conflated, pin R6's failure payload in both output modes on both entry points, close R5/R6 (EC07, EC08)
+- [x] 03-04-PLAN.md — Assert every documented code by its exact value with no cause conflated, pin R6's failure payload in both output modes on both entry points, close R5/R6 (EC07, EC08)
 
 **Note**: independent of Phases 1–2 — this phase owns the bridge's error output, a different code region from the `TIMEOUT_BIN` branches and the model cache. Criterion 5's empty-success case is not hypothetical: a live agy was observed on 2026-08-19 exiting rc=0 with completely empty stdout when a tool hit a headless permission gate.
 
@@ -238,7 +238,7 @@ Phases 1, 1.5, 3, and 4 have no dependencies on each other and may be planned or
 | 1. The missing-`timeout` decision | 6/6 | Complete    | 2026-08-20 |
 | 1.5. Contract check against a real agy | 6/6 | Complete    | 2026-08-20 |
 | 2. Model-list handling, end to end | 3/2 | Complete    | 2026-08-20 |
-| 3. The exit-code contract | 3/4 | In Progress|  |
+| 3. The exit-code contract | 4/4 | In Progress|  |
 | 4. Installer and launcher surface | 0/TBD | Not started | - |
 | 5. The shim's failure-mode contract | 0/TBD | Not started | - |
 | 6. Ship 1.6.2 | 0/TBD | Not started | - |

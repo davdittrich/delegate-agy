@@ -3,17 +3,17 @@ gsd_state_version: 1.0
 milestone: v1.6.2
 current_phase: 03
 current_phase_name: the-exit-code-contract
-status: executing
-stopped_at: Completed 03-03-PLAN.md
-last_updated: "2026-08-20T22:10:29.897Z"
+status: verifying
+stopped_at: Completed 03-04-PLAN.md
+last_updated: "2026-08-20T22:58:08.672Z"
 last_activity: 2026-08-20
 last_activity_desc: Phase 03 execution started
-state_head: 94fb465c914a56c27395c455ca05871021174074
+state_head: 027a89bc6302964cb409b9719ca3cf3fff3f0505
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 18
-  completed_plans: 17
+  completed_plans: 18
 milestone_name: milestone
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-08-20)
 
 Phase: 03 (the-exit-code-contract) — EXECUTING
 Plan: 4 of 4
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-08-20 — Phase 03 execution started
 
 Progress: [░░░░░░░░░░░░░░░░░░░░] 14/14 plans overall (Phase 02 complete: 2/2 plans; Phase 3 not yet planned)
@@ -76,6 +76,7 @@ Progress: [░░░░░░░░░░░░░░░░░░░░] 14/14 p
 | Phase 03 P01 | 40min | 2 tasks | 3 files |
 | Phase 03 P02 | ~30min | 3 tasks | 4 files |
 | Phase 03 P03 | ~1h10min | 3 tasks | 2 files |
+| Phase 03 P04 | 1h | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -130,6 +131,11 @@ Recent decisions affecting current work:
 - [Phase 03]: [Phase 03]: 03-02: EC05's mutation-red proof (T-03-08) is a manual, git-status-tracked verification of the real file during task execution, not a permanent self-mutating suite case -- matches RB03's own static-provenance shape
 - [Phase 03]: [Phase 03]: 03-03: README's exit-124 row quotes both timeout literals as bridge-text-vs-bridge-JSON divergence, not bridge-vs-shim -- the two entry points' TEXT forms are byte-identical
 - [Phase 03]: [Phase 03]: 03-03: D-09 exit-2 consistency pass found zero inconsistencies among 25 call sites in agy_bridge.sh; delegate-agy-b7g recorded with explicit left-for-another-phase disposition, no production change
+- [Phase 03]: [Phase 03]: 03-04: EC07's cause-fragment exclusivity check is scoped to the bridge's four captured messages (137/124/3/2), not all seven runtime invocations -- the bridge is the only entry point that reaches all four codes
+- [Phase 03]: [Phase 03]: 03-04: exit 127 is cited via four source assertions (not two) -- the two Codex-named -eq127 exactness pins plus two more pinning the negative half (-z OUT_STALE / -z RB29_SOUT) that must_haves separately require
+- [Phase 03]: [Phase 03]: 03-04: EC07's four self-referential grep patterns use escaped ERE metacharacters so the grep invocation's own source line can never satisfy the pattern it searches for -- verified empirically via an empty detail string
+- [Phase 03]: [Phase 03]: 03-04: EC07/EC08 were written in one Edit pass then split into two commits by temporarily removing and re-inserting the EC08 block, preserving per-task bd-id traceability without any destructive git operation
+- [Phase 03]: [Phase 03]: 03-04: R5's REQUIREMENTS.md row is closed met but names the integer-second SECONDS-precision ceiling (edge:R5/precision) as a stated residue rather than an implied closure
 
 ### Pending Todos
 
@@ -160,6 +166,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-20T22:10:29.870Z
-Stopped at: Completed 03-03-PLAN.md
+Last session: 2026-08-20T22:58:08.642Z
+Stopped at: Completed 03-04-PLAN.md
 Resume file: None
