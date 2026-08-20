@@ -69,6 +69,17 @@ if ! [[ "$AGY_CONTRACT_TIMEOUT" =~ ^[1-9][0-9]*$ ]]; then
     AGY_CONTRACT_TIMEOUT=30
 fi
 
+# Bound on the `agy models` fetch, matching scripts/agy_bridge.sh:39-46's
+# knob exactly -- same name, same default (20), same ^[1-9][0-9]*$ shape.
+# Corrected rather than rejected, same as AGY_CONTRACT_TIMEOUT above: this is
+# diagnostic tooling, not the production bridge, and never hard-exits on a
+# malformed env var.
+AGY_MODELS_TIMEOUT="${AGY_MODELS_TIMEOUT:-20}"
+if ! [[ "$AGY_MODELS_TIMEOUT" =~ ^[1-9][0-9]*$ ]]; then
+    echo "WARNING: AGY_MODELS_TIMEOUT='${AGY_MODELS_TIMEOUT}' is not a positive integer -- corrected to 20" >&9
+    AGY_MODELS_TIMEOUT=20
+fi
+
 # --- BEGIN run_bounded ---
 # Bounded invocation, redirect-transparent: the command runs in the caller's own
 # stdio, so command substitution, direct file redirects, a cd-subshell and a
@@ -442,7 +453,66 @@ _cc_fixture() {
     mv "$tmp" "$FIXTURES/$name"
 }
 
-# _cc_probe_agy_version_shape -- D-09's assumption 7, the slice's one probe.
+# _cc_preflight -- D-13's gate. Runs the two cheapest, non-generating calls
+# EXACTLY ONCE for the whole run: bounded `agy --version` (consumed below by
+# _cc_probe_agy_version_shape, never called a second time) and bounded
+# `agy models` (consumed by _cc_probe_models_format and
+# _cc_probe_non_gemini_rows). Captures land in a scratch dir that survives
+# for the life of the script (cleaned up via the EXIT trap set here, not
+# per-probe) because two later probes both need to read the same models
+# capture. Sets _CC_PREFLIGHT_OK; on failure, every delegation-dependent
+# probe below reads _CC_PREFLIGHT_REASON instead of attempting its own call
+# -- the worst case for an unreachable or unauthenticated agy is two bounded
+# failures, never three-plus billed timeouts.
+_CC_PREFLIGHT_OK=0
+_CC_PREFLIGHT_REASON=""
+_CC_VERSION_OUT="" _CC_VERSION_ERR="" _CC_VERSION_RC=1
+_CC_MODELS_OUT="" _CC_MODELS_ERR="" _CC_MODELS_RC=1
+
+_cc_preflight() {
+    _CC_SCRATCH="$(mktemp -d "${TMPDIR:-/tmp}/cc-preflight.XXXXXX")"
+    trap '[[ -n "${_CC_SCRATCH:-}" ]] && rm -rf "$_CC_SCRATCH"' EXIT
+
+    _CC_VERSION_OUT="$_CC_SCRATCH/version.stdout"
+    _CC_VERSION_ERR="$_CC_SCRATCH/version.stderr"
+    _CC_MODELS_OUT="$_CC_SCRATCH/models.stdout"
+    _CC_MODELS_ERR="$_CC_SCRATCH/models.stderr"
+
+    if [[ -z "$AGY_BIN" ]]; then
+        _CC_PREFLIGHT_REASON="no agy on PATH; command -v agy did not resolve"
+        return 0
+    fi
+
+    # File capture, never command substitution: fd 9 is inherited by the
+    # bounded child, and a surviving descendant under $(...) would hold this
+    # capture pipe open forever (tests/run-tests.sh:152-168's rationale).
+    run_bounded "$AGY_CONTRACT_TIMEOUT" 5 -- "$AGY_BIN" --version \
+        > "$_CC_VERSION_OUT" 2> "$_CC_VERSION_ERR"
+    _CC_VERSION_RC=$?
+
+    if [[ "$_CC_VERSION_RC" -ne 0 ]]; then
+        _CC_PREFLIGHT_REASON="agy --version failed (run_bounded rc=$_CC_VERSION_RC)"
+        return 0
+    fi
+
+    # </dev/null: scripts/agy_bridge.sh:476 redirects the models fetch's
+    # stdin the same way. Without it agy blocks reading a stdin that a
+    # scripted caller never provides -- observed live, not theoretical.
+    # Bound and kill-after (3) match the bridge's own fetch exactly.
+    run_bounded "$AGY_MODELS_TIMEOUT" 3 -- "$AGY_BIN" models < /dev/null \
+        > "$_CC_MODELS_OUT" 2> "$_CC_MODELS_ERR"
+    _CC_MODELS_RC=$?
+
+    if [[ "$_CC_MODELS_RC" -ne 0 ]]; then
+        _CC_PREFLIGHT_REASON="agy models failed (run_bounded rc=$_CC_MODELS_RC)"
+        return 0
+    fi
+
+    _CC_PREFLIGHT_OK=1
+}
+
+# _cc_probe_agy_version_shape -- D-09's assumption 7. Consumes _cc_preflight's
+# already-captured `agy --version` output; never calls run_bounded itself.
 _cc_probe_agy_version_shape() {
     local name="agy-version-shape"
 
@@ -451,44 +521,119 @@ _cc_probe_agy_version_shape() {
         return 0
     fi
 
-    local scratch out_f err_f rc
-    scratch="$(mktemp -d "${TMPDIR:-/tmp}/cc-version.XXXXXX")"
-    out_f="$scratch/stdout"
-    err_f="$scratch/stderr"
-
-    # File capture, never command substitution: fd 9 is inherited by the
-    # bounded child, and a surviving descendant under $(...) would hold this
-    # capture pipe open forever (tests/run-tests.sh:152-168's rationale).
-    run_bounded "$AGY_CONTRACT_TIMEOUT" 5 -- "$AGY_BIN" --version \
-        > "$out_f" 2> "$err_f"
-    rc=$?
-
-    if [[ "$rc" -ne 0 ]]; then
-        _cc_row "$name" unverified "run_bounded rc=$rc bounding 'agy --version' (a 124 here is the bound firing, not this check's own exit status)"
-        rm -rf "$scratch"
+    if [[ "$_CC_VERSION_RC" -ne 0 ]]; then
+        _cc_row "$name" unverified "run_bounded rc=$_CC_VERSION_RC bounding 'agy --version' (a 124 here is the bound firing, not this check's own exit status)"
         return 0
     fi
 
-    if [[ ! -s "$out_f" ]]; then
+    if [[ ! -s "$_CC_VERSION_OUT" ]]; then
         _cc_row "$name" unverified "rc=0 with empty stdout"
-        rm -rf "$scratch"
         return 0
     fi
 
     local first_line
-    first_line="$(head -n1 "$out_f")"
+    first_line="$(head -n1 "$_CC_VERSION_OUT")"
     # Shape check, not a pinned literal: no known-good version string is
     # compared against agy's answer anywhere in this file.
     if [[ "$first_line" =~ ^[0-9]+(\.[0-9]+)+([[:space:]].*)?$ ]]; then
         _CC_AGY_VERSION="$first_line"
         _cc_row "$name" verified "agy --version -> \"$first_line\""
-        _cc_fixture "agy-version.txt" "$out_f" verified
+        _cc_fixture "agy-version.txt" "$_CC_VERSION_OUT" verified
         _CC_SIDE_EFFECTS="wrote tests/fixtures/agy-version.txt"
     else
         _cc_row "$name" contradicted "agy --version -> \"$first_line\" (not version-shaped)"
     fi
+}
 
-    rm -rf "$scratch"
+# _cc_probe_models_format -- D-09's assumption 1: what `agy models` actually
+# emits. Verdict from shape (row count, TAB separator), never from equality
+# against a remembered list -- this check re-derives, it does not assert.
+_cc_probe_models_format() {
+    local name="models-format"
+
+    if [[ -z "$AGY_BIN" ]]; then
+        _cc_row "$name" unverified "no agy on PATH; command -v agy did not resolve"
+        return 0
+    fi
+    if [[ "$_CC_PREFLIGHT_OK" -ne 1 ]]; then
+        _cc_row "$name" unverified "preflight failed: $_CC_PREFLIGHT_REASON"
+        return 0
+    fi
+    if [[ ! -s "$_CC_MODELS_OUT" ]]; then
+        _cc_row "$name" unverified "rc=0 with empty stdout"
+        return 0
+    fi
+
+    local total tabbed notab
+    total=$(grep -c . "$_CC_MODELS_OUT")
+    if [[ "$total" -eq 0 ]]; then
+        _cc_row "$name" unverified "rc=0 but zero data rows"
+        return 0
+    fi
+
+    # Exactly one TAB per row: id<TAB>display name, the shape
+    # scripts/agy_bridge.sh's own `cut -f1` normalization assumes.
+    tabbed=$(grep -cE $'^[^\t]+\t[^\t]*$' "$_CC_MODELS_OUT")
+    notab=$(( total - tabbed ))
+
+    if [[ "$notab" -gt 0 ]]; then
+        local offender
+        offender="$(grep -vE $'^[^\t]+\t[^\t]*$' "$_CC_MODELS_OUT" | head -n1)"
+        _cc_row "$name" contradicted "$notab of $total rows lack the id<TAB>display-name separator; first offender: \"$offender\""
+        return 0
+    fi
+
+    _cc_row "$name" verified "$total rows, every row carried exactly one TAB (id<TAB>display name)"
+    _cc_fixture "agy-models.tsv" "$_CC_MODELS_OUT" verified
+}
+
+# _cc_probe_non_gemini_rows -- D-09's assumption 5: does the shipped anchored
+# selection (scripts/agy_bridge.sh's own `cut -f1` normalization plus both
+# `grep -E ... | sort -V | tail -1` matchers, re-derived verbatim below)
+# actually exclude every non-`gemini-` row. Never widened or loosened here --
+# this probe reports what the shipped anchors do, not what would make it pass.
+_cc_probe_non_gemini_rows() {
+    local name="non-gemini-rows"
+
+    if [[ -z "$AGY_BIN" ]]; then
+        _cc_row "$name" unverified "no agy on PATH; command -v agy did not resolve"
+        return 0
+    fi
+    if [[ "$_CC_PREFLIGHT_OK" -ne 1 ]]; then
+        _cc_row "$name" unverified "preflight failed: $_CC_PREFLIGHT_REASON"
+        return 0
+    fi
+    if [[ ! -s "$_CC_MODELS_OUT" ]]; then
+        _cc_row "$name" unverified "rc=0 with empty stdout"
+        return 0
+    fi
+
+    local ids
+    # cut -f1: byte-identical to scripts/agy_bridge.sh:463-532's own
+    # normalization before its anchored matchers run.
+    ids="$(cut -f1 "$_CC_MODELS_OUT")"
+    if [[ -z "$ids" ]]; then
+        _cc_row "$name" unverified "rc=0 but zero data rows"
+        return 0
+    fi
+
+    local gemini_count nongemini flash_sel pro_sel
+    gemini_count=$(printf '%s\n' "$ids" | grep -c '^gemini-')
+    nongemini=$(printf '%s\n' "$ids" | grep -vc '^gemini-')
+    flash_sel="$(printf '%s\n' "$ids" | grep -E '^gemini-[0-9.]+-flash-high$' | sort -V | tail -1)"
+    pro_sel="$(printf '%s\n' "$ids" | grep -E '^gemini-[0-9.]+-pro-high$' | sort -V | tail -1)"
+
+    if [[ "$gemini_count" -eq 0 ]]; then
+        _cc_row "$name" contradicted "$nongemini non-gemini rows present; normalized list contains no 'gemini-' id at all (the degraded-list shape the bridge exits 2 on)"
+        return 0
+    fi
+
+    if [[ ( -n "$flash_sel" && "$flash_sel" != gemini-* ) || ( -n "$pro_sel" && "$pro_sel" != gemini-* ) ]]; then
+        _cc_row "$name" contradicted "$nongemini non-gemini rows present; a shipped anchored matcher selected a non-gemini id (flash=\"$flash_sel\" pro=\"$pro_sel\")"
+        return 0
+    fi
+
+    _cc_row "$name" verified "$nongemini non-gemini rows present; both anchored matchers selected gemini-prefixed ids (flash=\"$flash_sel\" pro=\"$pro_sel\")"
 }
 
 # _cc_summary -- the trailing summary block, called ONCE, after every probe
@@ -508,8 +653,11 @@ _cc_summary() {
     fi
 }
 
-# ── Run the probes, in this fixed declared order (this slice: one) ─────────
+# ── Run the probes, in this fixed declared order ────────────────────────────
+_cc_preflight
 _cc_probe_agy_version_shape
+# RED: _cc_probe_models_format / _cc_probe_non_gemini_rows defined above but
+# not yet wired in -- GREEN commit adds these two calls.
 
 # ── Summary, exactly once, after every probe has returned ───────────────────
 _cc_summary
