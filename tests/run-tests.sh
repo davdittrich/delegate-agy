@@ -2581,6 +2581,107 @@ else
         "detail=$EC05_DETAIL"
 fi
 
+# EC06 (delegate-agy-6q1, delegate-agy-byv.7, 03-03-PLAN.md D-07/D-08/D-11):
+# pin the exit-3 (empty-output), exit-124 (timeout -- TWO literal forms, text
+# and the bridge-only JSON form) and exit-2 (degraded model list) message
+# literals across both scripts and README, same RB03/EC05 provenance shape.
+# Static provenance proves the invariant TEXT is present in the file that
+# emits it; it cannot prove the ASSEMBLED line (a runtime class, reason, or
+# bound), so this case also drives both entry points at runtime for exit-3 and
+# exit-124's shared text form (identical stderr / identical bound must yield
+# byte-identical lines) and drives the bridge through all three exit-3
+# classifier outcomes (03-03-PLAN.md review_dispositions, Codex MEDIUM x2).
+_EC_EMPTY_OUTPUT_LITERAL='ERROR: agy returned empty output ['
+_EC_TIMEOUT_TEXT_LITERAL='ERROR: agy timeout after '
+_EC_TIMEOUT_JSON_LITERAL='Timeout after '
+_EC_DEGRADED_LITERAL="agy model list contains no 'gemini-' ids; agy may be unauthenticated"
+
+EC06_OK=1
+EC06_DETAIL=""
+
+# -- static: exit-3 prefix present in BOTH scripts (shared, no shim exception) and verbatim in README --
+for _ec06_f in "$BRIDGE" "$SHIM"; do
+    grep -qF "$_EC_EMPTY_OUTPUT_LITERAL" "$_ec06_f" \
+        || { EC06_OK=0; EC06_DETAIL="$EC06_DETAIL ${_ec06_f##*/}:empty_output_literal_missing"; }
+done
+grep -qF "$_EC_EMPTY_OUTPUT_LITERAL" "$_RB_README" \
+    || { EC06_OK=0; EC06_DETAIL="$EC06_DETAIL readme:empty_output_literal_missing"; }
+
+# -- static: exit-124 TEXT form, exactly once per script (comment-filtered, RB03/EC05 precedent), verbatim in README --
+for _ec06_f in "$BRIDGE" "$SHIM"; do
+    _ec06_n="$(grep -v '^[[:space:]]*#' "$_ec06_f" | grep -cF "$_EC_TIMEOUT_TEXT_LITERAL")" || _ec06_n=0
+    [[ "$_ec06_n" -eq 1 ]] || { EC06_OK=0; EC06_DETAIL="$EC06_DETAIL ${_ec06_f##*/}:timeout_text_count_${_ec06_n}"; }
+done
+grep -qF "$_EC_TIMEOUT_TEXT_LITERAL" "$_RB_README" \
+    || { EC06_OK=0; EC06_DETAIL="$EC06_DETAIL readme:timeout_text_literal_missing"; }
+
+# -- static: exit-124 JSON form, exactly once in the BRIDGE, ZERO in the SHIM (no JSON timeout arm), verbatim in README --
+_ec06_bjson="$(grep -v '^[[:space:]]*#' "$BRIDGE" | grep -cF "$_EC_TIMEOUT_JSON_LITERAL")" || _ec06_bjson=0
+[[ "$_ec06_bjson" -eq 1 ]] || { EC06_OK=0; EC06_DETAIL="$EC06_DETAIL bridge:timeout_json_count_${_ec06_bjson}"; }
+_ec06_sjson="$(grep -v '^[[:space:]]*#' "$SHIM" | grep -cF "$_EC_TIMEOUT_JSON_LITERAL")" || _ec06_sjson=0
+[[ "$_ec06_sjson" -eq 0 ]] || { EC06_OK=0; EC06_DETAIL="$EC06_DETAIL shim:timeout_json_count_${_ec06_sjson}_expected_0"; }
+grep -qF "$_EC_TIMEOUT_JSON_LITERAL" "$_RB_README" \
+    || { EC06_OK=0; EC06_DETAIL="$EC06_DETAIL readme:timeout_json_literal_missing"; }
+
+# -- static: exit-2 degraded-list message, exactly once in the BRIDGE, ZERO in the SHIM (no matching check), verbatim in README --
+_ec06_bdeg="$(grep -v '^[[:space:]]*#' "$BRIDGE" | grep -cF "$_EC_DEGRADED_LITERAL")" || _ec06_bdeg=0
+[[ "$_ec06_bdeg" -eq 1 ]] || { EC06_OK=0; EC06_DETAIL="$EC06_DETAIL bridge:degraded_count_${_ec06_bdeg}"; }
+_ec06_sdeg="$(grep -v '^[[:space:]]*#' "$SHIM" | grep -cF "$_EC_DEGRADED_LITERAL")" || _ec06_sdeg=0
+[[ "$_ec06_sdeg" -eq 0 ]] || { EC06_OK=0; EC06_DETAIL="$EC06_DETAIL shim:degraded_count_${_ec06_sdeg}_expected_0"; }
+grep -qF "$_EC_DEGRADED_LITERAL" "$_RB_README" \
+    || { EC06_OK=0; EC06_DETAIL="$EC06_DETAIL readme:degraded_literal_missing"; }
+
+# -- runtime: exit-3, both entry points driven with IDENTICAL stderr, must print byte-identical lines --
+FAKE_AGY_EXIT=0 FAKE_AGY_STDOUT="" FAKE_AGY_STDERR="boom" _run EC06_B3OUT EC06_B3RC bash "$BRIDGE" --type code -- "ec06 empty check"
+FAKE_AGY_EXIT=0 FAKE_AGY_STDOUT="" FAKE_AGY_STDERR="boom" _run EC06_S3OUT EC06_S3RC bash "$SHIM" -p "ec06 empty check"
+EC06_B3LINE="$(printf '%s\n' "$EC06_B3OUT" | grep '^ERROR: agy returned empty output' | head -1)"
+EC06_S3LINE="$(printf '%s\n' "$EC06_S3OUT" | grep '^ERROR: agy returned empty output' | head -1)"
+if [[ "$EC06_B3RC" -eq 3 && "$EC06_S3RC" -eq 3 && -n "$EC06_B3LINE" && "$EC06_B3LINE" == "$EC06_S3LINE" ]]; then
+    :
+else
+    EC06_OK=0
+    EC06_DETAIL="$EC06_DETAIL exit3_agreement:brc=$EC06_B3RC:src=$EC06_S3RC:bline=[$EC06_B3LINE]:sline=[$EC06_S3LINE]"
+fi
+
+# -- runtime: exit-3 classifier, bridge driven through all three class values --
+FAKE_AGY_EXIT=0 FAKE_AGY_STDOUT="" FAKE_AGY_STDERR="RESOURCE_EXHAUSTED: quota exceeded" _run EC06_QOUT EC06_QRC bash "$BRIDGE" --type code -- "ec06 quota check"
+[[ "$EC06_QRC" -eq 3 && "$EC06_QOUT" == *"[quota]"* ]] \
+    || { EC06_OK=0; EC06_DETAIL="$EC06_DETAIL class_quota:rc=$EC06_QRC:out=[$EC06_QOUT]"; }
+FAKE_AGY_EXIT=0 FAKE_AGY_STDOUT="" FAKE_AGY_STDERR="UNAUTHENTICATED: token expired" _run EC06_AOUT EC06_ARC bash "$BRIDGE" --type code -- "ec06 auth check"
+[[ "$EC06_ARC" -eq 3 && "$EC06_AOUT" == *"[auth]"* ]] \
+    || { EC06_OK=0; EC06_DETAIL="$EC06_DETAIL class_auth:rc=$EC06_ARC:out=[$EC06_AOUT]"; }
+FAKE_AGY_EXIT=0 FAKE_AGY_STDOUT="" FAKE_AGY_STDERR="some other backend hiccup" _run EC06_EOUT EC06_ERC bash "$BRIDGE" --type code -- "ec06 neither check"
+[[ "$EC06_ERC" -eq 3 && "$EC06_EOUT" == *"[empty_output]"* ]] \
+    || { EC06_OK=0; EC06_DETAIL="$EC06_DETAIL class_empty_output:rc=$EC06_ERC:out=[$EC06_EOUT]"; }
+
+# -- runtime: exit-124 TEXT form, both entry points driven to the SAME bound, must print byte-identical lines --
+FAKE_AGY_PRINT_HANG=1 _run EC06_B124OUT EC06_B124RC bash "$BRIDGE" --type code --timeout 1 -- "ec06 timeout check"
+FAKE_AGY_PRINT_HANG=1 GEMINI_SHIM_TIMEOUT=1 _run EC06_S124OUT EC06_S124RC bash "$SHIM" -p "ec06 timeout check"
+EC06_B124LINE="$(printf '%s\n' "$EC06_B124OUT" | grep '^ERROR: agy timeout after' | head -1)"
+EC06_S124LINE="$(printf '%s\n' "$EC06_S124OUT" | grep '^ERROR: agy timeout after' | head -1)"
+if [[ "$EC06_B124RC" -eq 124 && "$EC06_S124RC" -eq 124 && -n "$EC06_B124LINE" && "$EC06_B124LINE" == "$EC06_S124LINE" ]]; then
+    :
+else
+    EC06_OK=0
+    EC06_DETAIL="$EC06_DETAIL exit124_agreement:brc=$EC06_B124RC:src=$EC06_S124RC:bline=[$EC06_B124LINE]:sline=[$EC06_S124LINE]"
+fi
+
+# -- runtime: exit-124 JSON form, bridge only -- the literal actually reaches the emitted envelope --
+FAKE_AGY_PRINT_HANG=1 _run EC06_BJSONOUT EC06_BJSONRC bash "$BRIDGE" --type code --timeout 1 --json -- "ec06 timeout json check"
+if [[ "$EC06_BJSONRC" -eq 124 && "$EC06_BJSONOUT" == *'"error": "Timeout after 1s"'* ]]; then
+    :
+else
+    EC06_OK=0
+    EC06_DETAIL="$EC06_DETAIL exit124_json:brc=$EC06_BJSONRC:out=[$EC06_BJSONOUT]"
+fi
+
+if [[ "$EC06_OK" -eq 1 ]]; then
+    ok "EC06 exit-2/3/124 literals pinned across both scripts and README, runtime agreement and classification held"
+else
+    bad "EC06 exit-2/3/124 literals pinned across both scripts and README, runtime agreement and classification held" \
+        "detail=$EC06_DETAIL"
+fi
+
 echo "== the docs are held to the captured evidence (CC05) =="
 
 # CC05: README's dated --model fact is a claim about the model list captured in
