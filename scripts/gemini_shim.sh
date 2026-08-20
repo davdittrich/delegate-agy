@@ -424,7 +424,12 @@ load_models() {
                 # redirect on every single invocation. Caching is best-effort — the
                 # fetched list in $raw is already usable without it.
                 mkdir -p "${MODELS_CACHE%/*}" 2>/dev/null || true
-                { printf '%s' "$raw" > "$MODELS_CACHE.tmp.$$" \
+                # umask 077 inside a subshell (IN-01): the temp file must
+                # never be briefly world/group-readable between this write
+                # and the chmod two lines below. Scoped to the write alone,
+                # so it never leaks the stricter umask onto the rest of the
+                # script.
+                { ( umask 077; printf '%s' "$raw" > "$MODELS_CACHE.tmp.$$" ) \
                     && mv "$MODELS_CACHE.tmp.$$" "$MODELS_CACHE"; } 2>/dev/null || true
                 chmod 600 "$MODELS_CACHE" 2>/dev/null || true
             elif [[ -s "$MODELS_CACHE" ]]; then

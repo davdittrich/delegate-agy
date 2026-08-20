@@ -486,7 +486,11 @@ if [[ ! -s "$CACHE_FILE" ]] || [[ -n "$(find "$CACHE_FILE" -mmin +60 2>/dev/null
             # redirect on every single invocation. Caching is best-effort — the
             # fetched list in $_agy_models is already usable without it.
             mkdir -p "${CACHE_FILE%/*}" 2>/dev/null || true
-            { printf '%s' "$_agy_models" > "$CACHE_FILE.tmp.$$" \
+            # umask 077 inside a subshell (IN-01): the temp file must never be
+            # briefly world/group-readable between this write and the chmod
+            # two lines below. Scoped to the write alone, so it never leaks
+            # the stricter umask onto the rest of the script.
+            { ( umask 077; printf '%s' "$_agy_models" > "$CACHE_FILE.tmp.$$" ) \
                 && mv "$CACHE_FILE.tmp.$$" "$CACHE_FILE"; } 2>/dev/null || true
             chmod 600 "$CACHE_FILE" 2>/dev/null || true
         elif [[ -s "$CACHE_FILE" ]]; then
