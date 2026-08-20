@@ -1466,6 +1466,24 @@ else
         "pipe_form_count=$SH15D_PIPE herestring_form_count=$SH15D_HERE"
 fi
 
+# IN01 (IN-01): the tmp-then-mv cache write in both scripts leaves the new
+# file at process-umask permissions (typically 644) until the chmod 600 two
+# lines later runs -- a process killed between mv and chmod, or a concurrent
+# reader, sees the file world/group-readable. Low impact (public model IDs),
+# so a light structural assertion is enough: the temp-file write must run
+# inside a `( umask 077; ... )` subshell in both files, closing the window
+# without leaking the stricter umask onto the rest of either script.
+IN01_BRIDGE_PATTERN=$'( umask 077; printf \'%s\' "$_agy_models" > "$CACHE_FILE.tmp.$$" )'
+IN01_SHIM_PATTERN=$'( umask 077; printf \'%s\' "$raw" > "$MODELS_CACHE.tmp.$$" )'
+IN01_BRIDGE="$(grep -cF "$IN01_BRIDGE_PATTERN" "$BRIDGE")" || IN01_BRIDGE=0
+IN01_SHIM="$(grep -cF "$IN01_SHIM_PATTERN" "$SHIM")" || IN01_SHIM=0
+if [[ "$IN01_BRIDGE" -eq 1 && "$IN01_SHIM" -eq 1 ]]; then
+    ok "IN01 the cache-file write is umask-guarded in both scripts, closing the perm window (IN-01)"
+else
+    bad "IN01 the cache-file write is umask-guarded in both scripts, closing the perm window (IN-01)" \
+        "bridge_guard_count=$IN01_BRIDGE shim_guard_count=$IN01_SHIM"
+fi
+
 echo "== watchdog fixtures (RB00) =="
 
 # RB00a: the sanitized PATH must genuinely resolve no bounding binary, AND still
