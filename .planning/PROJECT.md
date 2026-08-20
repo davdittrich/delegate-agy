@@ -24,6 +24,8 @@ A Claude Code plugin that routes tasks to `agy` (Google's Antigravity CLI), givi
 - ✓ R11 — every `agy` invocation bounded through `run_bounded`, on every host, with or without a coreutils binary — Phase 1 (UAT 28/29 direct pass + 1 explicitly accepted gap, 15/15 threats closed)
   - Caveat: R11's stated premise ("agy ignores SIGTERM, so every bound escalates to SIGKILL") is the worst-case design assumption the mechanism is built and tested against (proven via a fake agy that ignores SIGTERM). Phase 1.5's real-agy probe *contradicted* the premise for agy 1.1.13 — it died on SIGTERM alone, rc=124, under a strict 8s bound; the `-k` escalation rationale was not reproduced. Tracked as `delegate-agy-i43`, deliberately left open at the Phase 1/1.5 boundary rather than rewriting R11 or `run_bounded` mid-phase. The escalation ladder itself is still correct defense-in-depth (it's what any *future* SIGTERM-ignoring agy version, or a wedged descendant process, needs) — it just isn't proven necessary for the specific agy version currently observed.
   - Accepted gap: UAT test 29 (does a stock macOS host print no shell job-control notice when it hits this same code path?) was explicitly accepted unverified rather than tested — no macOS host is available to this project. See `01-UAT.md` test 29 and `01-SECURITY.md`'s disposition:accept pattern (same rationale class as T-01-09).
+- ✓ S1 — survive an `agy models` output-format change without silent breakage — Phase 2 (both writers gate a degraded/`gemini-`-less reply behind a `cut -f1` + `^gemini-` match before caching; a tab-suffixed/extra-column reply still normalizes and resolves; UAT 1/1 pass, 11/11 threats closed)
+- ✓ S4 — the shared model cache must be safe with two independent writers — Phase 2 (`delegate-agy-8ph` closed: `scripts/agy_bridge.sh` and `scripts/gemini_shim.sh` both gate their cache write the same way and both fall back to a good stale cache on a degraded reply — bridge warns, shim stays silent by design since it shadows `gemini` box-wide; per-file atomic `mv` write accepted as sufficient for the two-writer property, live concurrency untested — see `AR-02-02`)
 
 ### Active
 
@@ -37,10 +39,8 @@ A Claude Code plugin that routes tasks to `agy` (Google's Antigravity CLI), givi
 
 **Structural — the coupling that produced the 1.6.x bug cluster:**
 
-- [ ] S1 — survive an `agy models` output-format change without silent breakage
 - [ ] S2 — survive a Claude Code registry schema change the same way
 - [ ] S3 — a shim defect must not escape into unrelated PATH callers
-- [ ] S4 — the shared model cache must be safe with two independent writers
 - [ ] S5 — the plugin must be verifiable against a real `agy`, not only a fake
 
 ### Out of Scope
@@ -58,7 +58,7 @@ Pure bash: 9 shell scripts, an ~89-test hand-rolled harness (`tests/run-tests.sh
 
 **A second incident, same week.** A user's launcher was pinned to a superseded plugin version, so a shipped fix sat installed but never executed and an already-fixed bug was re-reported. That produced the version-mismatch refusal in 1.6.0/1.6.2.
 
-**Current state.** `master` merged 1.6.2 and then reverted its *content* at `a001d0e`; the commits are in master's history but the code is not. Completed work sits on `fix/agy-bridge-resilience`. Judge state by reading files, never by the commit graph.
+**Current state.** `master` merged 1.6.2 at `1a0051c`, content-reverted it at `a001d0e` (8 files, holding the release for its own follow-ups), then re-merged `fix/agy-bridge-resilience` at `54d4772` once Phase 2 closed those follow-ups — a 5-file conflict (`README.md`, `scripts/agy_bridge.sh`, `scripts/install.sh`, `tests/fake-agy.sh`, `tests/run-tests.sh`) resolved in the branch's favor, full suite re-run clean (`PASS=145 FAIL=0`). Those 5 files plus `scripts/gemini_shim.sh` (never reverted — added after `a001d0e`) are current on `master`. Three of `a001d0e`'s 8 reverted files fell outside that conflict and are still stale on `master`: `.claude-plugin/plugin.json` (version string reads `1.6.1`) and `.claude/commands/agy-setup.md`/`agy-uninstall.md` (describe the pre-fix install/uninstall flow) — tracked as `delegate-agy-k0f`. Judge state by reading files, never by the commit graph.
 
 **agy responds as of 2026-08-19** (version 1.1.13), reversing the note that stood here. A bounded read-only probe that day got `--version` and `agy models` back in seconds and a real `--type review` delegation back in 4721 bytes; `agy models` emits 14 lines of `id<TAB>display name`, and `--model` accepts **both** ids and display names — settling `delegate-agy-62x`, which was closed without ever being verified. S5 is therefore no longer externally blocked, and its phase moved from 7 to 1.5 so the phases reasoning about agy's output build on fixtures instead of hypotheses.
 
@@ -81,7 +81,10 @@ What the probe did **not** establish: whether agy ignores SIGTERM. Every call re
 | Refuse to run a superseded pin (exit 127) | Silent stale execution let a shipped fix sit unused; a warning had already failed to be noticed | ⚠️ Revisit — hard-breaks `gemini` box-wide until repinned |
 | Shim degrades silently, bridge fails loud | The shim must never break a PATH caller; the bridge is explicitly invoked and can be strict | ✗ Superseded by the row below — Phase 1 dissolved the missing-`timeout` divergence instead of documenting it |
 | Every agy call is bounded on every host, by coreutils `timeout` where it exists and a native bash watchdog where it does not | `delegate-agy-cy5` asked whether the bridge should hard-fail, degrade with a warning, or refuse only the delegation call. Each of the three buys either a call with no bound or a caller broken at startup, and the core value forbids both — a `gemini` that refuses to run is the same failure as one that hangs, moved one step earlier. Bash bounds a call natively with no external binary, so the premise that a missing binary forces the trade is what was rejected; the recorded decision is *always bounded*, none of the three | ✓ Good — both entry points now warn once per run and proceed bounded; the bridge's startup fatal is deleted (Phase 1) |
-| Follow-ups discovered during work block the release | A release shipping known defects it surfaced itself misrepresents what it fixes | — Pending — first applied to 1.6.2 |
+| Follow-ups discovered during work block the release | A release shipping known defects it surfaced itself misrepresents what it fixes | ✓ Good — applied to 1.6.2; Phase 2's own code review (4 findings) was folded into the phase before it closed rather than deferred |
+| Gate the cache write behind `cut -f1` + `^gemini-` match (not a rewrite of the write itself), mirrored identically on both `agy_bridge.sh` and `gemini_shim.sh` | A degraded `agy models` reply must never poison the cache the other tool reads for up to an hour; the two writers share one file so a one-sided fix leaves the other exposed | ✓ Good — `delegate-agy-8ph` closed, both writers verified byte-identical in gate shape |
+| On a degraded-but-successful reply, fall back to a good stale cache instead of failing: the bridge warns (`stderr`), the shim stays silent | The bridge is a watched, explicit delegation call; the shim shadows `gemini` for every PATH caller, so a warning there is box-wide log noise | ✓ Good — same mechanism, deliberately different message policy, both pinned by tests |
+| `printf ... \| grep -q` converted to the herestring form (`grep -q ... <<< "$var"`) at every site reading an untrusted, externally-sized list | `grep -q` exits on first match; under `set -o pipefail` an early match can SIGPIPE the upstream `printf`, and bash reports the pipeline's status as the SIGPIPE'd producer's 141, not `grep`'s 0 — reproduced empirically, bash 5.3.15 | ✓ Good — narrow, user-approved exception to the phase's closed-criteria boundary; applied to every matching site across both scripts, not just the two the plan started with |
 
 ---
-*Last updated: 2026-08-20 after Phase 1 (the-missing-timeout-decision) — UAT + security verification*
+*Last updated: 2026-08-20 after Phase 2 (model-list-handling-end-to-end) — UAT + security verification*

@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.6.2
-current_phase: 02
-current_phase_name: model-list-handling-end-to-end
-status: executing
-stopped_at: Completed 02-02-PLAN.md
-last_updated: "2026-08-20T15:20:00.000Z"
+current_phase: 3
+current_phase_name: The exit-code contract
+status: planning
+stopped_at: Phase 02 complete, ready to plan Phase 3
+last_updated: "2026-08-20T16:24:10.669Z"
 last_activity: 2026-08-20
-last_activity_desc: Phase 02 plan 02 (shim mirror) complete -- S4 (delegate-agy-8ph) and S1 both closed on both writers
-state_head: 529aa7308869de1c68edc6e797dc7e4a26880458
+last_activity_desc: Phase 02 complete, transitioned to Phase 3
+state_head: 54d47722accdd0c046df2c5b03b5e2520ada1480
 progress:
   total_phases: 7
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 14
   completed_plans: 14
 milestone_name: milestone
@@ -24,22 +24,22 @@ milestone_name: milestone
 See: .planning/PROJECT.md (updated 2026-08-20)
 
 **Core value:** Delegation must never break the caller — the shim shadows `gemini` for every PATH caller, so a hang, crash, or silent empty-success here is not scoped to this plugin.
-**Current focus:** Phase 02 — Model-list handling, end to end
+**Current focus:** Phase 3 — The exit-code contract
 
 ## Current Position
 
-Phase: 02 (model-list-handling-end-to-end) — plans complete, phase-level verification pending
-Plan: 02-01 complete (bridge cache-poisoning gate); 02-02 complete (shim mirror) -- both plans in Phase 02 done
-Status: Executing
-Last activity: 2026-08-20 — Phase 02 plan 02 complete: D-03 write gate, D-04 stale-cache fallback (silent, D-05), D-08 herestring fix (2 sites), D-06 extra-column/trailing-tab proof, all mirrored onto `scripts/gemini_shim.sh`'s `load_models()`. `delegate-agy-8ph` closed -- both writers of `~/.cache/agy-bridge-models` now gate the same way. S1 and S4 both moved to "met" in REQUIREMENTS.md. Suite PASS=141 FAIL=0.
+Phase: 3 — The exit-code contract
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-08-20 — Phase 02 complete, transitioned to Phase 3
 
-Progress: [██████████] 2/2 plans in Phase 02 (14/14 plans overall)
+Progress: [░░░░░░░░░░░░░░░░░░░░] 14/14 plans overall (Phase 02 complete: 2/2 plans; Phase 3 not yet planned)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 12
+- Total plans completed: 15
 - Average duration: —
 - Total execution time: —
 
@@ -49,6 +49,7 @@ Progress: [██████████] 2/2 plans in Phase 02 (14/14 plans ov
 |-------|-------|-------|----------|
 | 01.5 | 6 | - | - |
 | 01 | 6 | - | - |
+| 02 | 3 | - | - |
 
 **Recent Trend:**
 
@@ -126,7 +127,7 @@ None yet.
 
 ### Blockers/Concerns
 
-- **Master's files lag its history.** `master` merged 1.6.2 at `1a0051c` then content-reverted at `a001d0e`. `git log` shows the fixes; `git show HEAD:file` does not. Completed work lives on `fix/agy-bridge-resilience` at `56be103`, worktree `.worktrees/agy-1.6.2`. Judge state by reading files.
+- **Master's files no longer lag for the 5 conflicted files — 3 non-code files still do.** `master` merged 1.6.2 at `1a0051c`, content-reverted at `a001d0e` (8 files), then re-merged `fix/agy-bridge-resilience` at `54d4772` after Phase 2 closed the follow-ups the hold was waiting on — 5-file conflict (`README.md`, `scripts/agy_bridge.sh`, `scripts/install.sh`, `tests/fake-agy.sh`, `tests/run-tests.sh`) resolved in the branch's favor, diffed byte-identical against the branch tip, full suite clean post-merge (`PASS=145 FAIL=0`). `scripts/gemini_shim.sh` was never reverted (added after `a001d0e`) and is current too. Still stale: `.claude-plugin/plugin.json` (version reads `1.6.1`) and `.claude/commands/agy-setup.md`/`agy-uninstall.md` (describe the pre-fix flow) — these 3 fell outside the 5-file conflict, so the merge left them on `a001d0e`'s reverted content. Filed as `delegate-agy-k0f` (P3). Judge state by reading files, not the commit graph.
 - **The shim's blast radius is box-wide.** `~/.local/bin/gemini` shadows the real binary for interactive shells, Octopus, and Metaswarm. Weight any shim defect above an equivalent bridge defect.
 - **The per-run GEMINI.md policy may not be authoritative.** A probe from a throwaway CWD had agy answer that it found `GEMINI.md` in five unrelated projects, so agy discovers context outside its working directory. `agy_bridge.sh`'s per-type tool restriction assumes its own GEMINI.md binds. Not yet reproduced through the bridge, which also passes `--sandbox` and `--add-dir` (`delegate-agy-xfa`, P1, Phase 1.5).
 - **R6's empty-success case is real, not hypothetical.** The same probe saw agy exit rc=0 with completely empty stdout when a tool hit a headless permission gate (`jetski: no output produced -- a tool required the "command" permission ... auto-denied`). Phase 3's exit-3 requirement is grounded in observed behavior.
@@ -149,6 +150,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-20T15:20:00.000Z
-Stopped at: Completed 02-02-PLAN.md
-Resume file: None -- Phase 02's plans are both complete; phase-level verification is the next step, handled by the orchestrator, not this executor
+Last session: 2026-08-20T17:05:00Z
+Stopped at: Phase 02 complete (UAT passed 1/1, verification passed, security verified 0 threats open), transitioned to Phase 3 -- ready to plan
+Resume file: None

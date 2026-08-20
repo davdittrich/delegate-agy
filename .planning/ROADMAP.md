@@ -21,7 +21,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: The missing-`timeout` decision** - Settle whether the shim degrades or refuses when no `timeout` binary exists, then say so in both scripts
 - [x] **Phase 1.5: Contract check against a real agy** (INSERTED 2026-08-19, was Phase 7) - Ask the real binary which assumptions hold and record the answers as fixtures the later phases build on (completed 2026-08-20)
-- [ ] **Phase 2: Model-list handling, end to end** - No crash on a bare environment, no poisoned shared cache, no misattributed blame for a degraded agy
+- [x] **Phase 2: Model-list handling, end to end** - No crash on a bare environment, no poisoned shared cache, no misattributed blame for a degraded agy (completed 2026-08-20)
 - [ ] **Phase 3: The exit-code contract** - Every documented code reachable, distinct, and quoted in the docs as the code actually prints it
 - [ ] **Phase 4: Installer and launcher surface** - Registry read stays comparison-only; no install path aborts halfway
 - [ ] **Phase 5: The shim's failure-mode contract** - One table stating what `gemini` does to a caller that never heard of agy, one test per row
@@ -220,7 +220,7 @@ Phases 1, 1.5, 3, and 4 have no dependencies on each other and may be planned or
 |-------|----------------|--------|-----------|
 | 1. The missing-`timeout` decision | 6/6 | Complete    | 2026-08-20 |
 | 1.5. Contract check against a real agy | 6/6 | Complete    | 2026-08-20 |
-| 2. Model-list handling, end to end | 2/2 | In Progress|  |
+| 2. Model-list handling, end to end | 3/2 | Complete    | 2026-08-20 |
 | 3. The exit-code contract | 0/TBD | Not started | - |
 | 4. Installer and launcher surface | 0/TBD | Not started | - |
 | 5. The shim's failure-mode contract | 0/TBD | Not started | - |
