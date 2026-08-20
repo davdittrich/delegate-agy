@@ -117,13 +117,13 @@ _run() {
 # byte-for-byte: scripts/agy_bridge.sh's
 # grep -E '^gemini-[0-9.]+-<class>$' | sort -V | tail -1. FIXTURE_PATH is
 # optional and defaults to $HERE/fixtures/agy-models.tsv, so R2 and R4 read
-# the real capture while CC06 (task 3) drives this same byte-identical
-# derivation over synthetic lists it writes into the sandbox (F3) -- one
-# parameter, two callers, no override variable and no reimplementation of the
-# rule at either call site. An unreadable fixture or an empty result is
-# FATAL naming the path read, following _purebin()'s missing-tool discipline
-# -- a vacuous expectation would make both repaired cases (and CC06) compare
-# nothing to nothing.
+# the real capture while task 3's derivation-edges case drives this same
+# byte-identical derivation over synthetic lists it writes into the sandbox
+# (F3) -- one parameter, two callers, no override variable and no
+# reimplementation of the rule at either call site. An unreadable fixture or
+# an empty result is FATAL naming the path read, following _purebin()'s
+# missing-tool discipline -- a vacuous expectation would make every caller
+# compare nothing to nothing.
 _cc_expect_model() {
     local class="$1" fixture="${2:-$HERE/fixtures/agy-models.tsv}" id
     if [[ ! -r "$fixture" ]]; then
@@ -3908,6 +3908,132 @@ else
 fi
 rm -rf "$CC03M_DIR"
 # --- END cc03-self-exempt ---
+
+echo "== the fake resolves its fixtures, or fails loudly (CC04) =="
+
+# CC04a: tier 1 (AGY_FIXTURES_DIR) wins over tier 2 (a fixtures/ sibling),
+# proven with two DISTINGUISHABLE synthetic variants -- the only way to show
+# tier 1 specifically resolved, not merely that some tier did.
+CC04A_DIR="$(mktemp -d "$SANDBOX/cc04a.XXXXXX")"
+cp "$HERE/fake-agy.sh" "$CC04A_DIR/agy"; chmod +x "$CC04A_DIR/agy"
+mkdir -p "$CC04A_DIR/fixtures"
+printf '%s\n' "# sibling variant" "gemini-9.1-flash-high	Sibling Variant" \
+    > "$CC04A_DIR/fixtures/agy-models.tsv"
+CC04A_OVERRIDE="$(mktemp -d "$SANDBOX/cc04a-override.XXXXXX")"
+printf '%s\n' "# override variant" "gemini-9.2-flash-high	Override Variant" \
+    > "$CC04A_OVERRIDE/agy-models.tsv"
+CC04A_OUT="$(AGY_FIXTURES_DIR="$CC04A_OVERRIDE" "$CC04A_DIR/agy" models)"
+if [[ "$CC04A_OUT" == *"gemini-9.2-flash-high"* && "$CC04A_OUT" != *"gemini-9.1-flash-high"* ]]; then
+    ok "CC04a AGY_FIXTURES_DIR (tier 1) wins over a fixtures/ sibling (tier 2)"
+else
+    bad "CC04a AGY_FIXTURES_DIR (tier 1) wins over a fixtures/ sibling (tier 2)" "out=$CC04A_OUT"
+fi
+rm -rf "$CC04A_DIR" "$CC04A_OVERRIDE"
+
+# CC04b: tier 2 after a copy -- RB27's shape reduced to its resolution
+# question, and the case that would have caught D-14a's original defect.
+CC04B_DIR="$(mktemp -d "$SANDBOX/cc04b.XXXXXX")"
+cp "$HERE/fake-agy.sh" "$CC04B_DIR/agy"; chmod +x "$CC04B_DIR/agy"
+_cc_fixtures_beside "$CC04B_DIR"
+CC04B_OUT="$(env -u AGY_FIXTURES_DIR -u AGY_PLUGIN_DIR "$CC04B_DIR/agy" models)"
+CC04B_EXPECT="$(grep -v '^#' "$HERE/fixtures/agy-models.tsv")"
+if [[ "$CC04B_OUT" == "$CC04B_EXPECT" ]]; then
+    ok "CC04b tier 2 (fixtures/ copied beside the fake) resolves the real fixture"
+else
+    bad "CC04b tier 2 (fixtures/ copied beside the fake) resolves the real fixture" "out=${CC04B_OUT:0:200}"
+fi
+rm -rf "$CC04B_DIR"
+
+# CC04c: no tier resolves, and a zero-row fixture -- both must fail LOUD,
+# never silently empty. Streams captured SEPARATELY, SH9's pattern
+# (tests/run-tests.sh, "gemini_shim.sh: dynamic model resolution" section),
+# not _run, which merges them and would let an empty stdout pass while the
+# diagnostic sat in the same buffer. The emptiness assertion is the
+# important half: an empty list is the degraded shape S1 exists to catch, so
+# "fails loudly" and "emits nothing" must be provably different outcomes.
+CC04C_DIR="$(mktemp -d "$SANDBOX/cc04c.XXXXXX")"
+cp "$HERE/fake-agy.sh" "$CC04C_DIR/agy"; chmod +x "$CC04C_DIR/agy"
+CC04C_OK=1
+CC04C_DETAIL=""
+
+CC04C_OUT1F="$SANDBOX/cc04c-1.out"; CC04C_ERR1F="$SANDBOX/cc04c-1.err"
+env -u AGY_FIXTURES_DIR -u AGY_PLUGIN_DIR \
+    "$CC04C_DIR/agy" models > "$CC04C_OUT1F" 2> "$CC04C_ERR1F"
+CC04C_RC1=$?
+CC04C_OUT1="$(cat "$CC04C_OUT1F")"
+CC04C_ERR1="$(cat "$CC04C_ERR1F")"
+[[ "$CC04C_RC1" -ne 0 ]] || { CC04C_OK=0; CC04C_DETAIL="$CC04C_DETAIL no_tier:rc=$CC04C_RC1"; }
+[[ -z "$CC04C_OUT1" ]] || { CC04C_OK=0; CC04C_DETAIL="$CC04C_DETAIL no_tier:stdout_not_empty"; }
+[[ "$CC04C_ERR1" == *"AGY_FIXTURES_DIR"* ]] || { CC04C_OK=0; CC04C_DETAIL="$CC04C_DETAIL no_tier:tier1_not_named"; }
+[[ "$CC04C_ERR1" == *"$CC04C_DIR/fixtures"* ]] || { CC04C_OK=0; CC04C_DETAIL="$CC04C_DETAIL no_tier:tier2_not_named"; }
+[[ "$CC04C_ERR1" == *"tests/fixtures"* ]] || { CC04C_OK=0; CC04C_DETAIL="$CC04C_DETAIL no_tier:tier3_not_named"; }
+
+mkdir -p "$CC04C_DIR/fixtures"
+printf '%s\n' "# header only, zero data rows" > "$CC04C_DIR/fixtures/agy-models.tsv"
+CC04C_OUT2F="$SANDBOX/cc04c-2.out"; CC04C_ERR2F="$SANDBOX/cc04c-2.err"
+env -u AGY_FIXTURES_DIR -u AGY_PLUGIN_DIR \
+    "$CC04C_DIR/agy" models > "$CC04C_OUT2F" 2> "$CC04C_ERR2F"
+CC04C_RC2=$?
+CC04C_OUT2="$(cat "$CC04C_OUT2F")"
+[[ "$CC04C_RC2" -ne 0 ]] || { CC04C_OK=0; CC04C_DETAIL="$CC04C_DETAIL zero_row:rc=$CC04C_RC2"; }
+[[ -z "$CC04C_OUT2" ]] || { CC04C_OK=0; CC04C_DETAIL="$CC04C_DETAIL zero_row:stdout_not_empty"; }
+grep -qF "$CC04C_DIR/fixtures/agy-models.tsv" "$CC04C_ERR2F" \
+    || { CC04C_OK=0; CC04C_DETAIL="$CC04C_DETAIL zero_row:file_not_named"; }
+
+if [[ "$CC04C_OK" -eq 1 ]]; then
+    ok "CC04c no tier resolving, and a zero-row fixture, both fail loud: non-zero, byte-empty stdout, paths named"
+else
+    bad "CC04c no tier resolving, and a zero-row fixture, both fail loud: non-zero, byte-empty stdout, paths named" \
+        "$CC04C_DETAIL"
+fi
+rm -rf "$CC04C_DIR"
+
+echo "== the shipped model derivation at its edges (CC06) =="
+
+# CC06 exercises _cc_expect_model's rule -- the byte-identical shipped
+# derivation -- against synthetic lists written into the sandbox, reached
+# through the helper's own optional second parameter (F3). Reimplementing
+# the grep|sort -V|tail -1 rule here would be a second definition of
+# "newest matching id" able to disagree with the shipped one; the version
+# sort exists once, in the helper.
+CC06_OK=1
+CC06_DETAIL=""
+
+# precision: a 3.10 id beside a 3.7 id -- version ordering must be sort -V's,
+# not lexical, which would pick 3.7.
+CC06_PREC="$SANDBOX/cc06-precision.tsv"
+printf '%s\n' "# synthetic" \
+    "gemini-3.7-flash-high	Gemini 3.7 Flash (High)" \
+    "gemini-3.10-flash-high	Gemini 3.10 Flash (High)" > "$CC06_PREC"
+CC06_PREC_GOT="$(_cc_expect_model flash-high "$CC06_PREC")"
+[[ "$CC06_PREC_GOT" == "gemini-3.10-flash-high" ]] \
+    || { CC06_OK=0; CC06_DETAIL="$CC06_DETAIL precision:got=$CC06_PREC_GOT"; }
+
+# adjacency: a well-formed id and the same string with an extra trailing
+# segment -- the matcher is $-anchored, so the exact match wins whether or
+# not the longer id is present.
+CC06_ADJ="$SANDBOX/cc06-adjacency.tsv"
+printf '%s\n' "# synthetic" "gemini-3.8-flash-high	Gemini 3.8 Flash (High)" > "$CC06_ADJ"
+CC06_ADJ_BASE="$(_cc_expect_model flash-high "$CC06_ADJ")"
+printf '%s\n' "gemini-3.8-flash-high-extra	Gemini 3.8 Flash (High Extra)" >> "$CC06_ADJ"
+CC06_ADJ_WITH_LONGER="$(_cc_expect_model flash-high "$CC06_ADJ")"
+[[ "$CC06_ADJ_BASE" == "gemini-3.8-flash-high" ]] \
+    || { CC06_OK=0; CC06_DETAIL="$CC06_DETAIL adjacency:base=$CC06_ADJ_BASE"; }
+[[ "$CC06_ADJ_WITH_LONGER" == "gemini-3.8-flash-high" ]] \
+    || { CC06_OK=0; CC06_DETAIL="$CC06_DETAIL adjacency:with_longer=$CC06_ADJ_WITH_LONGER"; }
+
+# determinism: two runs over the same list return the same, non-empty id.
+CC06_DET1="$(_cc_expect_model flash-high "$CC06_PREC")"
+CC06_DET2="$(_cc_expect_model flash-high "$CC06_PREC")"
+[[ -n "$CC06_DET1" && "$CC06_DET1" == "$CC06_DET2" ]] \
+    || { CC06_OK=0; CC06_DETAIL="$CC06_DETAIL determinism:run1=$CC06_DET1 run2=$CC06_DET2"; }
+
+if [[ "$CC06_OK" -eq 1 ]]; then
+    ok "CC06 shipped derivation: version-sort precision, \$-anchored adjacency, deterministic"
+else
+    bad "CC06 shipped derivation: version-sort precision, \$-anchored adjacency, deterministic" "$CC06_DETAIL"
+fi
+rm -rf "$CC06_PREC" "$CC06_ADJ"
 
 echo
 echo "PASS=$PASS FAIL=$FAIL"
