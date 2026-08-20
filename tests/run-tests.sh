@@ -571,6 +571,48 @@ else
     bad "R9b a degraded reply with a stale cache falls back at rc 0, warns distinctly, shows agy's stderr, mtime untouched" "$R9B_DETAIL"
 fi
 
+# R9c: an extra column and a trailing tab both normalize through cut -f1 on
+# the REAL fetch path (D-06), with the anchored matchers byte-identical --
+# a real agy models reply through the bridge's whole fetch -> gate -> normalize
+# -> match path, not the cache-read normalization R3c already proves.
+# Synthetic rows, never added to tests/fixtures/agy-models.tsv (D-14/D-14a):
+# ids below appear nowhere else, in different classes so version-sort in one
+# class cannot mask the other.
+R9C_DIR="$(mktemp -d "$SANDBOX/r9c.XXXXXX")"
+printf '%s\n' \
+    "# synthetic R9c fixture -- not captured evidence, see D-06/D-14a" \
+    "$(printf '%s\t%s\t%s' "gemini-9.4-flash-high" "R9c Flash" "extra-column")" \
+    "$(printf '%s\t' "gemini-9.3-pro-high")" \
+    > "$R9C_DIR/agy-models.tsv"
+R9C_OK=1
+R9C_DETAIL=""
+
+rm -f "$HOME/.cache/agy-bridge-models"
+AGY_FIXTURES_DIR="$R9C_DIR" FAKE_AGY_STDOUT="ok" _run OUT RC bash "$BRIDGE" --type search --verbose -- "extra column"
+if [[ "$RC" -ne 0 || "$OUT" != *"model=gemini-9.4-flash-high"* ]]; then
+    R9C_OK=0
+    R9C_DETAIL="${R9C_DETAIL}extra-column: rc=$RC out=$OUT; "
+fi
+
+rm -f "$HOME/.cache/agy-bridge-models"
+AGY_FIXTURES_DIR="$R9C_DIR" FAKE_AGY_STDOUT="ok" _run OUT RC bash "$BRIDGE" --type code --verbose -- "trailing tab"
+if [[ "$RC" -ne 0 || "$OUT" != *"model=gemini-9.3-pro-high"* ]]; then
+    R9C_OK=0
+    R9C_DETAIL="${R9C_DETAIL}trailing-tab: rc=$RC out=$OUT; "
+fi
+
+# The synthetic ids above are well-formed gemini ids, so the write gate lets
+# them land in the shared $HOME's cache -- clean up so no later case sees a
+# model version that does not exist.
+rm -f "$HOME/.cache/agy-bridge-models"
+rm -rf "$R9C_DIR"
+
+if [[ "$R9C_OK" -eq 1 ]]; then
+    ok "R9c an extra column and a trailing tab both normalize through the real fetch path"
+else
+    bad "R9c an extra column and a trailing tab both normalize through the real fetch path" "$R9C_DETAIL"
+fi
+
 # R4: gemini_shim.sh -m flash resolves against the LIVE `agy models` list and
 # hands agy a real ID (delegate-agy-62x purge-guard). The map used to hold
 # DISPLAY NAMES ("Gemini 3.6 Flash (High)") frozen at whatever agy shipped that
