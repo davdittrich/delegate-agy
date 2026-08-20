@@ -165,17 +165,12 @@ case "${1:-}" in
             printf '%s\n' "Please run 'agy auth login' first." "no models available"
             exit 0
         fi
-        # Real agy emits "id<TAB>display name" per line (header goes to stderr).
-        printf '%s\t%s\n' \
-            "gemini-3.6-flash-high" "Gemini 3.6 Flash (High)" \
-            "gemini-3.6-flash-medium" "Gemini 3.6 Flash (Medium)" \
-            "gemini-3.6-flash-low" "Gemini 3.6 Flash (Low)" \
-            "gemini-3.5-flash-high" "Gemini 3.5 Flash (High)" \
-            "gemini-3.5-flash-medium" "Gemini 3.5 Flash (Medium)" \
-            "gemini-3.5-flash-low" "Gemini 3.5 Flash (Low)" \
-            "gemini-3.1-pro-high" "Gemini 3.1 Pro (High)" \
-            "gemini-3.1-pro-low" "Gemini 3.1 Pro (Low)"
-        exit 0 ;;
+        # Real agy emits "id<TAB>display name" per line (header goes to
+        # stderr). Rows come from a captured fixture, resolved and read by
+        # _fake_fixture -- this stub carries no independent copy of a model
+        # list.
+        _fake_fixture agy-models.tsv && exit 0
+        exit 1 ;;
     --version)
         if [[ -n "${FAKE_AGY_VERSION_HANG:-}" ]]; then
             trap '' TERM

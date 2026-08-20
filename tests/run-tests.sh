@@ -398,12 +398,16 @@ else
     bad "R1 bridge reaches agy for all 5 delegation types (rc=0 + fake-agy success marker)" "$R1_DETAIL"
 fi
 
-# R2: search delegation resolves the LATEST gemini-*-flash-high (3.6, not 3.5) via sort -V
+# R2: search delegation resolves the latest matching flash-high from the
+# fixture via sort -V -- derived with the shipped rule, never a pinned
+# version, so a recapture cannot leave a stale expectation passing silently.
+R2_EXPECT="$(_cc_expect_model flash-high)"
 FAKE_AGY_STDOUT="ok" _run OUT RC bash "$BRIDGE" --type search --verbose -- "latest check"
-if [[ "$OUT" == *"model=gemini-3.6-flash-high"* ]]; then
-    ok "R2 --type search --verbose resolves latest flash-high (3.6, not 3.5)"
+if [[ "$OUT" == *"model=$R2_EXPECT"* ]]; then
+    ok "R2 --type search --verbose resolves the latest matching flash-high from the fixture"
 else
-    bad "R2 --type search --verbose resolves latest flash-high (3.6, not 3.5)" "rc=$RC out=$OUT"
+    bad "R2 --type search --verbose resolves the latest matching flash-high from the fixture" \
+        "expected=$R2_EXPECT rc=$RC out=$OUT"
 fi
 
 # R3: pro-only bridge cache (fresh mtime) -> --type search fails loud with
@@ -509,19 +513,21 @@ rm -f "$HOME/.cache/agy-bridge-models"
 # DISPLAY NAMES ("Gemini 3.6 Flash (High)") frozen at whatever agy shipped that
 # week; agy's canonical identifier is the id, and a frozen literal of either
 # kind goes stale on the next agy release. Any display name or hardcoded id
-# reappearing on the wire fails here.
+# reappearing on the wire fails here. Expected id is now derived from the
+# captured fixture with the shipped rule, not pinned.
 # (Reuses the SH2 FAKE_AGY_DUMP_ARGV harness defined below, in the
 # "gemini_shim.sh: no stanza + --sandbox floor" section.)
+R4_EXPECT="$(_cc_expect_model flash-high)"
 R4_DUMP="$SANDBOX/purge_argv.log"
 : > "$R4_DUMP"
 rm -f "$HOME/.cache/agy-bridge-models"
 FAKE_AGY_DUMP_ARGV="$R4_DUMP" _run OUT RC bash "$SHIM" -m flash -p x
 R4_MODEL_VAL="$(awk '/^--model$/{getline; print; exit}' "$R4_DUMP")"
-if [[ "$R4_MODEL_VAL" == "gemini-3.6-flash-high" ]]; then
+if [[ "$R4_MODEL_VAL" == "$R4_EXPECT" ]]; then
     ok "R4 gemini_shim.sh -m flash resolves to a live agy id, not a display name (purge-guard)"
 else
     bad "R4 gemini_shim.sh -m flash resolves to a live agy id, not a display name (purge-guard)" \
-        "model=$R4_MODEL_VAL argv=$(cat "$R4_DUMP")"
+        "expected=$R4_EXPECT model=$R4_MODEL_VAL argv=$(cat "$R4_DUMP")"
 fi
 rm -f "$HOME/.cache/agy-bridge-models"
 
