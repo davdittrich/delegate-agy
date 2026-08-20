@@ -613,6 +613,24 @@ else
     bad "R9c an extra column and a trailing tab both normalize through the real fetch path" "$R9C_DETAIL"
 fi
 
+# R9d (CR-01): --model validation reads the same untrusted $VALID_MODELS as
+# D-08's herestring-converted write-gate/use-time checks, but was deliberately
+# left as a `printf | grep -qxF` pipe ("a different mechanism" -- 02-01-PLAN.md
+# :42). `grep -q` (any of -x/-F) exits on first match regardless, so a large
+# enough VALID_MODELS can SIGPIPE the upstream printf and, under `set -o
+# pipefail`, report the pipeline's status as 141 (not grep's 0) -- rejecting a
+# perfectly valid --model with a false "unknown --model". Structural, not
+# behavioral: reproducing the SIGPIPE race needs a multi-hundred-KB fixture,
+# not worth the flakiness here. Mirrors this same herestring-count convention.
+R9D_PIPE="$(grep -cF '"$VALID_MODELS" | grep -qxF "$MODEL"' "$BRIDGE")" || R9D_PIPE=0
+R9D_HERE="$(grep -cF 'grep -qxF "$MODEL" <<< "$VALID_MODELS"' "$BRIDGE")" || R9D_HERE=0
+if [[ "$R9D_PIPE" -eq 0 && "$R9D_HERE" -eq 1 ]]; then
+    ok "R9d --model validation uses the SIGPIPE-safe herestring form, not printf|grep (CR-01)"
+else
+    bad "R9d --model validation uses the SIGPIPE-safe herestring form, not printf|grep (CR-01)" \
+        "pipe_form_count=$R9D_PIPE herestring_form_count=$R9D_HERE"
+fi
+
 # R4: gemini_shim.sh -m flash resolves against the LIVE `agy models` list and
 # hands agy a real ID (delegate-agy-62x purge-guard). The map used to hold
 # DISPLAY NAMES ("Gemini 3.6 Flash (High)") frozen at whatever agy shipped that
