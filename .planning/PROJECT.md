@@ -26,6 +26,8 @@ A Claude Code plugin that routes tasks to `agy` (Google's Antigravity CLI), givi
   - Accepted gap: UAT test 29 (does a stock macOS host print no shell job-control notice when it hits this same code path?) was explicitly accepted unverified rather than tested — no macOS host is available to this project. See `01-UAT.md` test 29 and `01-SECURITY.md`'s disposition:accept pattern (same rationale class as T-01-09).
 - ✓ S1 — survive an `agy models` output-format change without silent breakage — Phase 2 (both writers gate a degraded/`gemini-`-less reply behind a `cut -f1` + `^gemini-` match before caching; a tab-suffixed/extra-column reply still normalizes and resolves; UAT 1/1 pass, 11/11 threats closed)
 - ✓ S4 — the shared model cache must be safe with two independent writers — Phase 2 (`delegate-agy-8ph` closed: `scripts/agy_bridge.sh` and `scripts/gemini_shim.sh` both gate their cache write the same way and both fall back to a good stale cache on a degraded reply — bridge warns, shim stays silent by design since it shadows `gemini` box-wide; per-file atomic `mv` write accepted as sufficient for the two-writer property, live concurrency untested — see `AR-02-02`)
+- ✓ R5 — exit codes are a contract: 2, 3, 124, 127, 137 each mean exactly one thing and say so — Phase 3 (`delegate-agy-v5a`/`delegate-agy-6q1` closed; every code provoked and asserted by exact value, 137-vs-124 elapsed-vs-bound discrimination pinned as a source assertion). Residue, not closed by this work: `SECONDS` gives integer-second resolution, so a SIGKILL in the final second before the bound can misclassify as an external kill rather than a timeout — a named ceiling, not a bug, and no test pins sub-second behavior because none can.
+- ✓ R6 — never report empty success; agy exiting 0 with no stdout is a failure — Phase 3 (EC08 pins the exit-3 failure payload as never success-shaped on both entry points and both output modes: zero-byte stdout via split-stream capture, a `response`-free JSON envelope via a real parser; also pins that a single-newline-byte stdout is NOT empty and round-trips)
 
 ### Active
 
@@ -33,8 +35,6 @@ A Claude Code plugin that routes tasks to `agy` (Google's Antigravity CLI), givi
 
 **Finish 1.6.2** — the release is written and reverted from `master` pending these:
 
-- [ ] R5 — exit codes are a contract: 2, 3, 124, 127, 137 each mean exactly one thing and say so
-- [ ] R6 — never report empty success; agy exiting 0 with no stdout is a failure
 - [ ] R8 — registry read is comparison-only: exact key match, repin path built from install-time literals
 
 **Structural — the coupling that produced the 1.6.x bug cluster:**
@@ -85,6 +85,8 @@ What the probe did **not** establish: whether agy ignores SIGTERM. Every call re
 | Gate the cache write behind `cut -f1` + `^gemini-` match (not a rewrite of the write itself), mirrored identically on both `agy_bridge.sh` and `gemini_shim.sh` | A degraded `agy models` reply must never poison the cache the other tool reads for up to an hour; the two writers share one file so a one-sided fix leaves the other exposed | ✓ Good — `delegate-agy-8ph` closed, both writers verified byte-identical in gate shape |
 | On a degraded-but-successful reply, fall back to a good stale cache instead of failing: the bridge warns (`stderr`), the shim stays silent | The bridge is a watched, explicit delegation call; the shim shadows `gemini` for every PATH caller, so a warning there is box-wide log noise | ✓ Good — same mechanism, deliberately different message policy, both pinned by tests |
 | `printf ... \| grep -q` converted to the herestring form (`grep -q ... <<< "$var"`) at every site reading an untrusted, externally-sized list | `grep -q` exits on first match; under `set -o pipefail` an early match can SIGPIPE the upstream `printf`, and bash reports the pipeline's status as the SIGPIPE'd producer's 141, not `grep`'s 0 — reproduced empirically, bash 5.3.15 | ✓ Good — narrow, user-approved exception to the phase's closed-criteria boundary; applied to every matching site across both scripts, not just the two the plan started with |
+| Hoist the shared exit-137 message tail (`EC_KILL9_TAIL`) as one file-scope constant per script, pinned byte-identical across both scripts and README by a dedicated test | A literal duplicated across `agy_bridge.sh`, `gemini_shim.sh`, and `README.md` drifts silently the moment one copy is edited — the same class of bug R5 exists to close | ✓ Good — same pattern extended to four more literals by EC06 in plan 03-03 |
+| Assert output-shape claims (e.g. "stdout is zero bytes") only through a stdout/stderr split-capture helper (`_ec_run_split`), never the suite's shared `_run` | `_run` merges both streams via `2>&1` for convenience; a zero-byte-stdout assertion against merged output passes vacuously regardless of what the code actually does | ✓ Good — EC08 (plan 03-04) is the first test to need it; reusable for any future output-shape assertion |
 
 ---
-*Last updated: 2026-08-20 after Phase 2 (model-list-handling-end-to-end) — UAT + security verification*
+*Last updated: 2026-08-21 after Phase 3 (the-exit-code-contract) — verification passed 5/5, code review clean*
