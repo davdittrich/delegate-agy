@@ -876,6 +876,49 @@ else
         "empty_ok=$EC02_EMPTY_OK empty_err=$EC02_EMPTY_ERR nonempty_ok=$EC02_NONEMPTY_OK nonempty_err=$EC02_NONEMPTY_ERR"
 fi
 
+# EC03 (delegate-agy-v5a, 03-CONTEXT.md D-01): the shim's external-kill branch
+# carries the identical dangling-separator defect the bridge had -- the
+# box-wide PATH-shadowing entry point, not just the bridge. Guarded with the
+# same EC_KILL9_TAIL constant and _err_txt pattern EC01 already proved.
+# Byte-identity is asserted directly against the bridge's OWN line (not a
+# separately-written expected string) across 4 stderr scenarios -- same
+# 60s bound and near-zero DURATION on both scripts, so nothing besides the
+# guard shape can make the two lines diverge. Scenario 4 (a printf format
+# string) additionally pins T-03-04: agy's stderr must reach neither script's
+# printf format string.
+EC03_OK=1
+EC03_FAIL_DETAIL=""
+EC03_LAST_BLINE=""
+_ec03_check() {
+    # _ec03_check NAME STDERR_VALUE -- sets EC03_LAST_BLINE (bridge's own
+    # line) for the T-03-04 format-literal assertion below.
+    local _name="$1" _val="$2" _sline
+    FAKE_AGY_PRINT_KILL9=1 FAKE_AGY_STDERR="$_val" \
+        _run EC03_BOUT EC03_BRC bash "$BRIDGE" --type code --timeout 60 -- "oom check"
+    FAKE_AGY_PRINT_KILL9=1 FAKE_AGY_STDERR="$_val" GEMINI_SHIM_TIMEOUT=60 \
+        _run EC03_SOUT EC03_SRC bash "$SHIM" -p "oom check"
+    EC03_LAST_BLINE="$(printf '%s\n' "$EC03_BOUT" | grep '^ERROR: agy killed' | head -1)"
+    _sline="$(printf '%s\n' "$EC03_SOUT" | grep '^ERROR: agy killed' | head -1)"
+    if [[ "$EC03_BRC" -eq 137 && "$EC03_SRC" -eq 137 \
+          && -n "$EC03_LAST_BLINE" && "$EC03_LAST_BLINE" == "$_sline" ]]; then
+        return 0
+    fi
+    EC03_FAIL_DETAIL="$EC03_FAIL_DETAIL $_name:brc=$EC03_BRC:src=$EC03_SRC:bline=[$EC03_LAST_BLINE]:sline=[$_sline];"
+    return 1
+}
+_ec03_check empty "" || EC03_OK=0
+_ec03_check nonempty "boom" || EC03_OK=0
+_ec03_check newline-only $'\n\n' || EC03_OK=0
+_ec03_check format-specifier '100%s%d' || EC03_OK=0
+EC03_FMT_LITERAL_OK=0
+[[ "$EC03_LAST_BLINE" == *"100%s%d" ]] && EC03_FMT_LITERAL_OK=1
+if [[ "$EC03_OK" -eq 1 && "$EC03_FMT_LITERAL_OK" -eq 1 ]]; then
+    ok "EC03 shim external-kill message: byte-identical to the bridge's across 4 stderr scenarios, format-specifier rendered literally"
+else
+    bad "EC03 shim external-kill message: byte-identical to the bridge's across 4 stderr scenarios, format-specifier rendered literally" \
+        "detail=$EC03_FAIL_DETAIL fmt_ok=$EC03_FMT_LITERAL_OK last_bline=[$EC03_LAST_BLINE]"
+fi
+
 echo "== agy_bridge.sh --add-dir passthrough (delegate-agy-0i9.2) =="
 
 # AD1: caller --add-dir reaches agy AND stays before the trailing WORK_DIR
