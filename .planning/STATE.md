@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.6.2
-current_phase: 01.5
-current_phase_name: Contract check against a real agy
-status: verifying
-stopped_at: Completed 01.5-06-PLAN.md (phase 01.5 complete, 6/6 plans)
-last_updated: "2026-08-20T05:18:32.925Z"
+current_phase: 2
+current_phase_name: Model-list handling, end to end
+status: planning
+stopped_at: Phase 01.5 complete, ready to plan Phase 2
+last_updated: "2026-08-20T05:48:08.984Z"
 last_activity: 2026-08-20
-last_activity_desc: Phase 01.5 plan 02 (CC02, CC03/CC03m) executed
-state_head: 75139a3fe6f0b57e76c060eb7c3d1689b65cfef0
+last_activity_desc: Phase 01.5 complete, transitioned to Phase 2
+state_head: e14ec554ece647a8733653b8e445144d159bd38f
 progress:
   total_phases: 7
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 12
   completed_plans: 12
 milestone_name: milestone
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 
 ## Current Position
 
-Phase: 01.5 (Contract check against a real agy) — EXECUTING
-Plan: 6 of 6
-Status: Phase complete — ready for verification
-Last activity: 2026-08-20 — Plan 01.5-02 (CC02, CC03/CC03m) executed
+Phase: 2 — Model-list handling, end to end
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-08-20 — Phase 01.5 complete, transitioned to Phase 2
 
 Progress: [██████████] 100%
 
@@ -39,7 +39,7 @@ Progress: [██████████] 100%
 
 **Velocity:**
 
-- Total plans completed: 0
+- Total plans completed: 6
 - Average duration: —
 - Total execution time: —
 
@@ -47,7 +47,7 @@ Progress: [██████████] 100%
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 01.5 | 6 | - | - |
 
 **Recent Trend:**
 
@@ -141,5 +141,5 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-08-20T05:18:32.906Z
-Stopped at: Completed 01.5-06-PLAN.md (phase 01.5 complete, 6/6 plans)
+Stopped at: Phase 01.5 complete, ready to plan Phase 2
 Resume file: None
