@@ -471,9 +471,9 @@ if [[ ! -s "$CACHE_FILE" ]] || [[ -n "$(find "$CACHE_FILE" -mmin +60 2>/dev/null
     # agy ignores SIGTERM (observed: `timeout 25 agy models` still running after
     # 3+ min), so -k escalates to SIGKILL. Its stderr is kept, not discarded --
     # it is the only diagnostic when auth or the network is the real fault.
-    _agy_err="$(mktemp -t agy-models-err.XXXXXX)"
+    _agy_err="$(mktemp -t agy-models-err.XXXXXX)" || _agy_err=""
     if _agy_models=$(run_bounded "$AGY_MODELS_TIMEOUT" 3 -- \
-                     "$AGY_BIN" models </dev/null 2>"$_agy_err"); then
+                     "$AGY_BIN" models </dev/null 2>"${_agy_err:-/dev/null}"); then
         # A gemini--less reply is degraded (unauthenticated agy, or an output
         # format change) and must never overwrite a good cache the shim also
         # reads (D-03, delegate-agy-8ph). Reuses the same cut -f1 + ^gemini-
@@ -516,8 +516,8 @@ if [[ ! -s "$CACHE_FILE" ]] || [[ -n "$(find "$CACHE_FILE" -mmin +60 2>/dev/null
     # an auth/network fault, and was previously shown only on outright fetch
     # failure. It now fires unconditionally whenever agy wrote anything,
     # success (degraded or not) or failure alike (D-07, criterion 3).
-    [[ -s "$_agy_err" ]] && sed 's/^/       agy: /' "$_agy_err" >&2
-    rm -f "$_agy_err"
+    [[ -n "$_agy_err" && -s "$_agy_err" ]] && sed 's/^/       agy: /' "$_agy_err" >&2
+    [[ -n "$_agy_err" ]] && rm -f "$_agy_err"
 fi
 VALID_MODELS="${_agy_models:-}"
 if [[ -z "$VALID_MODELS" ]]; then
