@@ -3561,6 +3561,77 @@ else
         "$CC01_DETAIL"
 fi
 
+# CC02: a SIGTERM-ignoring `agy` that sleeps 300s on --version must not hang
+# the operator who ran the check (D-08's hang shape, D-08a criterion 2).
+# `_purebin()`'s directory holds the fake `agy` (copied there at :118) as the
+# entire PATH -- the fake-present counterpart to CC01's fake-absent case,
+# same isolation machinery. Setting FAKE_AGY_VERSION_HANG makes the fake
+# trap SIGTERM and sleep 300s on the --version path -- the only probe the
+# check makes at this point in the phase. AGY_CONTRACT_TIMEOUT=2 so the
+# check's own internal bound fires quickly.
+#
+# Wrapped in a plain external `timeout 30` -- SH11's shape at :1060, not
+# T4/T5's internal-flag shape, and deliberately not `_run_sanitized`'s
+# `--foreground -k 5 30` net (that net is a suite-level safety belt, never
+# the mechanism under test; composing CC02's own bound directly on top of it
+# would blur that line). `env PATH=...` scopes the sanitized PATH to the
+# check invocation alone, so the outer `timeout` word itself still resolves
+# through the harness's own PATH -- `_purebin()`'s directory holds no
+# timeout/gtimeout on purpose (RB00a), and CC01 already hit the rc=127 a
+# fully-replaced PATH causes when the outer wrapper cannot resolve itself.
+#
+# Captured through a FILE and read back afterward, never through a command
+# substitution -- the same fd-9 rationale as _run_sanitized
+# (tests/run-tests.sh:152-168): contract-check.sh opens its own fd 9 on its
+# original stderr, and a live command substitution wrapping the whole
+# invocation would leave any surviving descendant holding that capture pipe
+# open.
+CC02_DIR="$(_purebin)"
+CC02_OUT="$SANDBOX/cc02.out"
+CC02_ERR="$SANDBOX/cc02.err"
+CC02_START="$(date +%s)"
+timeout 30 env PATH="$CC02_DIR" HOME="$HOME" AGY_CONTRACT_TIMEOUT=2 FAKE_AGY_VERSION_HANG=1 \
+    bash "$CONTRACT_CHECK" > "$CC02_OUT" 2> "$CC02_ERR"
+CC02_RC=$?
+_CC02_ELAPSED=$(( $(date +%s) - CC02_START ))
+# stdout and stderr captured SEPARATELY, not merged: _purebin()'s directory
+# holds no timeout/gtimeout on purpose (RB00a), so contract-check.sh's own
+# TIMEOUT_BIN probe prints its WARNING to stderr before the ledger row --
+# CC01's scratch PATH adds an explicit timeout entry and never hits this,
+# but CC02 must not let that diagnostic land ahead of the row on stdout.
+CC02_TEXT="$(cat "$CC02_OUT" 2>/dev/null)"
+CC02_ROW1="$(printf '%s\n' "$CC02_TEXT" | head -n1)"
+
+rm -f "$HOME/.cache/agy-bridge-models"
+
+CC02_OK=1
+[[ "$CC02_RC" -eq 10 ]] || CC02_OK=0
+[[ "$CC02_ROW1" =~ ^agy-version-shape[[:space:]]+unverified[[:space:]]+[^[:space:]] ]] || CC02_OK=0
+if [[ "$CC02_ROW1" =~ ^agy-version-shape[[:space:]]+unverified[[:space:]]+(.+)$ ]]; then
+    CC02_EVIDENCE="${BASH_REMATCH[1]}"
+else
+    CC02_EVIDENCE=""
+fi
+# The evidence must record the attempt (D-12a): non-empty, and naming either
+# the bound or the rc run_bounded returned internally.
+[[ -n "$CC02_EVIDENCE" ]] || CC02_OK=0
+[[ "$CC02_EVIDENCE" == *"rc="* || "$CC02_EVIDENCE" == *bound* ]] || CC02_OK=0
+# Negative half, same boundary rule as CC01: no row reports a bare "verified"
+# verdict anywhere in the ledger.
+CC02_VERIFIED_ROWS="$(printf '%s\n' "$CC02_TEXT" | grep -v '^#' | grep -cE '[[:space:]]verified([[:space:]]|$)')"
+[[ "$CC02_VERIFIED_ROWS" -eq 0 ]] || CC02_OK=0
+# "Returned on its own" distinguished from "was reaped by the net" -- SH11's
+# own margin against its 30s wrapper.
+[[ "$_CC02_ELAPSED" -lt 25 ]] || CC02_OK=0
+
+if [[ "$CC02_OK" -eq 1 ]]; then
+    ok "CC02 a hung agy (SIGTERM-ignoring --version) makes the check exit 10 inside its bound, never verified"
+else
+    CC02_DETAIL="rc=$CC02_RC elapsed=${_CC02_ELAPSED}s evidence=$CC02_EVIDENCE verified_rows=$CC02_VERIFIED_ROWS row1=$CC02_ROW1 stderr=$(cat "$CC02_ERR" 2>/dev/null | tr '\n' '|')"
+    bad "CC02 a hung agy (SIGTERM-ignoring --version) makes the check exit 10 inside its bound, never verified" \
+        "$CC02_DETAIL"
+fi
+
 echo
 echo "PASS=$PASS FAIL=$FAIL"
 if [[ "$FAIL" -eq 0 ]]; then
