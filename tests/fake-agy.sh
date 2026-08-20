@@ -235,6 +235,7 @@ fi
 # bound, emulating an external SIGKILL that has nothing to do with the
 # bridge's own -k escalation (which can only fire at/after the bound).
 if [[ -n "${FAKE_AGY_PRINT_KILL9:-}" ]]; then
+    [[ -n "${FAKE_AGY_STDERR:-}" ]] && printf '%s' "$FAKE_AGY_STDERR" >&2
     exit 137
 fi
 

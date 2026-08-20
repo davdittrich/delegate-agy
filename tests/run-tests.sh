@@ -832,6 +832,25 @@ else
     bad "T5 137 well inside --timeout bound reported as killed, not as a timeout" "rc=$RC out=$OUT"
 fi
 
+# EC01 (delegate-agy-v5a): the external-kill (137, well inside --timeout)
+# plain-text message must never trail off into a dangling separator. Empty
+# stderr -> the message ends right after the word "kill"; non-empty stderr
+# -> it ends with an exact ": <stderr>" suffix. Both are EXACT-suffix glob
+# matches (no trailing `*`), not substring checks -- a substring check would
+# pass on a dangling "kill: " just as readily as the defect this pins.
+FAKE_AGY_PRINT_KILL9=1 FAKE_AGY_STDERR="" _run OUT RC bash "$BRIDGE" --type code --timeout 60 -- "oom check"
+EC01_EMPTY_OK=0
+[[ "$RC" -eq 137 && "$OUT" == *"or external kill" ]] && EC01_EMPTY_OK=1
+FAKE_AGY_PRINT_KILL9=1 FAKE_AGY_STDERR="boom" _run OUT RC bash "$BRIDGE" --type code --timeout 60 -- "oom check"
+EC01_NONEMPTY_OK=0
+[[ "$RC" -eq 137 && "$OUT" == *"or external kill: boom" ]] && EC01_NONEMPTY_OK=1
+if [[ "$EC01_EMPTY_OK" -eq 1 && "$EC01_NONEMPTY_OK" -eq 1 ]]; then
+    ok "EC01 external-kill plain-text message: no dangling separator empty, exact suffix non-empty"
+else
+    bad "EC01 external-kill plain-text message: no dangling separator empty, exact suffix non-empty" \
+        "empty_ok=$EC01_EMPTY_OK nonempty_ok=$EC01_NONEMPTY_OK rc=$RC out=$OUT"
+fi
+
 echo "== agy_bridge.sh --add-dir passthrough (delegate-agy-0i9.2) =="
 
 # AD1: caller --add-dir reaches agy AND stays before the trailing WORK_DIR
