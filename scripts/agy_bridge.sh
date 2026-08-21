@@ -336,11 +336,15 @@ run_bounded() {
 
     _rb_start_timer "$secs" TERM
     wait "$child" 2>/dev/null || rc=$?
-    _rb_cancel_timer "$timer" "$timer_pgid"
     trap - TERM INT HUP
     eval "${rb_trap_term:-}"
     eval "${rb_trap_int:-}"
     eval "${rb_trap_hup:-}"
+    # By the time this runs the bounded command has already completed on its
+    # own rather than via signal, so the host owns signal handling again
+    # immediately -- not after one more kill with the relay traps still
+    # watching.
+    _rb_cancel_timer "$timer" "$timer_pgid"
 
     # Authoritative, never inferred from elapsed time: this branch is the one
     # that fired, so it is the one that says so. Deriving the fact from
