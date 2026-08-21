@@ -52,13 +52,24 @@ rather than your own eyes:
 
 ```bash
 RESOLVED="$(claude plugin list --json 2>/dev/null \
-  | python3 -c 'import sys,json;print(next((x.get("installPath","") for x in json.load(sys.stdin) if x.get("id","").startswith("agy-delegate@")), ""))')/scripts/install.sh"; \
+  | python3 -c 'import sys,json
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    d = []
+print(next((x.get("installPath","") for x in d if x.get("id","").startswith("agy-delegate@")), ""))')/scripts/install.sh"; \
 case "$RESOLVED" in \
   */agy-delegate/*/scripts/install.sh) [[ -f "$RESOLVED" ]] \
-    && bash "$RESOLVED" \
+    && echo "Resolved: $RESOLVED" \
     || echo "ERROR: resolved installer '$RESOLVED' is not a regular file — is agy-delegate installed?" >&2 ;; \
   *) echo "ERROR: refusing to run '$RESOLVED' — does not match */agy-delegate/*/scripts/install.sh" >&2 ;; \
 esac
+```
+
+Check the printed `Resolved: ...` path looks right, then run:
+
+```bash
+bash "$RESOLVED"
 ```
 
 ## Opt-in variants

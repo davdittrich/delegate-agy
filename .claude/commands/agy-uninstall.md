@@ -43,13 +43,24 @@ rather than your own eyes:
 
 ```bash
 RESOLVED="$(claude plugin list --json 2>/dev/null \
-  | python3 -c 'import sys,json;print(next((x.get("installPath","") for x in json.load(sys.stdin) if x.get("id","").startswith("agy-delegate@")), ""))')/scripts/uninstall.sh"; \
+  | python3 -c 'import sys,json
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    d = []
+print(next((x.get("installPath","") for x in d if x.get("id","").startswith("agy-delegate@")), ""))')/scripts/uninstall.sh"; \
 case "$RESOLVED" in \
   */agy-delegate/*/scripts/uninstall.sh) [[ -f "$RESOLVED" ]] \
-    && bash "$RESOLVED" \
+    && echo "Resolved: $RESOLVED" \
     || echo "ERROR: resolved uninstaller '$RESOLVED' is not a regular file — is agy-delegate installed?" >&2 ;; \
   *) echo "ERROR: refusing to run '$RESOLVED' — does not match */agy-delegate/*/scripts/uninstall.sh" >&2 ;; \
 esac
+```
+
+Check the printed `Resolved: ...` path looks right, then run:
+
+```bash
+bash "$RESOLVED"
 ```
 
 ## Also de-register tokensave + remove the availability hint
