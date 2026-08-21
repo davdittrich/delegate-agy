@@ -512,6 +512,13 @@ if [[ ! -s "$CACHE_FILE" ]] || [[ -n "$(find "$CACHE_FILE" -mmin +60 2>/dev/null
             # exactly as they were.
             echo "WARNING: 'agy models' returned a list with no 'gemini-' ids (agy may be unauthenticated); using the stale cached list." >&2
             _agy_models=""
+        else
+            # The fetch itself succeeded and returned nothing usable -- that is
+            # not the same fault as a fetch failure (D-07). No cache exists to
+            # fall back to either, so the exit is deferred to the existing bail
+            # below rather than raised here, so the stderr passthrough two
+            # blocks down still runs on this path.
+            _agy_degraded_no_cache=1
         fi
     else
         _agy_rc=$?
@@ -538,7 +545,15 @@ VALID_MODELS="${_agy_models:-}"
 if [[ -z "$VALID_MODELS" ]]; then
     VALID_MODELS=$(cat "$CACHE_FILE" 2>/dev/null) || true
 fi
-[[ -n "$VALID_MODELS" ]] || { echo "ERROR: failed to retrieve model list from agy" >&2; exit 2; }
+if [[ -z "$VALID_MODELS" ]]; then
+    if [[ "${_agy_degraded_no_cache:-0}" -eq 1 ]]; then
+        echo "ERROR: agy model list contains no 'gemini-' ids; agy may be unauthenticated" >&2
+        echo "       or its 'agy models' output format changed. Run 'agy models' to inspect." >&2
+    else
+        echo "ERROR: failed to retrieve model list from agy" >&2
+    fi
+    exit 2
+fi
 # agy models emits "id<TAB>display name". Keep only the id so the anchored
 # matches below (both '$'-anchored) still hold. Applied after the cache read too,
 # so caches written by an older bridge normalize on load. Tab-free lines pass through.
