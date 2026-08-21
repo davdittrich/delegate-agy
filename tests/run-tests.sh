@@ -3992,23 +3992,37 @@ _md_extract() {
 }
 
 # _md_fallback_case DOC_FILE SCRIPT_NAME CASE_ID LABEL -- the whole
-# four-behavior body (Tests 1-4 from this plan's <behavior> block) written
-# ONCE and parameterized over the doc file and the resolved script name, so
-# I21 (agy-setup.md/install.sh) and I21b (agy-uninstall.md/uninstall.sh)
-# share one assertion body rather than drifting apart as two copies -- the
-# same reason _rb_extract exists as a single shared helper. Builds its own
-# mktemp -d sandbox, runs the extracted block three times against three
-# fixtures under bash -euo pipefail -c with a stub `claude` on PATH, and
-# reports exactly one ok/bad under CASE_ID.
+# four-behavior body (Tests A-D, redesigned in 04-03 for the two-step
+# resolve-then-exec contract: CR-01/CR-02/IN-01) written ONCE and
+# parameterized over the doc file and the resolved script name, so I21
+# (agy-setup.md/install.sh) and I21b (agy-uninstall.md/uninstall.sh) share
+# one assertion body rather than drifting apart as two copies -- the same
+# reason _rb_extract exists as a single shared helper. Builds its own
+# mktemp -d sandbox, runs the extracted resolve/validate range against
+# several fixtures under bash -euo pipefail -c with a stub `claude` on PATH,
+# and reports exactly one ok/bad under CASE_ID.
+#
+# Test A: a hostile lookalike-marketplace entry listed FIRST (the exact
+#   CR-01/CR-02 reproduction shape) must NOT get executed by the
+#   resolve/validate range alone -- it may only print the resolved path.
+# Test B: the doc's OWN separate `bash "$RESOLVED"` line (extracted from the
+#   live file via an exact whole-line grep, not one the test writes itself)
+#   actually resolves+execs the legitimate marker end-to-end, using the same
+#   oversized multi-match fixture as before.
+# Test C: single-match parity -- the resolve/validate range's output is
+#   byte-identical whether fed the oversized fixture or a single-match one.
+# Test D: zero-match AND invalid/empty JSON both degrade to the same
+#   ERROR: arm, rc 0, no traceback.
 _md_fallback_case() {
     local doc="$1" script="$2" id="$3" label="$4"
-    local sbox stubdir marker_dir first_path _MD_BLOCK
+    local sbox stubdir marker_dir evil_dir first_path evil_path _MD_BLOCK
     local _MD_OK=1 _MD_DETAIL=""
 
     sbox="$(mktemp -d "$SANDBOX/mdcase.XXXXXX")"
     stubdir="$sbox/bin"
     marker_dir="$sbox/agy-delegate/1.6.2/scripts"
-    mkdir -p "$stubdir" "$marker_dir"
+    evil_dir="$sbox/agy-delegate/evil-marketplace/9.9.9/scripts"
+    mkdir -p "$stubdir" "$marker_dir" "$evil_dir"
 
     # Fake `claude`: the block invokes `claude plugin list --json`; the stub
     # just cats whatever payload the driver points CLAUDE_STUB_PAYLOAD at,
@@ -4018,12 +4032,18 @@ _md_fallback_case() {
     chmod +x "$stubdir/claude"
 
     first_path="$sbox/agy-delegate/1.6.2"
+    evil_path="$sbox/agy-delegate/evil-marketplace/9.9.9"
 
-    # Marker: an executable SCRIPT_NAME printing a unique token AND its own
-    # $0, so Test 3's byte-identity comparison actually compares the
-    # RESOLVED path the block executed, not just a constant token.
+    # Legitimate marker: an executable SCRIPT_NAME printing a unique token
+    # AND its own $0, so Test C's byte-identity comparison actually compares
+    # the RESOLVED path, not just a constant token.
     printf '#!/bin/sh\necho "MD_TOKEN_%s"\necho "$0"\n' "$id" > "$marker_dir/$script"
     chmod +x "$marker_dir/$script"
+
+    # Hostile marker: a DISTINCT token so Test A can prove nothing executed,
+    # regardless of which entry next() would have picked.
+    printf '#!/bin/sh\necho "EVIL_TOKEN_%s"\necho "$0"\n' "$id" > "$evil_dir/$script"
+    chmod +x "$evil_dir/$script"
 
     _MD_BLOCK="$sbox/block.sh"
     _md_extract "$doc" > "$_MD_BLOCK"
@@ -4048,7 +4068,7 @@ _md_fallback_case() {
     } > "$_MD_PAYLOAD_BIG"
 
     # Fixture 2: single-match reply, same first installPath as fixture 1 --
-    # Test 3's parity fixture.
+    # Test C's parity fixture.
     local _MD_PAYLOAD_SINGLE="$sbox/single.json"
     printf '[{"id":"agy-delegate@marketplace","installPath":"%s"}]' "$first_path" \
         > "$_MD_PAYLOAD_SINGLE"
@@ -4058,46 +4078,114 @@ _md_fallback_case() {
     printf '[{"id":"other-plugin@marketplace","installPath":"/some/other/path"}]' \
         > "$_MD_PAYLOAD_ZERO"
 
-    # Test 1+2 (one run): the oversized reply must reach the validating case
-    # AND actually resolve+exec the marker -- the tracer's end-to-end proof,
-    # not just an exit-code check. No trailing pipeline after the command
-    # substitution, so the block's own exit status is never replaced by a
-    # downstream filter's.
-    local _MD_OUT _MD_RC
-    _MD_OUT="$(CLAUDE_STUB_PAYLOAD="$_MD_PAYLOAD_BIG" PATH="$stubdir:$PATH" \
+    # Fixture 4: invalid/empty JSON reply -- simulates `claude plugin list
+    # --json` itself failing (IN-01).
+    local _MD_PAYLOAD_EMPTY="$sbox/empty.json"
+    : > "$_MD_PAYLOAD_EMPTY"
+
+    # Fixture 5: hostile lookalike-marketplace entry listed FIRST, legitimate
+    # entry listed second -- the exact CR-01/CR-02 reproduction shape.
+    local _MD_PAYLOAD_EVIL="$sbox/evil.json"
+    printf '[{"id":"agy-delegate@evil-marketplace","installPath":"%s"},{"id":"agy-delegate@real-marketplace","installPath":"%s"}]' \
+        "$evil_path" "$first_path" > "$_MD_PAYLOAD_EVIL"
+
+    # Test A: the resolve/validate range alone, fed the hostile fixture,
+    # must exit 0, print the resolved path, and execute NOTHING -- neither
+    # the hostile marker's EVIL_TOKEN nor the legitimate marker's MD_TOKEN,
+    # regardless of which entry next() picked.
+    local _MD_OUT_A _MD_RC_A
+    _MD_OUT_A="$(CLAUDE_STUB_PAYLOAD="$_MD_PAYLOAD_EVIL" PATH="$stubdir:$PATH" \
         bash -euo pipefail -c "$(cat "$_MD_BLOCK")" 2>&1)"
-    _MD_RC=$?
-    if [[ "$_MD_RC" -ne 0 ]]; then
-        _MD_OK=0; _MD_DETAIL="$_MD_DETAIL test1:rc=$_MD_RC"
+    _MD_RC_A=$?
+    if [[ "$_MD_RC_A" -ne 0 ]]; then
+        _MD_OK=0; _MD_DETAIL="$_MD_DETAIL testA:rc=$_MD_RC_A"
     fi
-    if [[ "$_MD_OUT" != *"MD_TOKEN_$id"* || "$_MD_OUT" != *"$marker_dir/$script"* ]]; then
-        _MD_OK=0; _MD_DETAIL="$_MD_DETAIL test1-2:not_resolved_or_not_exec"
+    if [[ "$_MD_OUT_A" != *"Resolved:"* ]]; then
+        _MD_OK=0; _MD_DETAIL="$_MD_DETAIL testA:no_resolved_path out=${_MD_OUT_A:0:200}"
+    fi
+    if [[ "$_MD_OUT_A" == *"TOKEN_"* ]]; then
+        _MD_OK=0; _MD_DETAIL="$_MD_DETAIL testA:executed out=${_MD_OUT_A:0:300}"
     fi
 
-    # Test 3: single-match parity -- byte-identical stdout to Test 1+2's,
-    # because the marker prints its own resolved path, this compares the
-    # RESOLVED path, not just a constant.
-    local _MD_OUT3
-    _MD_OUT3="$(CLAUDE_STUB_PAYLOAD="$_MD_PAYLOAD_SINGLE" PATH="$stubdir:$PATH" \
-        bash -euo pipefail -c "$(cat "$_MD_BLOCK")" 2>&1)"
-    if [[ "$_MD_OUT3" != "$_MD_OUT" ]]; then
-        _MD_OK=0; _MD_DETAIL="$_MD_DETAIL test3:mismatch got=${_MD_OUT3:0:120}"
+    # Test B, part (i)/(ii): the doc's own second, standalone exec line must
+    # exist exactly once as a WHOLE line (not a substring -- both docs carry
+    # a pre-existing, legitimate, untouched "e.g. ... bash \"$RESOLVED\""
+    # mention in the opt-in-variants prose that a substring count would
+    # wrongly collide with).
+    local _MD_EXACT_COUNT
+    _MD_EXACT_COUNT="$(grep -xc 'bash "$RESOLVED"' "$doc")"
+    if [[ "$_MD_EXACT_COUNT" -ne 1 ]]; then
+        _MD_OK=0; _MD_DETAIL="$_MD_DETAIL testB:exact_line_count=$_MD_EXACT_COUNT"
+    fi
+    local _MD_EXEC_LINE
+    _MD_EXEC_LINE="$(grep -xm1 'bash "$RESOLVED"' "$doc" || true)"
+    if [[ "$_MD_EXEC_LINE" != 'bash "$RESOLVED"' ]]; then
+        _MD_OK=0; _MD_DETAIL="$_MD_DETAIL testB:exec_line_mismatch=[${_MD_EXEC_LINE:0:80}]"
     fi
 
-    # Test 4: zero-match -> empty resolved prefix, an ERROR: arm, rc 0, and
+    # Test B, part (iii): resolve against the oversized fixture (same as
+    # Test C's baseline), parse the printed `Resolved: ...` line, export it
+    # as RESOLVED, then execute the DOC'S OWN EXTRACTED line text against
+    # that export -- proving the shipped text works, not a stand-in for it.
+    local _MD_OUT_RESOLVE _MD_RC_RESOLVE
+    _MD_OUT_RESOLVE="$(CLAUDE_STUB_PAYLOAD="$_MD_PAYLOAD_BIG" PATH="$stubdir:$PATH" \
+        bash -euo pipefail -c "$(cat "$_MD_BLOCK")" 2>&1)"
+    _MD_RC_RESOLVE=$?
+    if [[ "$_MD_RC_RESOLVE" -ne 0 ]]; then
+        _MD_OK=0; _MD_DETAIL="$_MD_DETAIL testB:resolve_rc=$_MD_RC_RESOLVE"
+    fi
+    local _MD_RESOLVED_PATH
+    _MD_RESOLVED_PATH="$(sed -n 's/^Resolved: //p' <<<"$_MD_OUT_RESOLVE" | head -1)"
+    if [[ -z "$_MD_RESOLVED_PATH" ]]; then
+        _MD_OK=0; _MD_DETAIL="$_MD_DETAIL testB:no_resolved_path out=${_MD_OUT_RESOLVE:0:200}"
+    fi
+    local _MD_OUT_B
+    _MD_OUT_B="$(RESOLVED="$_MD_RESOLVED_PATH" bash -euo pipefail -c "$_MD_EXEC_LINE" 2>&1)"
+    if [[ "$_MD_OUT_B" != *"MD_TOKEN_$id"* || "$_MD_OUT_B" != *"$marker_dir/$script"* ]]; then
+        _MD_OK=0; _MD_DETAIL="$_MD_DETAIL testB:not_resolved_or_not_exec out=${_MD_OUT_B:0:200}"
+    fi
+
+    # Test C: single-match parity -- byte-identical resolve/validate stdout
+    # to Test B's oversized-fixture run, because the success arm now only
+    # prints the resolved path (never execs), this compares the RESOLVED
+    # path itself, not just a constant.
+    local _MD_OUT_C
+    _MD_OUT_C="$(CLAUDE_STUB_PAYLOAD="$_MD_PAYLOAD_SINGLE" PATH="$stubdir:$PATH" \
+        bash -euo pipefail -c "$(cat "$_MD_BLOCK")" 2>&1)"
+    if [[ "$_MD_OUT_C" != "$_MD_OUT_RESOLVE" ]]; then
+        _MD_OK=0; _MD_DETAIL="$_MD_DETAIL testC:mismatch got=${_MD_OUT_C:0:120}"
+    fi
+
+    # Test D: zero-match -> empty resolved prefix, an ERROR: arm, rc 0, and
     # -- the gate that fails an index-[0] rewrite (M5) -- no Python traceback.
-    local _MD_OUT4 _MD_RC4
-    _MD_OUT4="$(CLAUDE_STUB_PAYLOAD="$_MD_PAYLOAD_ZERO" PATH="$stubdir:$PATH" \
+    local _MD_OUT_D _MD_RC_D
+    _MD_OUT_D="$(CLAUDE_STUB_PAYLOAD="$_MD_PAYLOAD_ZERO" PATH="$stubdir:$PATH" \
         bash -euo pipefail -c "$(cat "$_MD_BLOCK")" 2>&1)"
-    _MD_RC4=$?
-    if [[ "$_MD_RC4" -ne 0 ]]; then
-        _MD_OK=0; _MD_DETAIL="$_MD_DETAIL test4:rc=$_MD_RC4"
+    _MD_RC_D=$?
+    if [[ "$_MD_RC_D" -ne 0 ]]; then
+        _MD_OK=0; _MD_DETAIL="$_MD_DETAIL testD:rc=$_MD_RC_D"
     fi
-    if [[ "$_MD_OUT4" != *"ERROR:"* ]]; then
-        _MD_OK=0; _MD_DETAIL="$_MD_DETAIL test4:no_error_arm out=${_MD_OUT4:0:200}"
+    if [[ "$_MD_OUT_D" != *"ERROR:"* ]]; then
+        _MD_OK=0; _MD_DETAIL="$_MD_DETAIL testD:no_error_arm out=${_MD_OUT_D:0:200}"
     fi
-    if [[ "$_MD_OUT4" == *"Traceback"* || "$_MD_OUT4" == *"IndexError"* || "$_MD_OUT4" == *"StopIteration"* ]]; then
-        _MD_OK=0; _MD_DETAIL="$_MD_DETAIL test4:traceback out=${_MD_OUT4:0:300}"
+    if [[ "$_MD_OUT_D" == *"Traceback"* || "$_MD_OUT_D" == *"IndexError"* || "$_MD_OUT_D" == *"StopIteration"* || "$_MD_OUT_D" == *"JSONDecodeError"* ]]; then
+        _MD_OK=0; _MD_DETAIL="$_MD_DETAIL testD:traceback out=${_MD_OUT_D:0:300}"
+    fi
+
+    # Test D2: invalid/empty JSON reply (claude itself failing, IN-01) --
+    # same ERROR: arm, rc 0, no traceback even under bash -euo pipefail.
+    local _MD_OUT_D2 _MD_RC_D2
+    _MD_OUT_D2="$(CLAUDE_STUB_PAYLOAD="$_MD_PAYLOAD_EMPTY" PATH="$stubdir:$PATH" \
+        bash -euo pipefail -c "$(cat "$_MD_BLOCK")" 2>&1)"
+    _MD_RC_D2=$?
+    if [[ "$_MD_RC_D2" -ne 0 ]]; then
+        _MD_OK=0; _MD_DETAIL="$_MD_DETAIL testD2:rc=$_MD_RC_D2"
+    fi
+    if [[ "$_MD_OUT_D2" != *"ERROR:"* ]]; then
+        _MD_OK=0; _MD_DETAIL="$_MD_DETAIL testD2:no_error_arm out=${_MD_OUT_D2:0:200}"
+    fi
+    if [[ "$_MD_OUT_D2" == *"Traceback"* || "$_MD_OUT_D2" == *"IndexError"* || "$_MD_OUT_D2" == *"StopIteration"* || "$_MD_OUT_D2" == *"JSONDecodeError"* ]]; then
+        _MD_OK=0; _MD_DETAIL="$_MD_DETAIL testD2:traceback out=${_MD_OUT_D2:0:300}"
     fi
 
     if [[ "$_MD_OK" -eq 1 ]]; then
@@ -4107,19 +4195,21 @@ _md_fallback_case() {
     fi
 }
 
-# I21: agy-setup.md's fallback block resolves and execs the installPath
-# in-producer -- no truncating consumer stage -- surviving an oversized
-# multi-match registry reply (Tests 1+2, the tracer), a single-match parity
-# check (Test 3), and a zero-match reply with no traceback (Test 4).
+# I21: agy-setup.md's fallback block resolve/validate range never execs by
+# itself (Test A); the doc's OWN separate `bash "$RESOLVED"` line actually
+# resolves+execs the legitimate marker end-to-end (Test B); single-match
+# parity holds (Test C); zero-match AND invalid-JSON both degrade to the
+# same ERROR: arm with no traceback (Test D). Two-step resolve-then-exec
+# contract, CR-01/CR-02/IN-01.
 _md_fallback_case "$ROOT/.claude/commands/agy-setup.md" "install.sh" "I21" \
-    "agy-setup.md fallback block survives an oversized reply and reaches its case"
+    "agy-setup.md fallback block requires an explicit second step to exec, never auto-execs a hostile reply"
 
 # I21b: same four behaviors, retargeted at agy-uninstall.md/uninstall.sh (D-03
 # "fix both, not just the one literally ticketed"). One more _md_fallback_case
 # invocation, no second copy of the assertion body -- that duplication is
 # exactly the drift RB02 exists to catch elsewhere in this suite.
 _md_fallback_case "$ROOT/.claude/commands/agy-uninstall.md" "uninstall.sh" "I21b" \
-    "agy-uninstall.md fallback block survives an oversized reply and reaches its case"
+    "agy-uninstall.md fallback block requires an explicit second step to exec, never auto-execs a hostile reply"
 
 # I13: uninstall reverses install (wrappers gone, shadowed original restored).
 IH="$(_fresh_home)"
