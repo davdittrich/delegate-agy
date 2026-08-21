@@ -4050,6 +4050,13 @@ _md_fallback_case() {
 _md_fallback_case "$ROOT/.claude/commands/agy-setup.md" "install.sh" "I21" \
     "agy-setup.md fallback block survives an oversized reply and reaches its case"
 
+# I21b: same four behaviors, retargeted at agy-uninstall.md/uninstall.sh (D-03
+# "fix both, not just the one literally ticketed"). One more _md_fallback_case
+# invocation, no second copy of the assertion body -- that duplication is
+# exactly the drift RB02 exists to catch elsewhere in this suite.
+_md_fallback_case "$ROOT/.claude/commands/agy-uninstall.md" "uninstall.sh" "I21b" \
+    "agy-uninstall.md fallback block survives an oversized reply and reaches its case"
+
 # I13: uninstall reverses install (wrappers gone, shadowed original restored).
 IH="$(_fresh_home)"
 printf '#!/bin/sh\necho original gemini\n' > "$IH/.local/bin/gemini"; chmod +x "$IH/.local/bin/gemini"
