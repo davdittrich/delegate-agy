@@ -24,3 +24,21 @@ Pruned entries from STATE.md. Recoverable but no longer loaded into agent contex
 ### Performance Metrics
 
 | 01 | 6 | - | - |
+
+## Pruned 2026-08-21 (phases 1-2, kept recent 3)
+
+### Decisions
+
+- [Phase 02]: 02-01: D-03's write gate lives on the fetch-success branch only; the no-cache degraded path leaves `$_agy_models` untouched so the shipped criterion-3 check (now use-time, herestring form under D-08) is what reports the degraded-list message -- clearing it unconditionally would let the generic retrieval-failure fatal fire first and lose R8's distinct message
+- [Phase 02]: 02-01: D-08's herestring exception is scoped to exactly two sites in `agy_bridge.sh` (the new write-gate and the existing `:515`-era use-time check) -- a narrow, user-approved carve-out of D-01/D-02's closed-criteria boundary after Codex found the `printf | grep -q` pipe form shares the same SIGPIPE hazard class it was chosen to avoid (reproduced empirically, bash 5.3.15)
+- [Phase 02]: 02-01: D-07's stderr relay is relocated (one line moved to fire unconditionally after the whole fetch if/elif/else), not duplicated per branch -- folded into this plan's Task 2 rather than raised as a follow-up bd issue, closing the last open half of criterion 3 in this phase instead of a later one
+- [Phase 02]: 02-01: D-06's synthetic 3-column/trailing-tab fixture lives in a scratch `AGY_FIXTURES_DIR`, never in `tests/fixtures/agy-models.tsv` (D-14/D-14a's captured-vs-synthetic separation)
+- [Phase 02]: 02-01: S4 (`delegate-agy-8ph`) and S1 both stay "partial" in REQUIREMENTS.md, not "met" -- `8ph` explicitly forbids a one-sided fix, so both requirements close only after plan 02-02 mirrors the same gate/fallback into `gemini_shim.sh`
+- [Phase 02]: 02-02: the shim's write gate lives entirely inside `load_models()` -- a new `ids` local (cut -f1-normalized) gates the existing tmp-then-mv write; the D-04 fallback is one `elif [[ -s "$MODELS_CACHE" ]]; then raw=""; fi` on the same if, no new branch, no second cache read
+- [Phase 02]: 02-02: unlike the bridge, the shim adds no stderr line on the degraded-fallback path (D-05) -- this script shadows `gemini` on PATH, so a warning here would land in every Octopus/Metaswarm log line; the bridge's D-07 stderr-relocation gap does not apply here since `load_models()`'s fetch already redirects agy's own stderr to `2>/dev/null`
+- [Phase 02]: 02-02: D-08's herestring conversion touches exactly two sites in `gemini_shim.sh` -- the new write-gate and the existing `map_model` warning-gate check (formerly a `printf | grep -q` pipe) -- mirroring plan 02-01's identical, narrow D-01/D-02 exception on `agy_bridge.sh`; `map_model`'s verbatim-id and class-resolution matchers are untouched
+- [Phase 02]: 02-02: `delegate-agy-8ph` closed -- both writers of `~/.cache/agy-bridge-models` (`agy_bridge.sh` plan 02-01, `gemini_shim.sh` plan 02-02) now carry the write gate, the D-04 stale-cache fallback and atomic-write preservation; S1 and S4 both move to "met" in REQUIREMENTS.md. Suite PASS=141 FAIL=0.
+
+### Performance Metrics
+
+| 02 | 3 | - | - |
