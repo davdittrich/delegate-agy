@@ -4,16 +4,16 @@ milestone: v1.6.2
 current_phase: 04
 current_phase_name: Installer and launcher surface
 status: verifying
-stopped_at: Completed 04-02-PLAN.md
-last_updated: "2026-08-21T13:09:30.679Z"
+stopped_at: Completed 04-03-PLAN.md
+last_updated: "2026-08-21T14:39:29.056Z"
 last_activity: 2026-08-21
-last_activity_desc: Phase 04 execution started
-state_head: 5747d380f7c8a86c647fb8fb072bebb0d01bad9e
+last_activity_desc: Phase 04 gap-closure plan 04-03 executed (CR-01/CR-02/WR-01/WR-02/IN-01 closed)
+state_head: 37603681c0fa422ee3e6cbeb56a2eaef5f207c4a
 progress:
   total_phases: 7
   completed_phases: 4
-  total_plans: 20
-  completed_plans: 20
+  total_plans: 21
+  completed_plans: 21
 milestone_name: milestone
 ---
 
@@ -29,17 +29,17 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 04 (Installer and launcher surface) — AWAITING VERIFICATION
-Plan: 2 of 2
+Plan: 3 of 3
 Status: Phase complete — ready for verification
-Last activity: 2026-08-21 — Phase 04 execution complete (plans 04-01, 04-02)
+Last activity: 2026-08-21 — Phase 04 execution complete (plans 04-01, 04-02, 04-03). 04-03 is a gap-closure plan added after a deep code review of the shipped 04-01/04-02 work surfaced CR-01/CR-02/IN-01 (Critical/Info — CLI-fallback exec-before-review gap) and WR-01/WR-02 (Warning — python3-guard false positive, invalid `<that-path>` placeholder); all three beads (`delegate-agy-5r9.7/.8/.9`) closed.
 
-Progress: [████████████████████] 20/20 plans overall (Phase 4 complete: 2/2 plans)
+Progress: [████████████████████] 21/21 plans overall (Phase 4 complete: 3/3 plans)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 19
+- Total plans completed: 21
 - Average duration: —
 - Total execution time: —
 
@@ -79,6 +79,7 @@ Progress: [████████████████████] 20/20 p
 | Phase 03 P04 | 1h | 3 tasks | 2 files |
 | Phase 04 P01 | 27min | 3 tasks | 4 files |
 | Phase 04 P02 | 22min | 3 tasks | 4 files |
+| Phase 04 P03 | 41min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -130,6 +131,9 @@ Recent decisions affecting current work:
 - [Phase 04]: [Phase 04]: 04-02: D-06's HOME precondition is locked verbatim by the bead; inserted once per script immediately after refuse-root, exactly one added line each
 - [Phase 04]: [Phase 04]: 04-02: D-01's hoisted python3 guard resolves 04-RESEARCH.md's Open Question 1 -- the dependency check moves before the rc-alias loop, but the consent-flag read stays inside the loop per rc file, leaving the existing dry-run advisory untouched
 - [Phase 04]: [Phase 04]: 04-02: R8/S2 traceability rows cite I16/I17/I18 by case id only, never by line range -- this plan's own I19/I20/I20b insertions shifted those cases earlier in tests/run-tests.sh, so any range recorded before those insertions would already be stale
+- [Phase 04]: [Phase 04]: 04-03: Test B extracts the doc's own second exec line via exact whole-line grep -x, not substring grep -c -- both docs carry a pre-existing legitimate 'e.g. ... bash "$RESOLVED"' prose mention a substring count would collide with
+- [Phase 04]: [Phase 04]: 04-03: WR-01's fix hoists only the python3 dependency check into the loop's existing alias-match branch; the _alias_patch_py3_ok flag's own continue gate stays exactly where 04-02 sited it
+- [Phase 04]: [Phase 04]: 04-03: closed delegate-agy-5r9.7/.8/.9 (CR-01, CR-02, IN-01, WR-01, WR-02) -- a deep code review found these after 04-01/04-02 shipped; per project rule, review findings are blockers, not deferred. Suite PASS=160 FAIL=0
 
 ### Pending Todos
 
@@ -159,6 +163,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-21T13:09:30.643Z
-Stopped at: Completed 04-02-PLAN.md
+Last session: 2026-08-21T14:39:29.021Z
+Stopped at: Completed 04-03-PLAN.md
 Resume file: None

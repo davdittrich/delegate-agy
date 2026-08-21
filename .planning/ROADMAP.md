@@ -179,7 +179,7 @@ Plans:
 **Goal**: The registry read stays a version comparison and contributes nothing else, and no install path can abort after the wrappers are written.
 **Depends on**: Nothing
 **Requirements**: R8, S2
-**Tickets**: `delegate-agy-4vy` (P3), `delegate-agy-4xn` (P3), `delegate-agy-k0f` (P3), `delegate-agy-4bp` (P3) — the last two were unmapped to any phase and were folded into this phase's scope during `/gsd:discuss-phase` (04-CONTEXT.md, D-05/D-06); they sit on this phase's exact file surface, so leaving them out only defers them to Phase 6's release gate.
+**Tickets**: `delegate-agy-4vy` (P3), `delegate-agy-4xn` (P3), `delegate-agy-k0f` (P3), `delegate-agy-4bp` (P3) — the last two were unmapped to any phase and were folded into this phase's scope during `/gsd:discuss-phase` (04-CONTEXT.md, D-05/D-06); they sit on this phase's exact file surface, so leaving them out only defers them to Phase 6's release gate. `delegate-agy-5r9.7`/`.8`/`.9` (all P1/P2) were added post-hoc after a deep code review of the shipped 04-01/04-02 work surfaced CR-01/CR-02/IN-01/WR-01/WR-02; closed by 04-03.
 **Success Criteria** (what must be TRUE):
 
   1. A lookalike plugin from another marketplace sitting in `installed_plugins.json` never matches this plugin's key, and an adjacent entry's version is never misattributed — proven with registry fixtures that place one immediately beside the other.
@@ -188,7 +188,7 @@ Plans:
   4. `AGY_SETUP_PATCH_ALIASES=1` on a host with no `python3` ends in the same graceful state as every other python3-absent path in the installer, rather than hard-failing after the wrappers already exist on disk.
   5. The documented CLI fallback one-liner reaches its validating `case` under `set -euo pipefail` instead of aborting when its truncating consumer closes the pipe early. *(Mechanism correction from Phase 4 planning: the observable is a CPython `BrokenPipeError` and exit **120**, not a delivered SIGPIPE and exit 141 — CPython sets `SIGPIPE` to `SIG_IGN`. The criterion's intent is unchanged; see 04-01-PLAN.md "Measured facts", M1-M4.)*
 
-**Plans**: 2/2 plans executed
+**Plans**: 3/3 plans executed
 
 Plans:
 **Wave 1**
@@ -199,7 +199,13 @@ Plans:
 
 - [x] 04-02-PLAN.md — State the HOME precondition in both installer scripts, guard the rc-alias patch's python3 dependency once per run, and close R8/S2 on I16/I17/I18's shipped evidence (D-06, D-01, D-02, D-07; I19, I20, I20b)
 
+**Wave 3** *(gap closure — added after 04-01/04-02 shipped, per the phase-04 deep code review, `04-REVIEW.md`)*
+
+- [x] 04-03-PLAN.md — Split the CLI-fallback's resolve/validate step from its exec step in both docs and fail-close its JSON parse (CR-01, CR-02, IN-01); scope the python3-absent rc-alias warning to fire only when there's something to patch (WR-01); replace the invalid `<that-path>` doc placeholder with a captured `$AGY_PATH` variable (WR-02) (`_md_fallback_case` Tests A-D, I19b, I22)
+
 **Note**: independent of Phases 1–3 — this phase owns `install.sh`, `uninstall.sh`, the generated wrapper, and the docs one-liner, none of which the other phases touch. `delegate-agy-lkg` (the "non-fatal live verify" running unbounded for up to `GEMINI_SHIM_TIMEOUT`) was written into this phase but is **already closed and fixed** — the `GEMINI_SHIM_TIMEOUT=20` prefix now sits at `install.sh:381`, confirmed by reading the current file during `/gsd:discuss-phase`. It is out of scope; do not reopen it (04-CONTEXT.md, Out of scope).
+
+**04-03's provenance**: not part of the original phase-04 scope or `04-CONTEXT.md`'s locked decisions — a deep code review spawned after 04-01/04-02 shipped (`04-REVIEW.md`) found and reproduced an arbitrary-code-execution gap (CR-01/CR-02/IN-01) plus two warning-severity doc/UX defects (WR-01, WR-02) in the same file surface. Per this project's standing rule that findings discovered by review are blockers, `delegate-agy-5r9.7`/`.8`/`.9` closed this phase rather than deferred.
 
 **On criteria 1-3**: already implemented and already covered by `tests/run-tests.sh` I16 (`:3980-4105`), I17 (`:4107-4194`) and I18 (`:4197-4239`); `REQUIREMENTS.md` already reads R8 and S2 as shipped-on-branch. Plan 04-02 closes both by citing that evidence, and adds no new registry fixtures — a user decision (04-CONTEXT.md, D-07), not an omission. The phase's real new-code surface is criteria 4 and 5 plus the two folded-in tickets.
 
@@ -250,7 +256,7 @@ Phases 1, 1.5, 3, and 4 have no dependencies on each other and may be planned or
 | 1.5. Contract check against a real agy | 6/6 | Complete    | 2026-08-20 |
 | 2. Model-list handling, end to end | 3/2 | Complete    | 2026-08-20 |
 | 3. The exit-code contract | 4/4 | Complete    | 2026-08-21 |
-| 4. Installer and launcher surface | 2/2 | In Progress|  |
+| 4. Installer and launcher surface | 3/3 | In Progress|  |
 | 5. The shim's failure-mode contract | 0/TBD | Not started | - |
 | 6. Ship 1.6.2 | 0/TBD | Not started | - |
 
