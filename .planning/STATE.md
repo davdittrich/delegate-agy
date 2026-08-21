@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.6.2
-current_phase: 05
-current_phase_name: The shim's failure-mode contract
-status: verifying
-stopped_at: Completed 05-02-PLAN.md
-last_updated: "2026-08-21T19:16:18.614Z"
+current_phase: 6
+current_phase_name: Ship 1.6.2
+status: planning
+stopped_at: Phase 05 complete, ready to plan Phase 6
+last_updated: "2026-08-21T19:47:32.554Z"
 last_activity: 2026-08-21
-last_activity_desc: Phase 05 execution started
-state_head: 13752923e7219a9f9f53cbb3948b5dd43ef15ac2
+last_activity_desc: Phase 05 complete, transitioned to Phase 6
+state_head: 3fef12749a0bb1e982c97909e3c1a03afcfbe313
 progress:
   total_phases: 7
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 23
   completed_plans: 23
 milestone_name: milestone
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 
 ## Current Position
 
-Phase: 05 (The shim's failure-mode contract) — EXECUTING
-Plan: 2 of 2
-Status: Phase complete — ready for verification
-Last activity: 2026-08-21 — Phase 05 execution started
+Phase: 6 — Ship 1.6.2
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-08-21 — Phase 05 complete, transitioned to Phase 6
 
 Progress: [████████████████████] 21/21 plans overall (Phase 4 complete: 3/3 plans)
 
@@ -39,7 +39,7 @@ Progress: [████████████████████] 21/21 p
 
 **Velocity:**
 
-- Total plans completed: 16
+- Total plans completed: 15
 - Average duration: —
 - Total execution time: —
 
@@ -48,8 +48,8 @@ Progress: [████████████████████] 21/21 p
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01.5 | 6 | - | - |
-| 03 | 4 | - | - |
 | 04 | 3 | - | - |
+| 05 | 2 | - | - |
 
 **Recent Trend:**
 
@@ -106,18 +106,6 @@ Recent decisions affecting current work:
 - [Phase ?]: 01-06: Runtime descendant cases capture into files, not command substitutions: each script's fd 9 is inherited by agy and its forks, so under a command substitution a failing descendant assertion blocks for the fake's full 300s instead of failing
 - [Phase ?]: 01-06: The forking fake ignores SIGHUP as well as SIGTERM: without it the pty session's hangup reaps the pair and the with-terminal descendant assertion passes while asserting nothing
 - [Phase ?]: 01-06: The PTY allocator's argv form is chosen by probing script --version, never by uname, with both flavour branches pinned on one host via a stubbed probe result
-- [Phase 03]: 03-01: EC_KILL9_TAIL holds only the fixed variable-free tail ' -- possible OOM or external kill', not the whole sentence -- both output forms keep their existing, already-differing prefixes untouched
-- [Phase 03]: 03-01: _err_txt is computed once via $(cat "$STDERR_FILE" 2>/dev/null || true) immediately before the plain-text/JSON branch, guarded once via ${_err_txt:+...}, and is the single normalization point both output forms defer to -- the JSON path's open(sys.argv[5]).read() is deleted, not guarded
-- [Phase 03]: 03-01: the JSON path's error string is now trailing-newline-stripped (decided behavior change, not a bug fix) -- text\n\n now yields ': text', matching the plain-text arm's pre-existing $(cat ...) behavior
-- [Phase 03]: [Phase 03]: 03-02: the shim's EC_KILL9_TAIL mirrors the bridge's literal exactly (not just equivalent wording) so EC03's cross-script comparison is a meaningful byte-identity check, not two independently-written expected strings
-- [Phase 03]: [Phase 03]: 03-02: EC05's mutation-red proof (T-03-08) is a manual, git-status-tracked verification of the real file during task execution, not a permanent self-mutating suite case -- matches RB03's own static-provenance shape
-- [Phase 03]: [Phase 03]: 03-03: README's exit-124 row quotes both timeout literals as bridge-text-vs-bridge-JSON divergence, not bridge-vs-shim -- the two entry points' TEXT forms are byte-identical
-- [Phase 03]: [Phase 03]: 03-03: D-09 exit-2 consistency pass found zero inconsistencies among 25 call sites in agy_bridge.sh; delegate-agy-b7g recorded with explicit left-for-another-phase disposition, no production change
-- [Phase 03]: [Phase 03]: 03-04: EC07's cause-fragment exclusivity check is scoped to the bridge's four captured messages (137/124/3/2), not all seven runtime invocations -- the bridge is the only entry point that reaches all four codes
-- [Phase 03]: [Phase 03]: 03-04: exit 127 is cited via four source assertions (not two) -- the two Codex-named -eq127 exactness pins plus two more pinning the negative half (-z OUT_STALE / -z RB29_SOUT) that must_haves separately require
-- [Phase 03]: [Phase 03]: 03-04: EC07's four self-referential grep patterns use escaped ERE metacharacters so the grep invocation's own source line can never satisfy the pattern it searches for -- verified empirically via an empty detail string
-- [Phase 03]: [Phase 03]: 03-04: EC07/EC08 were written in one Edit pass then split into two commits by temporarily removing and re-inserting the EC08 block, preserving per-task bd-id traceability without any destructive git operation
-- [Phase 03]: [Phase 03]: 03-04: R5's REQUIREMENTS.md row is closed met but names the integer-second SECONDS-precision ceiling (edge:R5/precision) as a stated residue rather than an implied closure
 - [Phase 04]: 04-01: D-05 (sync) landed before D-03 (SIGPIPE fix) -- the branch tip carries the identical unfixed pipeline, so fixing first would have been silently overwritten by the sync
 - [Phase 04]: 04-01: D-03a locked next((<gen>), "") over an index-[0] rewrite -- measured (M5) that indexing raises IndexError and aborts under -e on a zero-match reply
 - [Phase 04]: 04-01: RED fixture sized >=131072 bytes of producer output (2x the measured 65536-byte pipe capacity) -- the plan's earlier 3-entry fixture was measured to pass 8/8 against the unfixed code and would have been vacuous
@@ -161,5 +149,5 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-08-21T19:16:18.574Z
-Stopped at: Completed 05-02-PLAN.md
+Stopped at: Phase 05 complete, ready to plan Phase 6
 Resume file: None
