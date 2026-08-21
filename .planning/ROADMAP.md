@@ -179,7 +179,7 @@ Plans:
 **Goal**: The registry read stays a version comparison and contributes nothing else, and no install path can abort after the wrappers are written.
 **Depends on**: Nothing
 **Requirements**: R8, S2
-**Tickets**: `delegate-agy-4vy` (P3), `delegate-agy-4xn` (P3)
+**Tickets**: `delegate-agy-4vy` (P3), `delegate-agy-4xn` (P3), `delegate-agy-k0f` (P3), `delegate-agy-4bp` (P3) — the last two were unmapped to any phase and were folded into this phase's scope during `/gsd:discuss-phase` (04-CONTEXT.md, D-05/D-06); they sit on this phase's exact file surface, so leaving them out only defers them to Phase 6's release gate.
 **Success Criteria** (what must be TRUE):
 
   1. A lookalike plugin from another marketplace sitting in `installed_plugins.json` never matches this plugin's key, and an adjacent entry's version is never misattributed — proven with registry fixtures that place one immediately beside the other.
@@ -188,9 +188,20 @@ Plans:
   4. `AGY_SETUP_PATCH_ALIASES=1` on a host with no `python3` ends in the same graceful state as every other python3-absent path in the installer, rather than hard-failing after the wrappers already exist on disk.
   5. The documented CLI fallback one-liner reaches its validating `case` under `set -euo pipefail` instead of aborting on a SIGPIPE from `head`.
 
-**Plans**: TBD
+**Plans**: 2 plans
 
-**Note**: independent of Phases 1–3 — this phase owns `install.sh`, the generated wrapper, and the docs one-liner, none of which the other phases touch. `delegate-agy-lkg` lands here too: the "non-fatal live verify" at `install.sh:360-368` invokes the bridge and shim with no installer-side bound, so it can sit for up to `GEMINI_SHIM_TIMEOUT` (default 600s) under a line that says it is non-fatal.
+Plans:
+**Wave 1**
+
+- [ ] 04-01-PLAN.md — Sync the three post-revert files from the branch tip, then the tracer: the published fallback one-liner runs end to end under `set -euo pipefail` against a multi-match `claude` stub and reaches its validating `case` (D-05, D-04, D-03; `_md_extract`, I21, I21b)
+
+**Wave 2** *(blocked on Wave 1 completion — both plans edit `tests/run-tests.sh`)*
+
+- [ ] 04-02-PLAN.md — State the HOME precondition in both installer scripts, guard the rc-alias patch's python3 dependency once per run, and close R8/S2 on I16/I17/I18's shipped evidence (D-06, D-01, D-02, D-07; I19, I20, I20b)
+
+**Note**: independent of Phases 1–3 — this phase owns `install.sh`, `uninstall.sh`, the generated wrapper, and the docs one-liner, none of which the other phases touch. `delegate-agy-lkg` (the "non-fatal live verify" running unbounded for up to `GEMINI_SHIM_TIMEOUT`) was written into this phase but is **already closed and fixed** — the `GEMINI_SHIM_TIMEOUT=20` prefix now sits at `install.sh:381`, confirmed by reading the current file during `/gsd:discuss-phase`. It is out of scope; do not reopen it (04-CONTEXT.md, Out of scope).
+
+**On criteria 1-3**: already implemented and already covered by `tests/run-tests.sh` I16 (`:3980-4105`), I17 (`:4107-4194`) and I18 (`:4197-4239`); `REQUIREMENTS.md` already reads R8 and S2 as shipped-on-branch. Plan 04-02 closes both by citing that evidence, and adds no new registry fixtures — a user decision (04-CONTEXT.md, D-07), not an omission. The phase's real new-code surface is criteria 4 and 5 plus the two folded-in tickets.
 
 ### Phase 5: The shim's failure-mode contract
 
@@ -239,7 +250,7 @@ Phases 1, 1.5, 3, and 4 have no dependencies on each other and may be planned or
 | 1.5. Contract check against a real agy | 6/6 | Complete    | 2026-08-20 |
 | 2. Model-list handling, end to end | 3/2 | Complete    | 2026-08-20 |
 | 3. The exit-code contract | 4/4 | Complete    | 2026-08-21 |
-| 4. Installer and launcher surface | 0/TBD | Not started | - |
+| 4. Installer and launcher surface | 0/2 | Planned | - |
 | 5. The shim's failure-mode contract | 0/TBD | Not started | - |
 | 6. Ship 1.6.2 | 0/TBD | Not started | - |
 
