@@ -2716,9 +2716,12 @@ _ec06_sjson="$(grep -v '^[[:space:]]*#' "$SHIM" | grep -cF "$_EC_TIMEOUT_JSON_LI
 grep -qF "$_EC_TIMEOUT_JSON_LITERAL" "$_RB_README" \
     || { EC06_OK=0; EC06_DETAIL="$EC06_DETAIL readme:timeout_json_literal_missing"; }
 
-# -- static: exit-2 degraded-list message, exactly once in the BRIDGE, ZERO in the SHIM (no matching check), verbatim in README --
+# -- static: exit-2 degraded-list message, TWICE in the BRIDGE (the original
+# post-cache-read check, plus D-07's verbatim reuse at the zero-byte/no-cache
+# bail -- same text, deliberately, per 06-03-PLAN.md's acceptance criteria),
+# ZERO in the SHIM (no matching check), verbatim in README --
 _ec06_bdeg="$(grep -v '^[[:space:]]*#' "$BRIDGE" | grep -cF "$_EC_DEGRADED_LITERAL")" || _ec06_bdeg=0
-[[ "$_ec06_bdeg" -eq 1 ]] || { EC06_OK=0; EC06_DETAIL="$EC06_DETAIL bridge:degraded_count_${_ec06_bdeg}"; }
+[[ "$_ec06_bdeg" -eq 2 ]] || { EC06_OK=0; EC06_DETAIL="$EC06_DETAIL bridge:degraded_count_${_ec06_bdeg}"; }
 _ec06_sdeg="$(grep -v '^[[:space:]]*#' "$SHIM" | grep -cF "$_EC_DEGRADED_LITERAL")" || _ec06_sdeg=0
 [[ "$_ec06_sdeg" -eq 0 ]] || { EC06_OK=0; EC06_DETAIL="$EC06_DETAIL shim:degraded_count_${_ec06_sdeg}_expected_0"; }
 grep -qF "$_EC_DEGRADED_LITERAL" "$_RB_README" \
