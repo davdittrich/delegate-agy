@@ -4932,6 +4932,91 @@ else
         "rc=$RB29_RC out=${RB29_OUT:0:80} err=${RB29_ERR:0:200} stale_rc=$RB29_SRC stale_err=${RB29_SERR:0:200} unguarded=${RB29_UNGUARDED:0:200}"
 fi
 
+echo "== a TERM landing during timer teardown cannot skip the trap restore (RB30) =="
+
+# RB30 forces the window RB24 could only wait on. delegate-agy-sup (D-08) named
+# it: the watchdog arm's teardown call to _rb_cancel_timer (agy_bridge.sh:339)
+# runs BEFORE `trap - TERM INT HUP` and the three evals that give the host its
+# TERM/INT/HUP dispositions back (agy_bridge.sh:340-343) -- so a signal that
+# lands during that one call's own internal `wait` is still caught by
+# `_rb_relay`, which unconditionally `exit`s (agy_bridge.sh:220), skipping the
+# restore entirely. RESEARCH.md logs 2 full suite runs plus 80 isolated
+# iterations without reproducing it live -- the window is real but scheduler-
+# timed, not scheduler-guaranteed, so a case that only re-ran RB24 harder could
+# stay green on the unfixed helper forever. This case does not wait: it shadows
+# _rb_cancel_timer with a one-shot wrapper that sends itself `kill -TERM $$` on
+# the FIRST call inside run_bounded -- the teardown call this case targets --
+# then delegates to the real function, guard set before the kill and the kill
+# before the delegate, because _rb_relay's own path calls _rb_cancel_timer twice
+# more (agy_bridge.sh:216, :219) and an unguarded shadow would re-signal itself
+# through those.
+#
+# $$ stands in for a TERM arriving from outside the script -- a caller, a
+# terminal, a process-group kill -- never for anything production's real
+# _rb_cancel_timer signals; that function only ever targets the timer PID or its
+# confirmed process group (agy_bridge.sh:127, :148), not the host shell. RB30
+# proves the ORDERING INVARIANT -- a TERM landing during teardown must still
+# reach the host's restored dispositions, not _rb_relay -- and is not a
+# reproduction of the historical flake itself, which RESEARCH.md leaves
+# [ASSUMED] rather than confirmed. Before the fix this case is RED: the shadow's
+# self-signal is caught by the still-armed `_rb_relay TERM 143` trap, which
+# exits the bash -c subshell before the restore lines ever run, so the "after"
+# dump never prints and the before/after comparison fails closed. After the fix
+# moves the restore ahead of the teardown, the same self-signal instead hits the
+# HOST's own trap (an echo, not an exit), execution continues, and the dump
+# prints unchanged.
+#
+# watchdog only: the coreutils arm (agy_bridge.sh:242-259) never calls trap -p,
+# trap, or eval, so it has no restore window for this case to force.
+RB30_OUT="$SANDBOX/rb30-out.log"
+: > "$RB30_OUT"
+bash -c '
+    set -euo pipefail
+    exec 9>/dev/null
+    TIMEOUT_BIN=""
+    . "$1"
+    trap "echo HOST_CLEANUP_RAN" TERM
+    trap "echo HOST_CLEANUP_RAN" INT
+    trap "echo HOST_CLEANUP_RAN" HUP
+
+    # One-shot shadow of the sourced _rb_cancel_timer: fires the forcing signal
+    # only on its first invocation (run_bounded'"'"'s teardown call), then
+    # delegates every call -- guarded so the two calls on _rb_relay'"'"'s own
+    # handling path do not re-trigger it.
+    eval "$(declare -f _rb_cancel_timer | sed "1s/_rb_cancel_timer/_rb_cancel_timer_orig/")"
+    _RB30_FIRED=0
+    _rb_cancel_timer() {
+        if [[ "$_RB30_FIRED" -eq 0 ]]; then
+            _RB30_FIRED=1
+            kill -TERM $$
+        fi
+        _rb_cancel_timer_orig "$@"
+    }
+
+    for _s in TERM INT HUP; do printf "before %s %s\n" "$_s" "$(trap -p $_s)"; done
+    run_bounded 5 2 -- true || true
+    for _s in TERM INT HUP; do printf "after %s %s\n" "$_s" "$(trap -p $_s)"; done
+' _ "$_RB_BLOCK" > "$RB30_OUT" 2>&1 || true
+
+RB30_OK=1
+RB30_DETAIL=""
+for _rb30_s in TERM INT HUP; do
+    _rb30_b="$(grep "^before $_rb30_s " "$RB30_OUT")" || _rb30_b=""
+    _rb30_a="$(grep "^after $_rb30_s " "$RB30_OUT")" || _rb30_a=""
+    [[ "$_rb30_b" == *"HOST_CLEANUP_RAN"* ]] \
+        || { RB30_OK=0; RB30_DETAIL="$RB30_DETAIL $_rb30_s:not_installed"; }
+    [[ -n "$_rb30_a" ]] \
+        || { RB30_OK=0; RB30_DETAIL="$RB30_DETAIL $_rb30_s:after_missing(exited_during_teardown)"; }
+    [[ "${_rb30_b#before }" == "${_rb30_a#after }" ]] \
+        || { RB30_OK=0; RB30_DETAIL="$RB30_DETAIL $_rb30_s:destroyed[${_rb30_a:0:60}]"; }
+done
+if [[ "$RB30_OK" -eq 1 ]]; then
+    ok "RB30 a TERM landing during the watchdog arm's timer teardown still reaches the host's restored TERM/INT/HUP dispositions (deterministic ordering invariant, not a reproduction of the RB24 flake itself)"
+else
+    bad "RB30 a TERM landing during the watchdog arm's timer teardown still reaches the host's restored TERM/INT/HUP dispositions (deterministic ordering invariant, not a reproduction of the RB24 flake itself)" \
+        "detail=$RB30_DETAIL out=$(head -c 300 "$RB30_OUT")"
+fi
+
 echo "== the check answers 'could not ask' (CC01, CC02) =="
 
 # CC01: with no agy anywhere on PATH -- not the fake, not the real binary --
