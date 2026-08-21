@@ -569,9 +569,9 @@ Options (translated to agy equivalents):
 
 HELP
             exit 0 ;;
-        # Silently skip unknown flags to maximise compatibility
+        # An unknown flag is ignored, not eaten together with a value; a flag carrying data must use the inline --flag=value form, which this arm already consumes whole.
         --no-*)               shift ;;
-        --[a-z]*)             [[ $# -ge 2 && "${2:-}" != -* ]] && shift 2 || shift ;;
+        --[a-z]*)             shift ;;
         --)                   shift; PROMPT_ARGS+=("$@"); break ;;
         -*)                   shift ;;
         *)                    PROMPT_ARGS+=("$1"); shift ;;
