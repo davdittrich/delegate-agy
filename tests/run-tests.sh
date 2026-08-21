@@ -3888,6 +3888,32 @@ else
         "rc=$I19_RC warns=$I19_WARN_COUNT baks=$NRC_BAK log=$(tail -6 "$SANDBOX/last-install.log")"
 fi
 
+# I19b: with AGY_SETUP_PATCH_ALIASES=1 and no python3 on PATH, but NO rc file
+# carries a recursive alias at all (WR-01's false-positive case) -- nothing
+# to skip, so nothing should be warned about. Reuses I19's exact nopy
+# curated PATH and a real $_real_gemini (so the guard's outer condition is
+# still true), but with no rc file written at all -- the smallest diff
+# against I19's own fixture-building code.
+IH="$(_fresh_home)"
+mkdir -p "$IH/otherbin" "$IH/nopy"
+printf '#!/bin/sh\necho real\n' > "$IH/otherbin/gemini"; chmod +x "$IH/otherbin/gemini"
+for b in bash cat grep sed date mktemp mkdir rm mv cp chmod ls readlink id printf command env; do
+    _src="$(command -v "$b" 2>/dev/null)"; [[ -n "$_src" ]] && ln -sf "$_src" "$IH/nopy/$b" 2>/dev/null || true
+done
+cp "$HERE/fake-agy.sh" "$IH/nopy/agy"; chmod +x "$IH/nopy/agy"
+_cc_fixtures_beside "$IH/nopy"
+env -i HOME="$IH" PATH="$IH/otherbin:$IH/nopy" \
+    AGY_PLUGIN_DIR="$ROOT" AGY_SETUP_PATCH_ALIASES=1 \
+    bash "$INSTALL" > "$SANDBOX/last-install.log" 2>&1; I19B_RC=$?
+I19B_WARN_COUNT="$(grep -ci 'python3 not found' "$SANDBOX/last-install.log")"
+if [[ "$I19B_RC" -eq 0 && -f "$IH/.local/bin/agy-bridge" && -f "$IH/.local/bin/gemini" ]] \
+   && [[ "$I19B_WARN_COUNT" -eq 0 ]]; then
+    ok "I19b python3-absent guard does not warn when no rc file has a recursive alias"
+else
+    bad "I19b python3-absent guard does not warn when no rc file has a recursive alias" \
+        "rc=$I19B_RC warns=$I19B_WARN_COUNT log=$(tail -6 "$SANDBOX/last-install.log")"
+fi
+
 # I9: register on invalid JSON -> original untouched, temp cleaned, exit-3 msg.
 IH="$(_fresh_home)"
 mkdir -p "$IH/.gemini/antigravity-cli"
