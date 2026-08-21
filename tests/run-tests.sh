@@ -2783,18 +2783,18 @@ _fm_row="$(printf '%s\n' "$_FM_TABLE" | grep -F "$_FM_ANCHOR_LIST" | head -1)"
 _FM_ANCHOR_NAME="did not resolve against the agy model list; passing it through unchanged"
 
 grep -qF "$_FM_ANCHOR_NAME" "$SHIM" \
-    || { FM01_OK=0; FM01_DETAIL="$FM01_DETAIL shim:name_literal_missing"; }
+    || { FM01_OK=0; FM01_DETAIL="$FM01_DETAIL shim:passthru_literal_missing"; }
 
 _fm_name_rows="$(printf '%s\n' "$_FM_TABLE" | grep -cF "$_FM_ANCHOR_NAME")" || _fm_name_rows=0
-[[ "$_fm_name_rows" -eq 1 ]] || { FM01_OK=0; FM01_DETAIL="$FM01_DETAIL readme:name_rows_${_fm_name_rows}"; }
+[[ "$_fm_name_rows" -eq 1 ]] || { FM01_OK=0; FM01_DETAIL="$FM01_DETAIL readme:passthru_rows_${_fm_name_rows}"; }
 
 _fm_row="$(printf '%s\n' "$_FM_TABLE" | grep -F "$_FM_ANCHOR_NAME" | head -1)"
 [[ "$_fm_row" == *"agy-bridge"* ]] \
-    || { FM01_OK=0; FM01_DETAIL="$FM01_DETAIL readme:name_missing_bridge_name"; }
+    || { FM01_OK=0; FM01_DETAIL="$FM01_DETAIL readme:passthru_missing_bridge_name"; }
 [[ "$_fm_row" == *"gemini"* ]] \
-    || { FM01_OK=0; FM01_DETAIL="$FM01_DETAIL readme:name_missing_shim_name"; }
+    || { FM01_OK=0; FM01_DETAIL="$FM01_DETAIL readme:passthru_missing_shim_name"; }
 [[ "$_fm_row" == *"because"* || "$_fm_row" == *"identical"* ]] \
-    || { FM01_OK=0; FM01_DETAIL="$FM01_DETAIL readme:name_missing_reason"; }
+    || { FM01_OK=0; FM01_DETAIL="$FM01_DETAIL readme:passthru_missing_reason"; }
 
 # Row-to-proof mapping is DATA, not a comment: deleting a row, deleting its
 # proof's ok/bad label, or deleting the pair entry itself each fail this case
