@@ -649,6 +649,47 @@ else
         "assign_guard=$R9E_ASSIGN redirect_guard=$R9E_REDIRECT relay_guard=$R9E_RELAY_GUARD rm_guard=$R9E_RM_GUARD"
 fi
 
+# R9f (D-07, delegate-agy-b7g): a successful `agy models` that returns ZERO
+# BYTES, with no cache on disk, matches neither arm of the fetch if/elif and
+# must not fall through to the generic "failed to retrieve model list" bail --
+# that swallows the one diagnostic (agy's own stderr) that would tell an
+# operator agy is unauthenticated. FAKE_AGY_MODELS_GARBAGE (R8/R9) writes
+# non-empty garbage text, which already reaches the downstream gemini--less
+# check further down this file; FAKE_AGY_MODELS_EMPTY is the fixture that
+# reproduces a TRULY empty $_agy_models, the shape that falls through the
+# if/elif untouched.
+_R9F_CACHE="$HOME/.cache/agy-bridge-models"
+_R9F_SENTINEL="R9F-AGY-STDERR-SENTINEL"
+R9F_OK=1
+R9F_DETAIL=""
+
+# Absent-cache half: exits 2, the degraded message is present, the generic
+# message is absent, agy's own stderr still reaches the user through the
+# unconditional passthrough, and the cache file is still not created.
+rm -f "$_R9F_CACHE"
+FAKE_AGY_MODELS_EMPTY=1 FAKE_AGY_STDERR="$_R9F_SENTINEL" _run OUT RC bash "$BRIDGE" --type code -- "empty fetch, no cache"
+[[ "$RC" -eq 2 ]] || { R9F_OK=0; R9F_DETAIL="${R9F_DETAIL}absent-half: rc=$RC (want 2); "; }
+[[ "$OUT" == *"no 'gemini-' ids"* ]] || { R9F_OK=0; R9F_DETAIL="${R9F_DETAIL}absent-half: degraded message missing, out=$OUT; "; }
+[[ "$OUT" != *"failed to retrieve model list from agy"* ]] || { R9F_OK=0; R9F_DETAIL="${R9F_DETAIL}absent-half: generic message present, out=$OUT; "; }
+[[ "$OUT" == *"       agy: $_R9F_SENTINEL"* ]] || { R9F_OK=0; R9F_DETAIL="${R9F_DETAIL}absent-half: agy stderr passthrough missing, out=$OUT; "; }
+[[ ! -s "$_R9F_CACHE" ]] || { R9F_OK=0; R9F_DETAIL="${R9F_DETAIL}absent-half: cache file created, contents=$(cat "$_R9F_CACHE" 2>/dev/null); "; }
+
+# Regression guard, same case: with a good stale cache on disk, the zero-byte
+# reply falls back to it and succeeds, so the new else arm has not stolen the
+# pre-existing cache-fallback path.
+mkdir -p "$(dirname "$_R9F_CACHE")"
+printf '%s\t%s\n' "gemini-3.1-pro-high" "Gemini 3.1 Pro (High)" > "$_R9F_CACHE"
+touch -d '2 hours ago' "$_R9F_CACHE"
+FAKE_AGY_MODELS_EMPTY=1 FAKE_AGY_STDOUT="ok" _run OUT RC bash "$BRIDGE" --type code -- "empty fetch, good cache"
+[[ "$RC" -eq 0 ]] || { R9F_OK=0; R9F_DETAIL="${R9F_DETAIL}cache-half: rc=$RC (want 0), out=$OUT; "; }
+rm -f "$_R9F_CACHE"
+
+if [[ "$R9F_OK" -eq 1 ]]; then
+    ok "R9f a zero-byte successful fetch with no cache reports the degraded diagnostic (D-07)"
+else
+    bad "R9f a zero-byte successful fetch with no cache reports the degraded diagnostic (D-07)" "$R9F_DETAIL"
+fi
+
 # R4: gemini_shim.sh -m flash resolves against the LIVE `agy models` list and
 # hands agy a real ID (delegate-agy-62x purge-guard). The map used to hold
 # DISPLAY NAMES ("Gemini 3.6 Flash (High)") frozen at whatever agy shipped that

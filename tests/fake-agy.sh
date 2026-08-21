@@ -12,7 +12,9 @@
 # Behavior controlled via env vars so tests can simulate agy outcomes:
 #   FAKE_AGY_EXIT         exit code for a --print run (default 0)
 #   FAKE_AGY_STDOUT       bytes written to stdout for a --print run (default empty)
-#   FAKE_AGY_STDERR       bytes written to stderr for a --print run (default empty)
+#   FAKE_AGY_STDERR       bytes written to stderr for a --print run (default empty);
+#                         also honored by FAKE_AGY_MODELS_EMPTY on the `models`
+#                         subcommand (the one non-`--print` site that needs it)
 #   FAKE_AGY_ECHO_PROMPT  if "1", echo ONLY the extracted TASK text (everything
 #                         after the `TASK:` marker line in GEMINI.md) to stdout,
 #                         instead of the STDOUT/STDERR/EXIT triple above. Lets a
@@ -69,6 +71,10 @@
 #   FAKE_AGY_MODELS_GARBAGE
 #                         `agy models` exits 0 but with no gemini ids in its
 #                         output. Ignored outside `models`.
+#   FAKE_AGY_MODELS_EMPTY `agy models` exits 0 having written zero bytes to
+#                         stdout (a successful-but-unauthenticated/degraded
+#                         reply), also honoring FAKE_AGY_STDERR. Ignored
+#                         outside `models`.
 #
 #   AGY_FIXTURES_DIR      NOT a FAKE_AGY_* knob -- deliberately: this is a
 #                         resolution path, not a behavior-simulation knob.
@@ -164,6 +170,22 @@ case "${1:-}" in
         if [[ -n "${FAKE_AGY_MODELS_GARBAGE:-}" ]]; then
             echo "FAKE-AGY-DEGRADED: not authenticated" >&2
             printf '%s\n' "Please run 'agy auth login' first." "no models available"
+            exit 0
+        fi
+        # Empty mode (D-07): exit 0 having written ZERO BYTES to stdout -- the
+        # shape a successful-but-unauthenticated/degraded `agy models` call
+        # takes in the wild. This deliberately looks like the rule
+        # _fake_fixture enforces above (never fall through to printing
+        # nothing) but is not a violation of it: here the emptiness IS the
+        # scenario under test, requested explicitly by this env var and
+        # short-circuiting before any fixture resolution runs, so it can
+        # never be confused with a fixture-resolution bug. FAKE_AGY_STDERR is
+        # honored here too, via the same guarded one-liner as the delegation
+        # sites below (:238, :293): the bridge's zero-byte-fetch exit happens
+        # during model discovery, before any delegation ever runs, so this is
+        # the only place that can put agy's own stderr on that code path.
+        if [[ -n "${FAKE_AGY_MODELS_EMPTY:-}" ]]; then
+            [[ -n "${FAKE_AGY_STDERR:-}" ]] && printf '%s' "$FAKE_AGY_STDERR" >&2
             exit 0
         fi
         # Real agy emits "id<TAB>display name" per line (header goes to
