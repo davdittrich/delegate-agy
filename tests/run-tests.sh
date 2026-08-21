@@ -3915,6 +3915,141 @@ else
     bad "I12 one-liner rejects non-matching/nonexistent resolved path" "ok=$I12_OK"
 fi
 
+# _md_extract FILE -> the fallback block's own source on stdout, anchored at
+# BOTH ends on the block's own text -- start on the line beginning
+# `RESOLVED="$(claude plugin list`, end on a line that is exactly `esac` --
+# never a fenced-block index (agy-setup.md carries 6 fenced bash blocks,
+# agy-uninstall.md carries 4, and only one in each is the hazard block).
+# Mirrors _rb_extract's anchored-at-both-ends discipline (tests/run-tests.sh
+# _rb_extract, above) so a doc edit can reorder blocks without desyncing the
+# test (D-04).
+_md_extract() {
+    sed -n '/^RESOLVED="\$(claude plugin list/,/^esac$/p' "$1"
+}
+
+# _md_fallback_case DOC_FILE SCRIPT_NAME CASE_ID LABEL -- the whole
+# four-behavior body (Tests 1-4 from this plan's <behavior> block) written
+# ONCE and parameterized over the doc file and the resolved script name, so
+# I21 (agy-setup.md/install.sh) and I21b (agy-uninstall.md/uninstall.sh)
+# share one assertion body rather than drifting apart as two copies -- the
+# same reason _rb_extract exists as a single shared helper. Builds its own
+# mktemp -d sandbox, runs the extracted block three times against three
+# fixtures under bash -euo pipefail -c with a stub `claude` on PATH, and
+# reports exactly one ok/bad under CASE_ID.
+_md_fallback_case() {
+    local doc="$1" script="$2" id="$3" label="$4"
+    local sbox stubdir marker_dir first_path _MD_BLOCK
+    local _MD_OK=1 _MD_DETAIL=""
+
+    sbox="$(mktemp -d "$SANDBOX/mdcase.XXXXXX")"
+    stubdir="$sbox/bin"
+    marker_dir="$sbox/agy-delegate/1.6.2/scripts"
+    mkdir -p "$stubdir" "$marker_dir"
+
+    # Fake `claude`: the block invokes `claude plugin list --json`; the stub
+    # just cats whatever payload the driver points CLAUDE_STUB_PAYLOAD at,
+    # matching this suite's established inline-fake convention (I9b's
+    # `tokensave` fake).
+    printf '#!/bin/sh\ncat "$CLAUDE_STUB_PAYLOAD"\n' > "$stubdir/claude"
+    chmod +x "$stubdir/claude"
+
+    first_path="$sbox/agy-delegate/1.6.2"
+
+    # Marker: an executable SCRIPT_NAME printing a unique token AND its own
+    # $0, so Test 3's byte-identity comparison actually compares the
+    # RESOLVED path the block executed, not just a constant token.
+    printf '#!/bin/sh\necho "MD_TOKEN_%s"\necho "$0"\n' "$id" > "$marker_dir/$script"
+    chmod +x "$marker_dir/$script"
+
+    _MD_BLOCK="$sbox/block.sh"
+    _md_extract "$doc" > "$_MD_BLOCK"
+    if [[ ! -s "$_MD_BLOCK" ]]; then
+        bad "$id $label" "empty extraction from $doc"
+        return
+    fi
+
+    # Fixture 1: oversized multi-match reply. Producer output (what python3
+    # writes, not JSON input bytes) must clear the measured 65536-byte pipe
+    # capacity (M1) by a wide margin -- 4200 filler entries, over-provisioned
+    # against M3's measured threshold so a doc-text change cannot shrink the
+    # margin back under it unnoticed.
+    local _MD_PAYLOAD_BIG="$sbox/big.json" _md_i
+    {
+        printf '[{"id":"agy-delegate@marketplace","installPath":"%s"}' "$first_path"
+        for ((_md_i = 0; _md_i < 4200; _md_i++)); do
+            printf ',{"id":"agy-delegate@marketplace","installPath":"%s-filler-%06d"}' \
+                "$first_path" "$_md_i"
+        done
+        printf ',{"id":"other-plugin@marketplace","installPath":"/some/other/path"}]'
+    } > "$_MD_PAYLOAD_BIG"
+
+    # Fixture 2: single-match reply, same first installPath as fixture 1 --
+    # Test 3's parity fixture.
+    local _MD_PAYLOAD_SINGLE="$sbox/single.json"
+    printf '[{"id":"agy-delegate@marketplace","installPath":"%s"}]' "$first_path" \
+        > "$_MD_PAYLOAD_SINGLE"
+
+    # Fixture 3: zero-match reply -- no agy-delegate@ entry at all.
+    local _MD_PAYLOAD_ZERO="$sbox/zero.json"
+    printf '[{"id":"other-plugin@marketplace","installPath":"/some/other/path"}]' \
+        > "$_MD_PAYLOAD_ZERO"
+
+    # Test 1+2 (one run): the oversized reply must reach the validating case
+    # AND actually resolve+exec the marker -- the tracer's end-to-end proof,
+    # not just an exit-code check. No trailing pipeline after the command
+    # substitution, so the block's own exit status is never replaced by a
+    # downstream filter's.
+    local _MD_OUT _MD_RC
+    _MD_OUT="$(CLAUDE_STUB_PAYLOAD="$_MD_PAYLOAD_BIG" PATH="$stubdir:$PATH" \
+        bash -euo pipefail -c "$(cat "$_MD_BLOCK")" 2>&1)"
+    _MD_RC=$?
+    if [[ "$_MD_RC" -ne 0 ]]; then
+        _MD_OK=0; _MD_DETAIL="$_MD_DETAIL test1:rc=$_MD_RC"
+    fi
+    if [[ "$_MD_OUT" != *"MD_TOKEN_$id"* || "$_MD_OUT" != *"$marker_dir/$script"* ]]; then
+        _MD_OK=0; _MD_DETAIL="$_MD_DETAIL test1-2:not_resolved_or_not_exec"
+    fi
+
+    # Test 3: single-match parity -- byte-identical stdout to Test 1+2's,
+    # because the marker prints its own resolved path, this compares the
+    # RESOLVED path, not just a constant.
+    local _MD_OUT3
+    _MD_OUT3="$(CLAUDE_STUB_PAYLOAD="$_MD_PAYLOAD_SINGLE" PATH="$stubdir:$PATH" \
+        bash -euo pipefail -c "$(cat "$_MD_BLOCK")" 2>&1)"
+    if [[ "$_MD_OUT3" != "$_MD_OUT" ]]; then
+        _MD_OK=0; _MD_DETAIL="$_MD_DETAIL test3:mismatch got=${_MD_OUT3:0:120}"
+    fi
+
+    # Test 4: zero-match -> empty resolved prefix, an ERROR: arm, rc 0, and
+    # -- the gate that fails an index-[0] rewrite (M5) -- no Python traceback.
+    local _MD_OUT4 _MD_RC4
+    _MD_OUT4="$(CLAUDE_STUB_PAYLOAD="$_MD_PAYLOAD_ZERO" PATH="$stubdir:$PATH" \
+        bash -euo pipefail -c "$(cat "$_MD_BLOCK")" 2>&1)"
+    _MD_RC4=$?
+    if [[ "$_MD_RC4" -ne 0 ]]; then
+        _MD_OK=0; _MD_DETAIL="$_MD_DETAIL test4:rc=$_MD_RC4"
+    fi
+    if [[ "$_MD_OUT4" != *"ERROR:"* ]]; then
+        _MD_OK=0; _MD_DETAIL="$_MD_DETAIL test4:no_error_arm out=${_MD_OUT4:0:200}"
+    fi
+    if [[ "$_MD_OUT4" == *"Traceback"* || "$_MD_OUT4" == *"IndexError"* || "$_MD_OUT4" == *"StopIteration"* ]]; then
+        _MD_OK=0; _MD_DETAIL="$_MD_DETAIL test4:traceback out=${_MD_OUT4:0:300}"
+    fi
+
+    if [[ "$_MD_OK" -eq 1 ]]; then
+        ok "$id $label"
+    else
+        bad "$id $label" "$_MD_DETAIL"
+    fi
+}
+
+# I21: agy-setup.md's fallback block resolves and execs the installPath
+# in-producer -- no truncating consumer stage -- surviving an oversized
+# multi-match registry reply (Tests 1+2, the tracer), a single-match parity
+# check (Test 3), and a zero-match reply with no traceback (Test 4).
+_md_fallback_case "$ROOT/.claude/commands/agy-setup.md" "install.sh" "I21" \
+    "agy-setup.md fallback block survives an oversized reply and reaches its case"
+
 # I13: uninstall reverses install (wrappers gone, shadowed original restored).
 IH="$(_fresh_home)"
 printf '#!/bin/sh\necho original gemini\n' > "$IH/.local/bin/gemini"; chmod +x "$IH/.local/bin/gemini"
