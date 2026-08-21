@@ -4,16 +4,16 @@ milestone: v1.6.2
 current_phase: 06
 current_phase_name: Ship 1.6.2
 status: executing
-stopped_at: Phase 6 context gathered
-last_updated: "2026-08-21T22:12:21.872Z"
+stopped_at: Completed 06-01-PLAN.md
+last_updated: "2026-08-21T23:10:04.000Z"
 last_activity: 2026-08-21
-last_activity_desc: Phase 05 complete, transitioned to Phase 6
-state_head: 025a65a47b2cda669b4f038b512ff6c17c0677f9
+last_activity_desc: 06-01 complete — RB30 trap-restore window fix (delegate-agy-sup / D-08)
+state_head: d887a8f
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 29
-  completed_plans: 23
+  completed_plans: 24
 milestone_name: milestone
 ---
 
@@ -28,18 +28,18 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 
 ## Current Position
 
-Phase: 06 (Ship 1.6.2) — READY TO EXECUTE
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-08-21 — Phase 05 complete, transitioned to Phase 6
+Phase: 06 (Ship 1.6.2) — EXECUTING
+Plan: 06-01 complete (RB30 trap-restore window fix)
+Status: Executing — 5 of 6 plans remaining
+Last activity: 2026-08-21 — 06-01 complete
 
-Progress: [████████████████████] 23/23 plans overall (Phase 05 complete: 2/2 plans)
+Progress: [████████████████████] 24/29 plans overall (Phase 06: 1/6 plans)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 15
+- Total plans completed: 16
 - Average duration: —
 - Total execution time: —
 
@@ -50,6 +50,7 @@ Progress: [████████████████████] 23/23 p
 | 01.5 | 6 | - | - |
 | 04 | 3 | - | - |
 | 05 | 2 | - | - |
+| 06 | 1 | 35min | 35min |
 
 **Recent Trend:**
 
@@ -82,6 +83,7 @@ Progress: [████████████████████] 23/23 p
 | Phase 04 P03 | 41min | 3 tasks | 4 files |
 | Phase 05 P01 | 68min | 2 tasks | 2 files |
 | Phase 05 P02 | 55m | 3 tasks | 3 files |
+| Phase 06 P01 | 35min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -120,6 +122,9 @@ Recent decisions affecting current work:
 - [Phase 05]: S3 left open: plan's own Multi-Source Coverage Audit states S3 closed in 05-02 T3; requirements mark-complete was not run for S3 in this plan's state update
 - [Phase 05]: FM01 NAME:SH9 anchor named _FM_ANCHOR_NAME (matching the _FM_PAIRS key), not _FM_ANCHOR_PASSTHRU as the plan's action text literally wrote — required by the existing per-pair anchor-lookup convention
 - [Phase 05]: Both new divergence-reason rows (exit-2, model-name-rejected) restated to reuse the plan's canonical D-03 rationale (shim shadows PATH for every caller; bridge is explicit/watched) instead of a locally-invented reason
+- [Phase 06]: 06-01: RB30 forces the D-08 trap-restore window deterministically by shadowing `_rb_cancel_timer` (guard-then-kill-then-delegate) rather than re-running RB24's scheduler-timed race more times -- a timing-based case could stay green on the unfixed helper indefinitely
+- [Phase 06]: 06-01: Fix is a pure statement reorder -- move the watchdog arm's teardown `_rb_cancel_timer` call to after the trap restore -- applied byte-identically to all three copies (agy_bridge.sh, gemini_shim.sh, contract-check.sh); RB02 enforces the byte-identity mechanically
+- [Phase 06]: 06-01: delegate-agy-sup (D-08) and the `delegate-agy-tmm` epic stay open by design; per-plan bug-ticket closure is deferred to 06-06's release-gate dossier
 
 ### Pending Todos
 
@@ -150,6 +155,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-21T20:26:28.754Z
-Stopped at: Phase 6 context gathered
-Resume file: .planning/phases/06-ship-1-6-2/06-CONTEXT.md
+Last session: 2026-08-21T23:10:04.000Z
+Stopped at: Completed 06-01-PLAN.md
+Resume file: None

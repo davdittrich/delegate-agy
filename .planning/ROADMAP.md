@@ -248,12 +248,12 @@ Plans:
   3. A fresh `scripts/install.sh` run against merged `master` produces working `agy-bridge` and `gemini` launchers, and both suites pass on that tree.
   4. The release notes name each defect 1.6.2 closes and state plainly that every existing installation must re-run the installer, because the pin only points forward.
 
-**Plans**: 6 plans
+**Plans**: 1/6 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 06-01-PLAN.md — tracer: root-cause `RB24`'s trap-preservation flake, restoring the host's TERM/INT/HUP handlers before `run_bounded` tears down its timer, in all three copies of the block, proven by a deterministic forcing case (`RB30`) observed red before the fix
+- [x] 06-01-PLAN.md — tracer: root-cause `RB24`'s trap-preservation flake, restoring the host's TERM/INT/HUP handlers before `run_bounded` tears down its timer, in all three copies of the block, proven by a deterministic forcing case (`RB30`) observed red before the fix
 - [ ] 06-02-PLAN.md — close the two investigation tickets, recording the verified GEMINI.md policy isolation and the SIGTERM-alone contradiction as PROJECT.md Key Decisions rows
 
 **Wave 2** *(blocked on Wave 1 completion)*
@@ -289,7 +289,7 @@ Phases 1, 1.5, 3, and 4 have no dependencies on each other and may be planned or
 | 3. The exit-code contract | 4/4 | Complete    | 2026-08-21 |
 | 4. Installer and launcher surface | 3/3 | Complete    | 2026-08-21 |
 | 5. The shim's failure-mode contract | 2/2 | Complete    | 2026-08-21 |
-| 6. Ship 1.6.2 | 0/TBD | Not started | - |
+| 6. Ship 1.6.2 | 1/6 | In Progress|  |
 
 ## Requirement Coverage
 
