@@ -222,7 +222,7 @@ Plans:
   3. Every row where the shim and bridge differ states why in one line, and no row differs without a stated reason.
   4. An unrecognized model name still passes through to agy unchanged — the shim warns or degrades but never hard-rejects input it merely does not recognize.
 
-**Plans**: 1/2 plans executed
+**Plans**: 2/2 plans executed
 
 Plans:
 **Wave 1**
@@ -231,7 +231,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 05-02-PLAN.md — State every row where the two entry points diverge and why (hung agy's JSON arm, degraded model list, unrecognized model name), pin the shim's passthrough warning, close S3
+- [x] 05-02-PLAN.md — State every row where the two entry points diverge and why (hung agy's JSON arm, degraded model list, unrecognized model name), pin the shim's passthrough warning, close S3
 
 **Note**: each dependency settles one of the four failure modes this phase pins down. Phase 1.5 supplies the real-agy behavior the "hung agy" and "unparseable model list" rows are written against, so those rows describe what agy does rather than what it was assumed to do.
 
@@ -266,7 +266,7 @@ Phases 1, 1.5, 3, and 4 have no dependencies on each other and may be planned or
 | 2. Model-list handling, end to end | 3/2 | Complete    | 2026-08-20 |
 | 3. The exit-code contract | 4/4 | Complete    | 2026-08-21 |
 | 4. Installer and launcher surface | 3/3 | Complete    | 2026-08-21 |
-| 5. The shim's failure-mode contract | 1/2 | In Progress|  |
+| 5. The shim's failure-mode contract | 2/2 | In Progress|  |
 | 6. Ship 1.6.2 | 0/TBD | Not started | - |
 
 ## Requirement Coverage
