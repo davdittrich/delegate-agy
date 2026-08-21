@@ -42,3 +42,24 @@ Pruned entries from STATE.md. Recoverable but no longer loaded into agent contex
 ### Performance Metrics
 
 | 02 | 3 | - | - |
+
+## Pruned 2026-08-21 (phases 1-3, kept recent 3)
+
+### Decisions
+
+- [Phase 03]: 03-01: EC_KILL9_TAIL holds only the fixed variable-free tail ' -- possible OOM or external kill', not the whole sentence -- both output forms keep their existing, already-differing prefixes untouched
+- [Phase 03]: 03-01: _err_txt is computed once via $(cat "$STDERR_FILE" 2>/dev/null || true) immediately before the plain-text/JSON branch, guarded once via ${_err_txt:+...}, and is the single normalization point both output forms defer to -- the JSON path's open(sys.argv[5]).read() is deleted, not guarded
+- [Phase 03]: 03-01: the JSON path's error string is now trailing-newline-stripped (decided behavior change, not a bug fix) -- text\n\n now yields ': text', matching the plain-text arm's pre-existing $(cat ...) behavior
+- [Phase 03]: [Phase 03]: 03-02: the shim's EC_KILL9_TAIL mirrors the bridge's literal exactly (not just equivalent wording) so EC03's cross-script comparison is a meaningful byte-identity check, not two independently-written expected strings
+- [Phase 03]: [Phase 03]: 03-02: EC05's mutation-red proof (T-03-08) is a manual, git-status-tracked verification of the real file during task execution, not a permanent self-mutating suite case -- matches RB03's own static-provenance shape
+- [Phase 03]: [Phase 03]: 03-03: README's exit-124 row quotes both timeout literals as bridge-text-vs-bridge-JSON divergence, not bridge-vs-shim -- the two entry points' TEXT forms are byte-identical
+- [Phase 03]: [Phase 03]: 03-03: D-09 exit-2 consistency pass found zero inconsistencies among 25 call sites in agy_bridge.sh; delegate-agy-b7g recorded with explicit left-for-another-phase disposition, no production change
+- [Phase 03]: [Phase 03]: 03-04: EC07's cause-fragment exclusivity check is scoped to the bridge's four captured messages (137/124/3/2), not all seven runtime invocations -- the bridge is the only entry point that reaches all four codes
+- [Phase 03]: [Phase 03]: 03-04: exit 127 is cited via four source assertions (not two) -- the two Codex-named -eq127 exactness pins plus two more pinning the negative half (-z OUT_STALE / -z RB29_SOUT) that must_haves separately require
+- [Phase 03]: [Phase 03]: 03-04: EC07's four self-referential grep patterns use escaped ERE metacharacters so the grep invocation's own source line can never satisfy the pattern it searches for -- verified empirically via an empty detail string
+- [Phase 03]: [Phase 03]: 03-04: EC07/EC08 were written in one Edit pass then split into two commits by temporarily removing and re-inserting the EC08 block, preserving per-task bd-id traceability without any destructive git operation
+- [Phase 03]: [Phase 03]: 03-04: R5's REQUIREMENTS.md row is closed met but names the integer-second SECONDS-precision ceiling (edge:R5/precision) as a stated residue rather than an implied closure
+
+### Performance Metrics
+
+| 03 | 4 | - | - |
