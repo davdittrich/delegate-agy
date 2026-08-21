@@ -24,8 +24,9 @@ Find the plugin's install path, then run its uninstaller. Both steps print a
 path you can read before anything executes:
 
 ```bash
-grep -A6 '"agy-delegate@' ~/.claude/plugins/installed_plugins.json \
-  | sed -n 's/.*"installPath"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1
+AGY_PATH="$(grep -A6 '"agy-delegate@' ~/.claude/plugins/installed_plugins.json \
+  | sed -n 's/.*"installPath"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
+echo "$AGY_PATH"
 ```
 
 That prints something like
@@ -33,7 +34,7 @@ That prints something like
 looks right, then run:
 
 ```bash
-bash <that-path>/scripts/uninstall.sh
+bash "$AGY_PATH/scripts/uninstall.sh"
 ```
 
 If the registry file is missing (older Claude Code, or a non-standard config
@@ -68,9 +69,9 @@ bash "$RESOLVED"
 Prepend `AGY_UNINSTALL_TOKENSAVE=1`:
 
 ```bash
-AGY_UNINSTALL_TOKENSAVE=1 bash <that-path>/scripts/uninstall.sh
+AGY_UNINSTALL_TOKENSAVE=1 bash "$AGY_PATH/scripts/uninstall.sh"
 ```
 
-(`<that-path>` is the uninstall path you printed above; if you used the CLI
-fallback, replace `<that-path>/scripts/uninstall.sh` with `"$RESOLVED"` —
-e.g. `AGY_UNINSTALL_TOKENSAVE=1 bash "$RESOLVED"`.)
+(`$AGY_PATH` is the variable set in step 1 above; if you used the CLI
+fallback instead, replace `$AGY_PATH/scripts/uninstall.sh` with
+`"$RESOLVED"` — e.g. `AGY_UNINSTALL_TOKENSAVE=1 bash "$RESOLVED"`.)

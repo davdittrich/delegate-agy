@@ -4237,6 +4237,34 @@ _md_fallback_case "$ROOT/.claude/commands/agy-setup.md" "install.sh" "I21" \
 _md_fallback_case "$ROOT/.claude/commands/agy-uninstall.md" "uninstall.sh" "I21b" \
     "agy-uninstall.md fallback block requires an explicit second step to exec, never auto-execs a hostile reply"
 
+# I22: neither doc contains the bare <that-path> placeholder as a `bash`
+# argument anymore (WR-02) -- a plain negative grep over pure doc text, no
+# sandbox/exec needed. Each doc declares its own $AGY_PATH (not shared, two
+# separate shell sessions) and actually uses it to run something, not just
+# declares it.
+I22_OK=1
+I22_DETAIL=""
+for I22_DOC in "$ROOT/.claude/commands/agy-setup.md" "$ROOT/.claude/commands/agy-uninstall.md"; do
+    I22_PLACEHOLDER_COUNT="$(grep -c '<that-path>' "$I22_DOC")"
+    I22_DECL_COUNT="$(grep -c 'AGY_PATH=' "$I22_DOC")"
+    I22_USE_COUNT="$(grep -c 'bash "\$AGY_PATH' "$I22_DOC")"
+    if [[ "$I22_PLACEHOLDER_COUNT" -ne 0 ]]; then
+        I22_OK=0; I22_DETAIL="$I22_DETAIL $I22_DOC:placeholder=$I22_PLACEHOLDER_COUNT"
+    fi
+    if [[ "$I22_DECL_COUNT" -lt 1 ]]; then
+        I22_OK=0; I22_DETAIL="$I22_DETAIL $I22_DOC:decl=$I22_DECL_COUNT"
+    fi
+    if [[ "$I22_USE_COUNT" -lt 1 ]]; then
+        I22_OK=0; I22_DETAIL="$I22_DETAIL $I22_DOC:use=$I22_USE_COUNT"
+    fi
+done
+if [[ "$I22_OK" -eq 1 ]]; then
+    ok "I22 neither doc contains the <that-path> placeholder; each declares and uses its own \$AGY_PATH"
+else
+    bad "I22 neither doc contains the <that-path> placeholder; each declares and uses its own \$AGY_PATH" \
+        "$I22_DETAIL"
+fi
+
 # I13: uninstall reverses install (wrappers gone, shadowed original restored).
 IH="$(_fresh_home)"
 printf '#!/bin/sh\necho original gemini\n' > "$IH/.local/bin/gemini"; chmod +x "$IH/.local/bin/gemini"
