@@ -2760,6 +2760,42 @@ _fm_row="$(printf '%s\n' "$_FM_TABLE" | grep -F "$_FM_ANCHOR_HANG" | head -1)"
 [[ "$_fm_row" == *"because"* || "$_fm_row" == *"identical"* ]] \
     || { FM01_OK=0; FM01_DETAIL="$FM01_DETAIL readme:hang_missing_reason"; }
 
+# The unparseable/degraded model-list row (delegate-agy-rod.4, CONTEXT D-01):
+# exit-2 hard fail in the bridge (EC06) versus a silent degrade gate in the
+# shim (SH14), same table-scoped window and same three row checks.
+_FM_ANCHOR_LIST="agy model list contains no 'gemini-' ids; agy may be unauthenticated"
+
+_fm_list_rows="$(printf '%s\n' "$_FM_TABLE" | grep -cF "$_FM_ANCHOR_LIST")" || _fm_list_rows=0
+[[ "$_fm_list_rows" -eq 1 ]] || { FM01_OK=0; FM01_DETAIL="$FM01_DETAIL readme:list_rows_${_fm_list_rows}"; }
+
+_fm_row="$(printf '%s\n' "$_FM_TABLE" | grep -F "$_FM_ANCHOR_LIST" | head -1)"
+[[ "$_fm_row" == *"agy-bridge"* ]] \
+    || { FM01_OK=0; FM01_DETAIL="$FM01_DETAIL readme:list_missing_bridge_name"; }
+[[ "$_fm_row" == *"gemini"* ]] \
+    || { FM01_OK=0; FM01_DETAIL="$FM01_DETAIL readme:list_missing_shim_name"; }
+[[ "$_fm_row" == *"because"* || "$_fm_row" == *"identical"* ]] \
+    || { FM01_OK=0; FM01_DETAIL="$FM01_DETAIL readme:list_missing_reason"; }
+
+# The unrecognized-model-name row (delegate-agy-rod.4, CONTEXT D-01): the
+# bridge validates upfront and exits 2 before agy ever runs; the shim passes
+# an unresolved name through unchanged (SH9), pinned against the shim's own
+# warning literal below, same table-scoped window and same three row checks.
+_FM_ANCHOR_NAME="did not resolve against the agy model list; passing it through unchanged"
+
+grep -qF "$_FM_ANCHOR_NAME" "$SHIM" \
+    || { FM01_OK=0; FM01_DETAIL="$FM01_DETAIL shim:name_literal_missing"; }
+
+_fm_name_rows="$(printf '%s\n' "$_FM_TABLE" | grep -cF "$_FM_ANCHOR_NAME")" || _fm_name_rows=0
+[[ "$_fm_name_rows" -eq 1 ]] || { FM01_OK=0; FM01_DETAIL="$FM01_DETAIL readme:name_rows_${_fm_name_rows}"; }
+
+_fm_row="$(printf '%s\n' "$_FM_TABLE" | grep -F "$_FM_ANCHOR_NAME" | head -1)"
+[[ "$_fm_row" == *"agy-bridge"* ]] \
+    || { FM01_OK=0; FM01_DETAIL="$FM01_DETAIL readme:name_missing_bridge_name"; }
+[[ "$_fm_row" == *"gemini"* ]] \
+    || { FM01_OK=0; FM01_DETAIL="$FM01_DETAIL readme:name_missing_shim_name"; }
+[[ "$_fm_row" == *"because"* || "$_fm_row" == *"identical"* ]] \
+    || { FM01_OK=0; FM01_DETAIL="$FM01_DETAIL readme:name_missing_reason"; }
+
 # Row-to-proof mapping is DATA, not a comment: deleting a row, deleting its
 # proof's ok/bad label, or deleting the pair entry itself each fail this case
 # instead of silently unbinding a claim from its evidence. Ceiling, stated
@@ -2770,10 +2806,10 @@ _fm_row="$(printf '%s\n' "$_FM_TABLE" | grep -F "$_FM_ANCHOR_HANG" | head -1)"
 # themselves (RB02, RB03, EC06, SH14, SH9, I16), each of which already
 # asserts its own literal, and by 05-02 Task 3's human read-through.
 _FM_SELF="$HERE/run-tests.sh"
-_FM_PAIRS=(DEP:RB03 DEP:RB02 PIN:I16 HANG:EC06)  # count: 4 after 05-02 Task 1; Task 2 adds LIST:SH14, LIST:EC06, NAME:SH9 -> 7
+_FM_PAIRS=(DEP:RB03 DEP:RB02 PIN:I16 HANG:EC06 LIST:SH14 LIST:EC06 NAME:SH9)  # count: 7, phase 05 complete
 
 _fm_pairs_n="${#_FM_PAIRS[@]}"
-[[ "$_fm_pairs_n" -eq 4 ]] || { FM01_OK=0; FM01_DETAIL="$FM01_DETAIL pairs:count_${_fm_pairs_n}"; }
+[[ "$_fm_pairs_n" -eq 7 ]] || { FM01_OK=0; FM01_DETAIL="$FM01_DETAIL pairs:count_${_fm_pairs_n}"; }
 
 for _fm_pair in "${_FM_PAIRS[@]}"; do
     _fm_key="${_fm_pair%%:*}"
