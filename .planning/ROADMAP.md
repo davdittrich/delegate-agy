@@ -186,14 +186,14 @@ Plans:
   2. An absent, truncated, or reshaped registry makes the launcher run silently rather than refuse, so a Claude Code schema change can never manufacture a false "superseded pin" and break `gemini` box-wide.
   3. The repin command printed on a real version mismatch is assembled from install-time literals plus a version matched against `^[0-9]+(\.[0-9]+)*$`; no registry-supplied string is ever printed as a command to run, and the exec target remains the install-time literal.
   4. `AGY_SETUP_PATCH_ALIASES=1` on a host with no `python3` ends in the same graceful state as every other python3-absent path in the installer, rather than hard-failing after the wrappers already exist on disk.
-  5. The documented CLI fallback one-liner reaches its validating `case` under `set -euo pipefail` instead of aborting on a SIGPIPE from `head`.
+  5. The documented CLI fallback one-liner reaches its validating `case` under `set -euo pipefail` instead of aborting when its truncating consumer closes the pipe early. *(Mechanism correction from Phase 4 planning: the observable is a CPython `BrokenPipeError` and exit **120**, not a delivered SIGPIPE and exit 141 — CPython sets `SIGPIPE` to `SIG_IGN`. The criterion's intent is unchanged; see 04-01-PLAN.md "Measured facts", M1-M4.)*
 
 **Plans**: 2 plans
 
 Plans:
 **Wave 1**
 
-- [ ] 04-01-PLAN.md — Sync the three post-revert files from the branch tip, then the tracer: the published fallback one-liner runs end to end under `set -euo pipefail` against a multi-match `claude` stub and reaches its validating `case` (D-05, D-04, D-03; `_md_extract`, I21, I21b)
+- [ ] 04-01-PLAN.md — Sync the three post-revert files from the branch tip, then the tracer: the published fallback one-liner runs end to end under `set -euo pipefail` against a `claude` stub whose reply exceeds the pipe capacity, and reaches its validating `case` (D-05, D-04, D-03; `_md_extract`, `_md_fallback_case`, I21, I21b)
 
 **Wave 2** *(blocked on Wave 1 completion — both plans edit `tests/run-tests.sh`)*
 
