@@ -2682,6 +2682,57 @@ else
         "detail=$EC06_DETAIL"
 fi
 
+echo "== README's failure-mode contract table pins entry-point names and literals (FM01) =="
+
+# FM01 (05-01-PLAN.md, ROADMAP S3): the Troubleshooting table is the only
+# account an operator who has never heard of agy gets of what a `gemini`
+# failure means. This case pins TABLE SHAPE only, never semantics: requiring a
+# row to contain `agy-bridge`, `gemini`, and either `because` or `identical`
+# proves a rationale clause is PRESENT, not that it is TRUE -- meaningless
+# prose satisfies it. The truth of each stated reason is judged by
+# 05-01-PLAN.md Task 1's <human-check> and by 05-02 Task 3's read-through,
+# never by grep.
+_FM_README="$ROOT/README.md"
+
+FM01_OK=1
+FM01_DETAIL=""
+
+# The window is table rows only: between the '## Troubleshooting' heading and
+# the '### Running the tests' heading that closes it, physical table lines
+# only ('grep ^|'). Counting inside the window rather than over the whole
+# file is what makes uniqueness satisfiable at all -- the missing-dependency
+# literal is deliberately repeated a second time in the fenced example at
+# README:308, and that copy must survive rather than be deleted to satisfy a
+# whole-file count.
+_FM_TABLE="$(sed -n '/^## Troubleshooting$/,/^### Running the tests$/p' "$_FM_README" | grep '^|')"
+if [[ -z "$_FM_TABLE" ]]; then
+    FM01_OK=0
+    FM01_DETAIL="$FM01_DETAIL readme:table_window_empty"
+fi
+
+_FM_ANCHOR_DEP='WARNING: timeout/gtimeout not found -- bounding agy with the bash watchdog fallback'
+
+_fm_dep_rows="$(printf '%s\n' "$_FM_TABLE" | grep -cF "$_FM_ANCHOR_DEP")" || _fm_dep_rows=0
+[[ "$_fm_dep_rows" -eq 1 ]] || { FM01_OK=0; FM01_DETAIL="$FM01_DETAIL readme:dep_rows_${_fm_dep_rows}"; }
+
+_fm_dep_total="$(grep -cF "$_FM_ANCHOR_DEP" "$_FM_README")" || _fm_dep_total=0
+[[ "$_fm_dep_total" -eq 2 ]] || { FM01_OK=0; FM01_DETAIL="$FM01_DETAIL readme:dep_total_${_fm_dep_total}"; }
+
+_fm_row="$(printf '%s\n' "$_FM_TABLE" | grep -F "$_FM_ANCHOR_DEP" | head -1)"
+[[ "$_fm_row" == *"agy-bridge"* ]] \
+    || { FM01_OK=0; FM01_DETAIL="$FM01_DETAIL readme:dep_missing_bridge_name"; }
+[[ "$_fm_row" == *"gemini"* ]] \
+    || { FM01_OK=0; FM01_DETAIL="$FM01_DETAIL readme:dep_missing_shim_name"; }
+[[ "$_fm_row" == *"because"* || "$_fm_row" == *"identical"* ]] \
+    || { FM01_OK=0; FM01_DETAIL="$FM01_DETAIL readme:dep_missing_reason"; }
+
+if [[ "$FM01_OK" -eq 1 ]]; then
+    ok "FM01 failure-mode contract table names both entry points per row and states sameness or a reason"
+else
+    bad "FM01 failure-mode contract table names both entry points per row and states sameness or a reason" \
+        "detail=$FM01_DETAIL"
+fi
+
 echo "== every documented exit code is defended by an exact assertion (EC07) =="
 
 # EC07 (delegate-agy-byv.9, R5 acceptance criterion 1, 03-04-PLAN.md): PROVOKES
