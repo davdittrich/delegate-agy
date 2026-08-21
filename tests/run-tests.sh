@@ -2726,6 +2726,58 @@ _fm_row="$(printf '%s\n' "$_FM_TABLE" | grep -F "$_FM_ANCHOR_DEP" | head -1)"
 [[ "$_fm_row" == *"because"* || "$_fm_row" == *"identical"* ]] \
     || { FM01_OK=0; FM01_DETAIL="$FM01_DETAIL readme:dep_missing_reason"; }
 
+# The superseded-pin row (delegate-agy-rod.2, CONTEXT D-02): pinned in both
+# directions against the installer, same table-scoped window and same three
+# row checks Task 1 established above.
+_FM_ANCHOR_PIN='is installed, but this launcher is pinned to'
+
+grep -qF "$_FM_ANCHOR_PIN" "$INSTALL" \
+    || { FM01_OK=0; FM01_DETAIL="$FM01_DETAIL install:pin_literal_missing"; }
+
+_fm_pin_rows="$(printf '%s\n' "$_FM_TABLE" | grep -cF "$_FM_ANCHOR_PIN")" || _fm_pin_rows=0
+[[ "$_fm_pin_rows" -eq 1 ]] || { FM01_OK=0; FM01_DETAIL="$FM01_DETAIL readme:pin_rows_${_fm_pin_rows}"; }
+
+_fm_row="$(printf '%s\n' "$_FM_TABLE" | grep -F "$_FM_ANCHOR_PIN" | head -1)"
+[[ "$_fm_row" == *"agy-bridge"* ]] \
+    || { FM01_OK=0; FM01_DETAIL="$FM01_DETAIL readme:pin_missing_bridge_name"; }
+[[ "$_fm_row" == *"gemini"* ]] \
+    || { FM01_OK=0; FM01_DETAIL="$FM01_DETAIL readme:pin_missing_shim_name"; }
+[[ "$_fm_row" == *"because"* || "$_fm_row" == *"identical"* ]] \
+    || { FM01_OK=0; FM01_DETAIL="$FM01_DETAIL readme:pin_missing_reason"; }
+
+# Row-to-proof mapping is DATA, not a comment: deleting a row, deleting its
+# proof's ok/bad label, or deleting the pair entry itself each fail this case
+# instead of silently unbinding a claim from its evidence. Ceiling, stated
+# rather than hidden: this proves each contract row is bound BY NAME to a
+# proof that still exists as a labelled test. It does NOT prove that test
+# still asserts what the README row claims -- a test can be gutted and keep
+# its label. Row-to-behaviour fidelity is carried by the per-proof tests
+# themselves (RB02, RB03, EC06, SH14, SH9, I16), each of which already
+# asserts its own literal, and by 05-02 Task 3's human read-through.
+_FM_SELF="$HERE/run-tests.sh"
+_FM_PAIRS=(DEP:RB03 DEP:RB02 PIN:I16)  # count: 3 at end of 05-01; 05-02 adds HANG:EC06, LIST:SH14, LIST:EC06, NAME:SH9 -> 7
+
+_fm_pairs_n="${#_FM_PAIRS[@]}"
+[[ "$_fm_pairs_n" -eq 3 ]] || { FM01_OK=0; FM01_DETAIL="$FM01_DETAIL pairs:count_${_fm_pairs_n}"; }
+
+for _fm_pair in "${_FM_PAIRS[@]}"; do
+    _fm_key="${_fm_pair%%:*}"
+    _fm_id="${_fm_pair##*:}"
+    # Quote-agnostic: every ok/bad call in the suite is double-quoted today
+    # (308 of them, zero single-quoted), but the character class survives a
+    # future style change at no cost. Matches the LABEL CALL, never a bare
+    # occurrence of the ID -- the _FM_PAIRS line above contains every ID as
+    # data and must not satisfy its own check; the ok/bad prefix is what
+    # excludes it.
+    grep -qE "^[[:space:]]*(ok|bad)[[:space:]]+[\"']${_fm_id}[[:space:]]" "$_FM_SELF" \
+        || { FM01_OK=0; FM01_DETAIL="$FM01_DETAIL proof:${_fm_id}_missing"; }
+    # The anchor key names an anchor variable this block actually defines, so
+    # a deleted row fails twice -- once on its own count, once through its pair.
+    _fm_anchor_var="_FM_ANCHOR_${_fm_key}"
+    [[ -n "${!_fm_anchor_var:-}" ]] \
+        || { FM01_OK=0; FM01_DETAIL="$FM01_DETAIL pairs:anchor_missing_${_fm_key}"; }
+done
+
 if [[ "$FM01_OK" -eq 1 ]]; then
     ok "FM01 failure-mode contract table names both entry points per row and states sameness or a reason"
 else
