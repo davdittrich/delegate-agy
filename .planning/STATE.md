@@ -4,16 +4,16 @@ milestone: v1.6.2
 current_phase: 06
 current_phase_name: Ship 1.6.2
 status: executing
-stopped_at: Completed 06-02-PLAN.md
-last_updated: "2026-08-21T23:19:06.000Z"
-last_activity: 2026-08-21
-last_activity_desc: 06-02 complete — xfa/i43 findings recorded and closed (D-02, D-03)
-state_head: bad56a9
+stopped_at: Completed 06-03-PLAN.md
+last_updated: "2026-08-21T23:58:28.221Z"
+last_activity: 2026-08-22
+last_activity_desc: 06-03 complete — D-04 (SH16, gemini_shim.sh flag-eating) and D-07 (R9f, agy_bridge.sh zero-byte fetch) fixed, EC06 regression fixed
+state_head: 406114ade090af01425296203f1915a2d88e4764
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 29
-  completed_plans: 25
+  completed_plans: 27
 milestone_name: milestone
 ---
 
@@ -29,11 +29,11 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 06 (Ship 1.6.2) — EXECUTING
-Plan: 06-02 complete (xfa/i43 findings recorded and closed)
-Status: Executing — 4 of 6 plans remaining
-Last activity: 2026-08-21 — 06-02 complete
+Plan: 06-03 complete (D-04 and D-07 fixed, test-first)
+Status: Executing — 3 of 6 plans remaining
+Last activity: 2026-08-22 — 06-03 complete
 
-Progress: [████████████████████] 25/29 plans overall (Phase 06: 2/6 plans)
+Progress: [████████████████████] 26/29 plans overall (Phase 06: 3/6 plans)
 
 ## Performance Metrics
 
@@ -85,6 +85,7 @@ Progress: [████████████████████] 25/29 p
 | Phase 05 P02 | 55m | 3 tasks | 3 files |
 | Phase 06 P01 | 35min | 2 tasks | 4 files |
 | Phase 06 P02 | 8min | 2 tasks | 1 file |
+| Phase 06 P03 | 50min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -127,6 +128,8 @@ Recent decisions affecting current work:
 - [Phase 06]: 06-01: Fix is a pure statement reorder -- move the watchdog arm's teardown `_rb_cancel_timer` call to after the trap restore -- applied byte-identically to all three copies (agy_bridge.sh, gemini_shim.sh, contract-check.sh); RB02 enforces the byte-identity mechanically
 - [Phase 06]: 06-01: delegate-agy-sup (D-08) and the `delegate-agy-tmm` epic stay open by design; per-plan bug-ticket closure is deferred to 06-06's release-gate dossier
 - [Phase 06]: 06-02: delegate-agy-xfa (gemini-md-binds isolation) and delegate-agy-i43 (sigterm-ignored contradiction) both closed against new PROJECT.md Key Decisions rows (D-02, D-03) rather than left open or silently dropped -- xfa verified good with a one-run caveat, i43 recorded as a genuine contradiction (agy died on SIGTERM alone, rc=124) with the `-k` escalation kept as defense-in-depth, not removed on one sample
+- [Phase 06]: [Phase 06]: 06-03: D-04's allowlist carve-out has zero members -- every value-taking gemini_shim.sh flag already has an explicit case arm before the catch-all, so the fix is a bare single shift, no allowlist array
+- [Phase 06]: [Phase 06]: 06-03: D-07 reuses R9's exact degraded-message text verbatim at the new zero-byte/no-cache bail rather than inventing a third message; fixed Phase 3's EC06 regression test (stale exactly-once literal count) rather than forking the text
 
 ### Pending Todos
 
@@ -157,6 +160,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-21T23:19:06.000Z
-Stopped at: Completed 06-02-PLAN.md
+Last session: 2026-08-21T23:58:28.172Z
+Stopped at: Completed 06-03-PLAN.md
 Resume file: None
