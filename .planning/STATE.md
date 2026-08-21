@@ -4,11 +4,11 @@ milestone: v1.6.2
 current_phase: 5
 current_phase_name: The shim's failure-mode contract
 status: planning
-stopped_at: Phase 04 complete, ready to plan Phase 5
-last_updated: "2026-08-21T14:59:34.058Z"
+stopped_at: Phase 5 context gathered
+last_updated: "2026-08-21T15:20:33.831Z"
 last_activity: 2026-08-21
 last_activity_desc: Phase 04 complete, transitioned to Phase 5
-state_head: 1e5626e2dc7693e03c939f80b52122a55fab2a3d
+state_head: 80fc84299df7a3c0899fdeea06204301f74e2c8a
 progress:
   total_phases: 7
   completed_phases: 5
@@ -24,7 +24,7 @@ milestone_name: milestone
 See: .planning/PROJECT.md (updated 2026-08-21)
 
 **Core value:** Delegation must never break the caller — the shim shadows `gemini` for every PATH caller, so a hang, crash, or silent empty-success here is not scoped to this plugin.
-**Current focus:** Phase 04 — Installer and launcher surface
+**Current focus:** Phase 5 — The shim's failure-mode contract
 
 ## Current Position
 
@@ -132,7 +132,6 @@ None yet.
 
 ### Blockers/Concerns
 
-- **Master's files no longer lag for the 5 conflicted files — 3 non-code files still do.** `master` merged 1.6.2 at `1a0051c`, content-reverted at `a001d0e` (8 files), then re-merged `fix/agy-bridge-resilience` at `54d4772` after Phase 2 closed the follow-ups the hold was waiting on — 5-file conflict (`README.md`, `scripts/agy_bridge.sh`, `scripts/install.sh`, `tests/fake-agy.sh`, `tests/run-tests.sh`) resolved in the branch's favor, diffed byte-identical against the branch tip, full suite clean post-merge (`PASS=145 FAIL=0`). `scripts/gemini_shim.sh` was never reverted (added after `a001d0e`) and is current too. Still stale: `.claude-plugin/plugin.json` (version reads `1.6.1`) and `.claude/commands/agy-setup.md`/`agy-uninstall.md` (describe the pre-fix flow) — these 3 fell outside the 5-file conflict, so the merge left them on `a001d0e`'s reverted content. Filed as `delegate-agy-k0f` (P3). Judge state by reading files, not the commit graph.
 - **The shim's blast radius is box-wide.** `~/.local/bin/gemini` shadows the real binary for interactive shells, Octopus, and Metaswarm. Weight any shim defect above an equivalent bridge defect.
 - **The per-run GEMINI.md policy may not be authoritative.** A probe from a throwaway CWD had agy answer that it found `GEMINI.md` in five unrelated projects, so agy discovers context outside its working directory. `agy_bridge.sh`'s per-type tool restriction assumes its own GEMINI.md binds. Not yet reproduced through the bridge, which also passes `--sandbox` and `--add-dir` (`delegate-agy-xfa`, P1, Phase 1.5).
 - **agy is live; the docs that said otherwise are corrected, the phases are not yet re-read.** Verified 2026-08-19 against agy 1.1.13: `--version` and `agy models` both return in seconds, and a real `--type review` delegation returned 4721 bytes. `agy --model` accepts BOTH ids and display names; a bogus name gives rc=1 with an `Available models:` list rendered in display names. PROJECT.md and ROADMAP.md are corrected and Phase 7 moved to Phase 1.5; `delegate-agy-9qp` stays open until Phase 1.5 lands the fixtures and the README statement. **Not established:** whether agy ignores SIGTERM -- every probe call returned on its own, so no bound fired and the `-k` rationale rests on its original observation, untested.
@@ -154,6 +153,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-21T14:39:29.021Z
-Stopped at: Phase 04 complete, ready to plan Phase 5
-Resume file: None
+Last session: 2026-08-21T15:20:33.791Z
+Stopped at: Phase 5 context gathered
+Resume file: .planning/phases/05-the-shim-s-failure-mode-contract/05-CONTEXT.md
