@@ -205,3 +205,7 @@ Phase 5 is now complete: `FM01` pins all five failure-mode contract rows (missin
 *Plan: 02*
 *Completed: 2026-08-21T19:13:55Z*
 *Status: PASSED*
+
+## Self-Check: PASSED
+
+All 4 modified/created files found on disk; all 8 commit hashes (`7f9a45a`, `255ee8a`, `8783b8f`, `49fa2c7`, `9560787`, `ced7305`, `870653a`, `7853f2b`) found in `git log --oneline --all`.
