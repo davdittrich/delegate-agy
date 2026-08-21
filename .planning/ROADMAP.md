@@ -251,11 +251,25 @@ Plans:
 **Plans**: 6 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 06-01-PLAN.md — tracer: root-cause `RB24`'s trap-preservation flake, restoring the host's TERM/INT/HUP handlers before `run_bounded` tears down its timer, in all three copies of the block, proven by a deterministic forcing case (`RB30`) observed red before the fix
 - [ ] 06-02-PLAN.md — close the two investigation tickets, recording the verified GEMINI.md policy isolation and the SIGTERM-alone contradiction as PROJECT.md Key Decisions rows
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 06-03-PLAN.md — the shim stops swallowing the token after an unrecognized long flag (`SH16`), and a zero-byte successful `agy models` with no cache reports the degraded diagnostic instead of the generic bail (`R9f`)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 06-04-PLAN.md — `RB01`'s unbounded-call scan widened to `tests/contract-check.sh` with that file restructured to scan clean, plus `IN02`, a cross-file guard over both model-list validators' herestring sites
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 06-05-PLAN.md — prove the `a001d0e` content revert undone by file contents rather than history, and finish the `### 1.6.2` release notes with one bullet per defect and the re-run-the-installer notice
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 06-06-PLAN.md — release gate: fresh install from a clean clone into a sandboxed home, both suites green, all eight tickets closed, four-criteria dossier assembled for sign-off
 
 **Note**: criterion 3's "both suites pass" gate covers `bash tests/run-tests.sh` and the installer suite, and is deliberately **not** widened to include `bash tests/contract-check.sh` (D-05). Making a release gate depend on a live third-party binary means an agy outage blocks a tag; the contract check's verdicts inform the release, they do not gate it.
