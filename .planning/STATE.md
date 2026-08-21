@@ -3,17 +3,17 @@ gsd_state_version: 1.0
 milestone: v1.6.2
 current_phase: 04
 current_phase_name: Installer and launcher surface
-status: executing
-stopped_at: Completed 04-01-PLAN.md
-last_updated: "2026-08-21T12:33:33.601Z"
+status: verifying
+stopped_at: Completed 04-02-PLAN.md
+last_updated: "2026-08-21T13:09:30.679Z"
 last_activity: 2026-08-21
 last_activity_desc: Phase 04 execution started
-state_head: 268fb486b8459c1557367991c1a05dfedaca28bd
+state_head: 5747d380f7c8a86c647fb8fb072bebb0d01bad9e
 progress:
   total_phases: 7
   completed_phases: 4
   total_plans: 20
-  completed_plans: 19
+  completed_plans: 20
 milestone_name: milestone
 ---
 
@@ -28,12 +28,12 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 
 ## Current Position
 
-Phase: 04 (Installer and launcher surface) — EXECUTING
+Phase: 04 (Installer and launcher surface) — AWAITING VERIFICATION
 Plan: 2 of 2
-Status: Ready to execute
-Last activity: 2026-08-21 — Phase 04 execution started
+Status: Phase complete — ready for verification
+Last activity: 2026-08-21 — Phase 04 execution complete (plans 04-01, 04-02)
 
-Progress: [░░░░░░░░░░░░░░░░░░░░] 18/18 plans overall (Phase 3 complete: 4/4 plans; Phase 4 not yet planned)
+Progress: [████████████████████] 20/20 plans overall (Phase 4 complete: 2/2 plans)
 
 ## Performance Metrics
 
@@ -78,6 +78,7 @@ Progress: [░░░░░░░░░░░░░░░░░░░░] 18/18 p
 | Phase 03 P03 | ~1h10min | 3 tasks | 2 files |
 | Phase 03 P04 | 1h | 3 tasks | 2 files |
 | Phase 04 P01 | 27min | 3 tasks | 4 files |
+| Phase 04 P02 | 22min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -126,6 +127,9 @@ Recent decisions affecting current work:
 - [Phase 04]: 04-01: D-05 (sync) landed before D-03 (SIGPIPE fix) -- the branch tip carries the identical unfixed pipeline, so fixing first would have been silently overwritten by the sync
 - [Phase 04]: 04-01: D-03a locked next((<gen>), "") over an index-[0] rewrite -- measured (M5) that indexing raises IndexError and aborts under -e on a zero-match reply
 - [Phase 04]: 04-01: RED fixture sized >=131072 bytes of producer output (2x the measured 65536-byte pipe capacity) -- the plan's earlier 3-entry fixture was measured to pass 8/8 against the unfixed code and would have been vacuous
+- [Phase 04]: [Phase 04]: 04-02: D-06's HOME precondition is locked verbatim by the bead; inserted once per script immediately after refuse-root, exactly one added line each
+- [Phase 04]: [Phase 04]: 04-02: D-01's hoisted python3 guard resolves 04-RESEARCH.md's Open Question 1 -- the dependency check moves before the rc-alias loop, but the consent-flag read stays inside the loop per rc file, leaving the existing dry-run advisory untouched
+- [Phase 04]: [Phase 04]: 04-02: R8/S2 traceability rows cite I16/I17/I18 by case id only, never by line range -- this plan's own I19/I20/I20b insertions shifted those cases earlier in tests/run-tests.sh, so any range recorded before those insertions would already be stale
 
 ### Pending Todos
 
@@ -155,6 +159,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-21T12:33:33.566Z
-Stopped at: Completed 04-01-PLAN.md
+Last session: 2026-08-21T13:09:30.643Z
+Stopped at: Completed 04-02-PLAN.md
 Resume file: None

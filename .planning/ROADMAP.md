@@ -188,7 +188,7 @@ Plans:
   4. `AGY_SETUP_PATCH_ALIASES=1` on a host with no `python3` ends in the same graceful state as every other python3-absent path in the installer, rather than hard-failing after the wrappers already exist on disk.
   5. The documented CLI fallback one-liner reaches its validating `case` under `set -euo pipefail` instead of aborting when its truncating consumer closes the pipe early. *(Mechanism correction from Phase 4 planning: the observable is a CPython `BrokenPipeError` and exit **120**, not a delivered SIGPIPE and exit 141 — CPython sets `SIGPIPE` to `SIG_IGN`. The criterion's intent is unchanged; see 04-01-PLAN.md "Measured facts", M1-M4.)*
 
-**Plans**: 1/2 plans executed
+**Plans**: 2/2 plans executed
 
 Plans:
 **Wave 1**
@@ -197,7 +197,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion — both plans edit `tests/run-tests.sh`)*
 
-- [ ] 04-02-PLAN.md — State the HOME precondition in both installer scripts, guard the rc-alias patch's python3 dependency once per run, and close R8/S2 on I16/I17/I18's shipped evidence (D-06, D-01, D-02, D-07; I19, I20, I20b)
+- [x] 04-02-PLAN.md — State the HOME precondition in both installer scripts, guard the rc-alias patch's python3 dependency once per run, and close R8/S2 on I16/I17/I18's shipped evidence (D-06, D-01, D-02, D-07; I19, I20, I20b)
 
 **Note**: independent of Phases 1–3 — this phase owns `install.sh`, `uninstall.sh`, the generated wrapper, and the docs one-liner, none of which the other phases touch. `delegate-agy-lkg` (the "non-fatal live verify" running unbounded for up to `GEMINI_SHIM_TIMEOUT`) was written into this phase but is **already closed and fixed** — the `GEMINI_SHIM_TIMEOUT=20` prefix now sits at `install.sh:381`, confirmed by reading the current file during `/gsd:discuss-phase`. It is out of scope; do not reopen it (04-CONTEXT.md, Out of scope).
 
@@ -250,7 +250,7 @@ Phases 1, 1.5, 3, and 4 have no dependencies on each other and may be planned or
 | 1.5. Contract check against a real agy | 6/6 | Complete    | 2026-08-20 |
 | 2. Model-list handling, end to end | 3/2 | Complete    | 2026-08-20 |
 | 3. The exit-code contract | 4/4 | Complete    | 2026-08-21 |
-| 4. Installer and launcher surface | 1/2 | In Progress|  |
+| 4. Installer and launcher surface | 2/2 | In Progress|  |
 | 5. The shim's failure-mode contract | 0/TBD | Not started | - |
 | 6. Ship 1.6.2 | 0/TBD | Not started | - |
 
