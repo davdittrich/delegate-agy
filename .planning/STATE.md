@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.6.2
-current_phase: 04
-current_phase_name: Installer and launcher surface
-status: verifying
-stopped_at: Completed 04-03-PLAN.md
-last_updated: "2026-08-21T14:39:29.056Z"
+current_phase: 5
+current_phase_name: The shim's failure-mode contract
+status: planning
+stopped_at: Phase 04 complete, ready to plan Phase 5
+last_updated: "2026-08-21T14:59:34.058Z"
 last_activity: 2026-08-21
-last_activity_desc: Phase 04 gap-closure plan 04-03 executed (CR-01/CR-02/WR-01/WR-02/IN-01 closed)
-state_head: 37603681c0fa422ee3e6cbeb56a2eaef5f207c4a
+last_activity_desc: Phase 04 complete, transitioned to Phase 5
+state_head: 1e5626e2dc7693e03c939f80b52122a55fab2a3d
 progress:
   total_phases: 7
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 21
   completed_plans: 21
 milestone_name: milestone
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 
 ## Current Position
 
-Phase: 04 (Installer and launcher surface) — AWAITING VERIFICATION
-Plan: 3 of 3
-Status: Phase complete — ready for verification
-Last activity: 2026-08-21 — Phase 04 execution complete (plans 04-01, 04-02, 04-03). 04-03 is a gap-closure plan added after a deep code review of the shipped 04-01/04-02 work surfaced CR-01/CR-02/IN-01 (Critical/Info — CLI-fallback exec-before-review gap) and WR-01/WR-02 (Warning — python3-guard false positive, invalid `<that-path>` placeholder); all three beads (`delegate-agy-5r9.7/.8/.9`) closed.
+Phase: 5 — The shim's failure-mode contract
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-08-21 — Phase 04 complete, transitioned to Phase 5
 
 Progress: [████████████████████] 21/21 plans overall (Phase 4 complete: 3/3 plans)
 
@@ -39,7 +39,7 @@ Progress: [████████████████████] 21/21 p
 
 **Velocity:**
 
-- Total plans completed: 21
+- Total plans completed: 16
 - Average duration: —
 - Total execution time: —
 
@@ -48,8 +48,8 @@ Progress: [████████████████████] 21/21 p
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01.5 | 6 | - | - |
-| 02 | 3 | - | - |
 | 03 | 4 | - | - |
+| 04 | 3 | - | - |
 
 **Recent Trend:**
 
@@ -104,15 +104,6 @@ Recent decisions affecting current work:
 - [Phase ?]: 01-06: Runtime descendant cases capture into files, not command substitutions: each script's fd 9 is inherited by agy and its forks, so under a command substitution a failing descendant assertion blocks for the fake's full 300s instead of failing
 - [Phase ?]: 01-06: The forking fake ignores SIGHUP as well as SIGTERM: without it the pty session's hangup reaps the pair and the with-terminal descendant assertion passes while asserting nothing
 - [Phase ?]: 01-06: The PTY allocator's argv form is chosen by probing script --version, never by uname, with both flavour branches pinned on one host via a stubbed probe result
-- [Phase 02]: 02-01: D-03's write gate lives on the fetch-success branch only; the no-cache degraded path leaves `$_agy_models` untouched so the shipped criterion-3 check (now use-time, herestring form under D-08) is what reports the degraded-list message -- clearing it unconditionally would let the generic retrieval-failure fatal fire first and lose R8's distinct message
-- [Phase 02]: 02-01: D-08's herestring exception is scoped to exactly two sites in `agy_bridge.sh` (the new write-gate and the existing `:515`-era use-time check) -- a narrow, user-approved carve-out of D-01/D-02's closed-criteria boundary after Codex found the `printf | grep -q` pipe form shares the same SIGPIPE hazard class it was chosen to avoid (reproduced empirically, bash 5.3.15)
-- [Phase 02]: 02-01: D-07's stderr relay is relocated (one line moved to fire unconditionally after the whole fetch if/elif/else), not duplicated per branch -- folded into this plan's Task 2 rather than raised as a follow-up bd issue, closing the last open half of criterion 3 in this phase instead of a later one
-- [Phase 02]: 02-01: D-06's synthetic 3-column/trailing-tab fixture lives in a scratch `AGY_FIXTURES_DIR`, never in `tests/fixtures/agy-models.tsv` (D-14/D-14a's captured-vs-synthetic separation)
-- [Phase 02]: 02-01: S4 (`delegate-agy-8ph`) and S1 both stay "partial" in REQUIREMENTS.md, not "met" -- `8ph` explicitly forbids a one-sided fix, so both requirements close only after plan 02-02 mirrors the same gate/fallback into `gemini_shim.sh`
-- [Phase 02]: 02-02: the shim's write gate lives entirely inside `load_models()` -- a new `ids` local (cut -f1-normalized) gates the existing tmp-then-mv write; the D-04 fallback is one `elif [[ -s "$MODELS_CACHE" ]]; then raw=""; fi` on the same if, no new branch, no second cache read
-- [Phase 02]: 02-02: unlike the bridge, the shim adds no stderr line on the degraded-fallback path (D-05) -- this script shadows `gemini` on PATH, so a warning here would land in every Octopus/Metaswarm log line; the bridge's D-07 stderr-relocation gap does not apply here since `load_models()`'s fetch already redirects agy's own stderr to `2>/dev/null`
-- [Phase 02]: 02-02: D-08's herestring conversion touches exactly two sites in `gemini_shim.sh` -- the new write-gate and the existing `map_model` warning-gate check (formerly a `printf | grep -q` pipe) -- mirroring plan 02-01's identical, narrow D-01/D-02 exception on `agy_bridge.sh`; `map_model`'s verbatim-id and class-resolution matchers are untouched
-- [Phase 02]: 02-02: `delegate-agy-8ph` closed -- both writers of `~/.cache/agy-bridge-models` (`agy_bridge.sh` plan 02-01, `gemini_shim.sh` plan 02-02) now carry the write gate, the D-04 stale-cache fallback and atomic-write preservation; S1 and S4 both move to "met" in REQUIREMENTS.md. Suite PASS=141 FAIL=0.
 - [Phase 03]: 03-01: EC_KILL9_TAIL holds only the fixed variable-free tail ' -- possible OOM or external kill', not the whole sentence -- both output forms keep their existing, already-differing prefixes untouched
 - [Phase 03]: 03-01: _err_txt is computed once via $(cat "$STDERR_FILE" 2>/dev/null || true) immediately before the plain-text/JSON branch, guarded once via ${_err_txt:+...}, and is the single normalization point both output forms defer to -- the JSON path's open(sys.argv[5]).read() is deleted, not guarded
 - [Phase 03]: 03-01: the JSON path's error string is now trailing-newline-stripped (decided behavior change, not a bug fix) -- text\n\n now yields ': text', matching the plain-text arm's pre-existing $(cat ...) behavior
@@ -164,5 +155,5 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-08-21T14:39:29.021Z
-Stopped at: Completed 04-03-PLAN.md
+Stopped at: Phase 04 complete, ready to plan Phase 5
 Resume file: None

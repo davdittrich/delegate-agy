@@ -23,7 +23,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1.5: Contract check against a real agy** (INSERTED 2026-08-19, was Phase 7) - Ask the real binary which assumptions hold and record the answers as fixtures the later phases build on (completed 2026-08-20)
 - [x] **Phase 2: Model-list handling, end to end** - No crash on a bare environment, no poisoned shared cache, no misattributed blame for a degraded agy (completed 2026-08-20)
 - [x] **Phase 3: The exit-code contract** - Every documented code reachable, distinct, and quoted in the docs as the code actually prints it (completed 2026-08-21)
-- [ ] **Phase 4: Installer and launcher surface** - Registry read stays comparison-only; no install path aborts halfway
+- [x] **Phase 4: Installer and launcher surface** - Registry read stays comparison-only; no install path aborts halfway (completed 2026-08-21)
 - [ ] **Phase 5: The shim's failure-mode contract** - One table stating what `gemini` does to a caller that never heard of agy, one test per row
 - [ ] **Phase 6: Ship 1.6.2** - The held release lands on master with every follow-up it surfaced already closed
 
@@ -256,7 +256,7 @@ Phases 1, 1.5, 3, and 4 have no dependencies on each other and may be planned or
 | 1.5. Contract check against a real agy | 6/6 | Complete    | 2026-08-20 |
 | 2. Model-list handling, end to end | 3/2 | Complete    | 2026-08-20 |
 | 3. The exit-code contract | 4/4 | Complete    | 2026-08-21 |
-| 4. Installer and launcher surface | 3/3 | In Progress|  |
+| 4. Installer and launcher surface | 3/3 | Complete    | 2026-08-21 |
 | 5. The shim's failure-mode contract | 0/TBD | Not started | - |
 | 6. Ship 1.6.2 | 0/TBD | Not started | - |
 
