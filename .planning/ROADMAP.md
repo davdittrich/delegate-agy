@@ -188,12 +188,12 @@ Plans:
   4. `AGY_SETUP_PATCH_ALIASES=1` on a host with no `python3` ends in the same graceful state as every other python3-absent path in the installer, rather than hard-failing after the wrappers already exist on disk.
   5. The documented CLI fallback one-liner reaches its validating `case` under `set -euo pipefail` instead of aborting when its truncating consumer closes the pipe early. *(Mechanism correction from Phase 4 planning: the observable is a CPython `BrokenPipeError` and exit **120**, not a delivered SIGPIPE and exit 141 — CPython sets `SIGPIPE` to `SIG_IGN`. The criterion's intent is unchanged; see 04-01-PLAN.md "Measured facts", M1-M4.)*
 
-**Plans**: 2 plans
+**Plans**: 1/2 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 04-01-PLAN.md — Sync the three post-revert files from the branch tip, then the tracer: the published fallback one-liner runs end to end under `set -euo pipefail` against a `claude` stub whose reply exceeds the pipe capacity, and reaches its validating `case` (D-05, D-04, D-03; `_md_extract`, `_md_fallback_case`, I21, I21b)
+- [x] 04-01-PLAN.md — Sync the three post-revert files from the branch tip, then the tracer: the published fallback one-liner runs end to end under `set -euo pipefail` against a `claude` stub whose reply exceeds the pipe capacity, and reaches its validating `case` (D-05, D-04, D-03; `_md_extract`, `_md_fallback_case`, I21, I21b)
 
 **Wave 2** *(blocked on Wave 1 completion — both plans edit `tests/run-tests.sh`)*
 
@@ -250,7 +250,7 @@ Phases 1, 1.5, 3, and 4 have no dependencies on each other and may be planned or
 | 1.5. Contract check against a real agy | 6/6 | Complete    | 2026-08-20 |
 | 2. Model-list handling, end to end | 3/2 | Complete    | 2026-08-20 |
 | 3. The exit-code contract | 4/4 | Complete    | 2026-08-21 |
-| 4. Installer and launcher surface | 0/2 | Planned | - |
+| 4. Installer and launcher surface | 1/2 | In Progress|  |
 | 5. The shim's failure-mode contract | 0/TBD | Not started | - |
 | 6. Ship 1.6.2 | 0/TBD | Not started | - |
 

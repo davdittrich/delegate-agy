@@ -4,16 +4,16 @@ milestone: v1.6.2
 current_phase: 04
 current_phase_name: Installer and launcher surface
 status: executing
-stopped_at: Phase 04 context gathered
-last_updated: "2026-08-21T11:49:34.317Z"
+stopped_at: Completed 04-01-PLAN.md
+last_updated: "2026-08-21T12:33:33.601Z"
 last_activity: 2026-08-21
-last_activity_desc: Phase 03 complete, transitioned to Phase 4
-state_head: 35b2a0acba3d2b8b1ae097923ebbc56fbea51831
+last_activity_desc: Phase 04 execution started
+state_head: 268fb486b8459c1557367991c1a05dfedaca28bd
 progress:
   total_phases: 7
   completed_phases: 4
   total_plans: 20
-  completed_plans: 18
+  completed_plans: 19
 milestone_name: milestone
 ---
 
@@ -24,14 +24,14 @@ milestone_name: milestone
 See: .planning/PROJECT.md (updated 2026-08-21)
 
 **Core value:** Delegation must never break the caller — the shim shadows `gemini` for every PATH caller, so a hang, crash, or silent empty-success here is not scoped to this plugin.
-**Current focus:** Phase 4 — Installer and launcher surface
+**Current focus:** Phase 04 — Installer and launcher surface
 
 ## Current Position
 
-Phase: 04 (Installer and launcher surface) — READY TO EXECUTE
-Plan: Not started
+Phase: 04 (Installer and launcher surface) — EXECUTING
+Plan: 2 of 2
 Status: Ready to execute
-Last activity: 2026-08-21 — Phase 03 complete, transitioned to Phase 4
+Last activity: 2026-08-21 — Phase 04 execution started
 
 Progress: [░░░░░░░░░░░░░░░░░░░░] 18/18 plans overall (Phase 3 complete: 4/4 plans; Phase 4 not yet planned)
 
@@ -77,6 +77,7 @@ Progress: [░░░░░░░░░░░░░░░░░░░░] 18/18 p
 | Phase 03 P02 | ~30min | 3 tasks | 4 files |
 | Phase 03 P03 | ~1h10min | 3 tasks | 2 files |
 | Phase 03 P04 | 1h | 3 tasks | 2 files |
+| Phase 04 P01 | 27min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -122,6 +123,9 @@ Recent decisions affecting current work:
 - [Phase 03]: [Phase 03]: 03-04: EC07's four self-referential grep patterns use escaped ERE metacharacters so the grep invocation's own source line can never satisfy the pattern it searches for -- verified empirically via an empty detail string
 - [Phase 03]: [Phase 03]: 03-04: EC07/EC08 were written in one Edit pass then split into two commits by temporarily removing and re-inserting the EC08 block, preserving per-task bd-id traceability without any destructive git operation
 - [Phase 03]: [Phase 03]: 03-04: R5's REQUIREMENTS.md row is closed met but names the integer-second SECONDS-precision ceiling (edge:R5/precision) as a stated residue rather than an implied closure
+- [Phase 04]: 04-01: D-05 (sync) landed before D-03 (SIGPIPE fix) -- the branch tip carries the identical unfixed pipeline, so fixing first would have been silently overwritten by the sync
+- [Phase 04]: 04-01: D-03a locked next((<gen>), "") over an index-[0] rewrite -- measured (M5) that indexing raises IndexError and aborts under -e on a zero-match reply
+- [Phase 04]: 04-01: RED fixture sized >=131072 bytes of producer output (2x the measured 65536-byte pipe capacity) -- the plan's earlier 3-entry fixture was measured to pass 8/8 against the unfixed code and would have been vacuous
 
 ### Pending Todos
 
@@ -151,6 +155,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-21T00:19:30.428Z
-Stopped at: Phase 04 context gathered
-Resume file: .planning/phases/04-installer-and-launcher-surface/04-CONTEXT.md
+Last session: 2026-08-21T12:33:33.566Z
+Stopped at: Completed 04-01-PLAN.md
+Resume file: None
