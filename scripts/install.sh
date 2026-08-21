@@ -39,6 +39,7 @@ if [[ "${EUID:-$(id -u)}" -eq 0 || -n "${SUDO_USER:-}" ]]; then
     exit 1
 fi
 
+[[ -n "${HOME:-}" ]] || { echo "ERROR: HOME is not set; run as a normal user with a home directory." >&2; exit 1; }
 # ── resolve this plugin's root (dir containing scripts/) ─────────────────────
 if [[ -n "${AGY_PLUGIN_DIR:-}" ]]; then
     PLUGIN_DIR="$AGY_PLUGIN_DIR"
