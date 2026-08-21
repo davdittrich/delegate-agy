@@ -52,8 +52,7 @@ rather than your own eyes:
 
 ```bash
 RESOLVED="$(claude plugin list --json 2>/dev/null \
-  | python3 -c 'import sys,json;[print(x.get("installPath","")) for x in json.load(sys.stdin) if x.get("id","").startswith("agy-delegate@")]' \
-  | head -1)/scripts/install.sh"; \
+  | python3 -c 'import sys,json;print(next((x.get("installPath","") for x in json.load(sys.stdin) if x.get("id","").startswith("agy-delegate@")), ""))')/scripts/install.sh"; \
 case "$RESOLVED" in \
   */agy-delegate/*/scripts/install.sh) [[ -f "$RESOLVED" ]] \
     && bash "$RESOLVED" \
