@@ -3855,6 +3855,39 @@ else
     bad "I8b rc-alias patch rewrites recursion + backs up (flag set)" "bashrc=$(cat "$IH/.bashrc") baks=$NRC_BAK"
 fi
 
+# I19: with AGY_SETUP_PATCH_ALIASES=1 and no python3 on PATH, the rc-alias
+# patch fails OPEN once (one warning naming the feature, the whole loop body
+# skipped) instead of aborting after both wrappers are already written.
+# Composes I8b's real-recursive-alias setup with I10's curated python3-absent
+# whitelist (N4) verbatim -- extend the whitelist if a run fails on a missing
+# coreutil, never convert it to a blocklist.
+IH="$(_fresh_home)"
+mkdir -p "$IH/otherbin" "$IH/nopy"
+printf '#!/bin/sh\necho real\n' > "$IH/otherbin/gemini"; chmod +x "$IH/otherbin/gemini"
+printf "%s\n" "alias gemini='GEMINI_API_KEY=x gemini'" > "$IH/.bashrc"
+for b in bash cat grep sed date mktemp mkdir rm mv cp chmod ls readlink id printf command env; do
+    _src="$(command -v "$b" 2>/dev/null)"; [[ -n "$_src" ]] && ln -sf "$_src" "$IH/nopy/$b" 2>/dev/null || true
+done
+cp "$HERE/fake-agy.sh" "$IH/nopy/agy"; chmod +x "$IH/nopy/agy"
+_cc_fixtures_beside "$IH/nopy"
+_RCHASH_I19_BEFORE="$(cksum "$IH/.bashrc")"
+env -i HOME="$IH" PATH="$IH/otherbin:$IH/nopy" \
+    AGY_PLUGIN_DIR="$ROOT" AGY_SETUP_PATCH_ALIASES=1 \
+    bash "$INSTALL" > "$SANDBOX/last-install.log" 2>&1; I19_RC=$?
+_RCHASH_I19_AFTER="$(cksum "$IH/.bashrc")"
+I19_WARN_COUNT="$(grep -ci 'python3 not found' "$SANDBOX/last-install.log")"
+NRC_BAK="$(ls "$IH/.bashrc".bak-agy-* 2>/dev/null | wc -l)"
+if [[ "$I19_RC" -eq 0 && -f "$IH/.local/bin/agy-bridge" && -f "$IH/.local/bin/gemini" ]] \
+   && [[ "$I19_WARN_COUNT" -eq 1 ]] \
+   && grep -qi 'python3 not found.*alias' "$SANDBOX/last-install.log" \
+   && [[ "$_RCHASH_I19_BEFORE" == "$_RCHASH_I19_AFTER" ]] \
+   && [[ "$NRC_BAK" -eq 0 ]]; then
+    ok "I19 python3-absent rc-alias patch fails open: one warning, rc file untouched, no backup"
+else
+    bad "I19 python3-absent rc-alias patch fails open: one warning, rc file untouched, no backup" \
+        "rc=$I19_RC warns=$I19_WARN_COUNT baks=$NRC_BAK log=$(tail -6 "$SANDBOX/last-install.log")"
+fi
+
 # I9: register on invalid JSON -> original untouched, temp cleaned, exit-3 msg.
 IH="$(_fresh_home)"
 mkdir -p "$IH/.gemini/antigravity-cli"
