@@ -24,7 +24,7 @@ milestone_name: milestone
 See: .planning/PROJECT.md (updated 2026-08-21)
 
 **Core value:** Delegation must never break the caller — the shim shadows `gemini` for every PATH caller, so a hang, crash, or silent empty-success here is not scoped to this plugin.
-**Current focus:** Phase 05 — The shim's failure-mode contract
+**Current focus:** Phase 6 — Ship 1.6.2
 
 ## Current Position
 
@@ -33,7 +33,7 @@ Plan: Not started
 Status: Ready to plan
 Last activity: 2026-08-21 — Phase 05 complete, transitioned to Phase 6
 
-Progress: [████████████████████] 21/21 plans overall (Phase 4 complete: 3/3 plans)
+Progress: [████████████████████] 23/23 plans overall (Phase 05 complete: 2/2 plans)
 
 ## Performance Metrics
 
@@ -133,6 +133,8 @@ None yet.
 - **Phase 1 did not pass on the first attempt, and the record must not read as if it did.** The code review of `bb54c6f` found two Criticals in `run_bounded` itself, both reproduced at runtime, both introduced by this phase: (1) `exec 9>&2` was inherited by the bounded child and every descendant, so under `out=$(gemini ... 2>&1)` -- the commonest capture shape for a CLI that shadows `gemini` box-wide -- a surviving agy descendant held the caller's capture pipe open forever, on a run that exited 0 in under a second, on BOTH mechanisms; (2) SIGHUP was not relayed, so on the watchdog arm a HUP returned from `wait` as 129, cancelled the timer and left agy running with no bound on it at all, while the coreutils arm reaped -- a direct break of the mechanism parity the whole phase rests on. Also fixed in the same round: `trap - TERM INT` destroyed the host's cleanup handlers instead of restoring them (a later Ctrl-C then left the full user prompt in `/tmp/gemini-shim.XXXXXX/GEMINI.md`, since bash runs no EXIT trap for a signal-killed process); the pgid lookup shelled out to `awk`/`ps` and silently stopped reaping descendants where neither resolved; its `/proc` parse returned the PPID for any comm containing whitespace, which then became a `kill -- -<pgid>` operand aimed at an unrelated process group; and RB01 counted violating LINES rather than OCCURRENCES, so two occurrences on one line and a decoy string both scanned clean. **The lesson worth carrying: the suite was green, mutation-checked in five places, and none of it saw any of this** -- every gap was structural (`_PUREBIN_TOOLS` hardcodes the binaries the pgid lookup needed; no case ever sent HUP; no case ever asserted the trap table; the harness fixed fd 9 for ITSELF and left the shipped scripts alone). Regression cases RB23-RB26 and RB22-over-HUP now exist, each demonstrated red against the shipped code before its fix. Suite PASS=135 FAIL=0 (re-confirmed 2026-08-20). R11 is now Validated (PROJECT.md, Phase 1): 28/29 UAT checks passed directly, 1 (macOS job-control notice) explicitly accepted unverified (no macOS host available), 15/15 security threats closed. Two bugs surfaced by this phase's own code review (delegate-agy-vtx, delegate-agy-84e) are fixed and closed, guarded by RB20a/b and RB21a/b.
 
 - **RB01's static scan doesn't cover `tests/contract-check.sh`.** T-01-06's regression guard (RB01) scans only the two shipped scripts. `contract-check.sh` (added Phase 1.5) carries 3 agy call sites, hand-verified `run_bounded`-wrapped, but not in RB01's loop — a future edit there could add an unbounded call site with the suite staying green. `delegate-agy-d4t` filed (Phase 1 security audit, 2026-08-20).
+- **FM01's `_FM_PAIRS` binding proves a proof test exists by label, not that its assertion still matches the row.** `grep -qE "^(ok|bad) \"ID "` only confirms the ID is a live label; a future edit that guts a proof's internal assertion while keeping its label would leave FM01 green (Phase 05 code review, WR-01, `05-REVIEW.md`).
+- **README's "Model name rejected" row uses an untested table-order cross-reference ("the row below").** This exact phrasing already broke twice within Phase 05's own history (`ced7305`, `870653a`) when row order or wording shifted; no test (including FM01) verifies it (Phase 05 code review, WR-02, `05-REVIEW.md`).
 
 ### Roadmap Evolution
 
@@ -148,6 +150,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-21T19:16:18.574Z
+Last session: 2026-08-21T19:51:26.000Z
 Stopped at: Phase 05 complete, ready to plan Phase 6
 Resume file: None
