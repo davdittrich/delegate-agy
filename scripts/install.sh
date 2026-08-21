@@ -227,10 +227,7 @@ fi
 # ── consent-gated recursive-gemini rc alias patch (dry-run unless flag) ───────
 if [[ -n "$_real_gemini" ]]; then
     _alias_patch_py3_ok=1
-    if [[ "${AGY_SETUP_PATCH_ALIASES:-0}" == "1" ]] && ! command -v python3 >/dev/null 2>&1; then
-        _alias_patch_py3_ok=0
-        echo "WARNING: python3 not found — skipping the recursive-gemini rc alias patch (fail-open)." >&2
-    fi
+    _alias_patch_py3_warned=0
     for RC in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.bash_aliases"; do
         [[ -f "$RC" ]] || continue
         if grep -qE "^alias gemini='[^']* gemini'\$" "$RC" 2>/dev/null; then
@@ -240,6 +237,12 @@ if [[ -n "$_real_gemini" ]]; then
             if [[ "${AGY_SETUP_PATCH_ALIASES:-0}" != "1" ]]; then
                 echo "  (dry-run) set AGY_SETUP_PATCH_ALIASES=1 to rewrite it to call $_real_gemini."
                 continue
+            fi
+            if [[ "${AGY_SETUP_PATCH_ALIASES:-0}" == "1" ]] && ! command -v python3 >/dev/null 2>&1; then
+                _alias_patch_py3_ok=0
+                [[ "$_alias_patch_py3_warned" -eq 1 ]] || \
+                    echo "WARNING: python3 not found — skipping the recursive-gemini rc alias patch (fail-open)." >&2
+                _alias_patch_py3_warned=1
             fi
             [[ "$_alias_patch_py3_ok" -eq 1 ]] || continue
             cp -f "$RC" "$RC.bak-agy-$(_ts)"
