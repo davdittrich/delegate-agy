@@ -3778,6 +3778,37 @@ else
     bad "I6b uninstall.sh refuses root" "rc=$I6B_RC log=$(tail -2 "$SANDBOX/last-uninstall.log")"
 fi
 
+# _home_unset_case SCRIPT_PATH CASE_ID LABEL -> runs SCRIPT_PATH under env -i
+# with a minimal PATH and NO HOME key in the environment at all -- distinct
+# from every existing I* case above, which always sets HOME="$IH"; the outer
+# suite's own `export HOME="$SANDBOX/home"` at the top of this file is exactly
+# why an empty HOME="" would not distinguish "unset" from "set-but-empty".
+# Captures the run's combined stdout+stderr into a variable and reads $? on
+# the next line, with no trailing pipeline -- a filter at the end of the
+# command would replace the script's own exit status with the filter's.
+_home_unset_case() {
+    local script="$1" case_id="$2" label="$3" out rc logf
+    if [[ "$script" == *uninstall* ]]; then
+        logf="$SANDBOX/last-uninstall.log"
+    else
+        logf="$SANDBOX/last-install.log"
+    fi
+    out="$(env -i PATH=/usr/bin:/bin bash "$script" 2>&1)"; rc=$?
+    printf '%s\n' "$out" > "$logf"
+    if [[ "$rc" -eq 1 && "$out" == *"ERROR: HOME is not set"* && "$out" != *"unbound variable"* ]]; then
+        ok "$case_id $label"
+    else
+        bad "$case_id $label" "rc=$rc out=${out:0:200}"
+    fi
+}
+
+# I20: install.sh states the HOME precondition (named, exit 1) instead of
+# bash's own opaque "unbound variable" diagnostic when HOME is entirely unset.
+_home_unset_case "$INSTALL" "I20" "install.sh states the HOME precondition when HOME is unset"
+
+# I20b: uninstall.sh, same precondition shape, same env.
+_home_unset_case "$UNINSTALL" "I20b" "uninstall.sh states the HOME precondition when HOME is unset"
+
 # I7: idempotent re-run: no duplicate/backup of our own wrapper.
 IH="$(_fresh_home)"
 _install_in "$IH" >/dev/null 2>&1
