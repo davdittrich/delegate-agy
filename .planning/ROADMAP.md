@@ -222,12 +222,12 @@ Plans:
   3. Every row where the shim and bridge differ states why in one line, and no row differs without a stated reason.
   4. An unrecognized model name still passes through to agy unchanged — the shim warns or degrades but never hard-rejects input it merely does not recognize.
 
-**Plans**: 2 plans
+**Plans**: 1/2 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 05-01-PLAN.md — Tracer: pin the contract table's shape end-to-end on the two rows where the shim and bridge agree (missing dependency, superseded pin); new `FM01` gate plus a first-ever provenance pin of the installer's refusal literal to README
+- [x] 05-01-PLAN.md — Tracer: pin the contract table's shape end-to-end on the two rows where the shim and bridge agree (missing dependency, superseded pin); new `FM01` gate plus a first-ever provenance pin of the installer's refusal literal to README
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -266,7 +266,7 @@ Phases 1, 1.5, 3, and 4 have no dependencies on each other and may be planned or
 | 2. Model-list handling, end to end | 3/2 | Complete    | 2026-08-20 |
 | 3. The exit-code contract | 4/4 | Complete    | 2026-08-21 |
 | 4. Installer and launcher surface | 3/3 | Complete    | 2026-08-21 |
-| 5. The shim's failure-mode contract | 0/2 | Not started | - |
+| 5. The shim's failure-mode contract | 1/2 | In Progress|  |
 | 6. Ship 1.6.2 | 0/TBD | Not started | - |
 
 ## Requirement Coverage

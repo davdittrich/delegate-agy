@@ -1,19 +1,19 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.6.2
-current_phase: 5
-current_phase_name: the-shim-s-failure-mode-contract
+current_phase: 05
+current_phase_name: The shim's failure-mode contract
 status: executing
-stopped_at: Phase 5 context gathered
-last_updated: "2026-08-21T16:39:17.281Z"
+stopped_at: Completed 05-01-PLAN.md
+last_updated: "2026-08-21T17:52:21.889Z"
 last_activity: 2026-08-21
-last_activity_desc: Phase 04 complete, transitioned to Phase 5
-state_head: bb47ab54a4cbbcbdb4a9400ab818fa1dcf12f74b
+last_activity_desc: Phase 05 execution started
+state_head: 63133ae08652354c415eebc1568e6b8d03b54691
 progress:
   total_phases: 7
   completed_phases: 5
   total_plans: 23
-  completed_plans: 21
+  completed_plans: 22
 milestone_name: milestone
 ---
 
@@ -24,14 +24,14 @@ milestone_name: milestone
 See: .planning/PROJECT.md (updated 2026-08-21)
 
 **Core value:** Delegation must never break the caller — the shim shadows `gemini` for every PATH caller, so a hang, crash, or silent empty-success here is not scoped to this plugin.
-**Current focus:** Phase 5 — The shim's failure-mode contract
+**Current focus:** Phase 05 — The shim's failure-mode contract
 
 ## Current Position
 
-Phase: 5 (the-shim-s-failure-mode-contract) — READY TO EXECUTE
-Plan: Not started
+Phase: 05 (The shim's failure-mode contract) — EXECUTING
+Plan: 2 of 2
 Status: Ready to execute
-Last activity: 2026-08-21 — Phase 04 complete, transitioned to Phase 5
+Last activity: 2026-08-21 — Phase 05 execution started
 
 Progress: [████████████████████] 21/21 plans overall (Phase 4 complete: 3/3 plans)
 
@@ -80,6 +80,7 @@ Progress: [████████████████████] 21/21 p
 | Phase 04 P01 | 27min | 3 tasks | 4 files |
 | Phase 04 P02 | 22min | 3 tasks | 4 files |
 | Phase 04 P03 | 41min | 3 tasks | 4 files |
+| Phase 05 P01 | 68min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -125,6 +126,9 @@ Recent decisions affecting current work:
 - [Phase 04]: [Phase 04]: 04-03: Test B extracts the doc's own second exec line via exact whole-line grep -x, not substring grep -c -- both docs carry a pre-existing legitimate 'e.g. ... bash "$RESOLVED"' prose mention a substring count would collide with
 - [Phase 04]: [Phase 04]: 04-03: WR-01's fix hoists only the python3 dependency check into the loop's existing alias-match branch; the _alias_patch_py3_ok flag's own continue gate stays exactly where 04-02 sited it
 - [Phase 04]: [Phase 04]: 04-03: closed delegate-agy-5r9.7/.8/.9 (CR-01, CR-02, IN-01, WR-01, WR-02) -- a deep code review found these after 04-01/04-02 shipped; per project rule, review findings are blockers, not deferred. Suite PASS=160 FAIL=0
+- [Phase 05]: FM01 counts row occurrences inside a Troubleshooting-table window (sed between headings, then grep '^|'), not over the whole file, so the legitimate second copy of the missing-dependency literal at README:308 survives
+- [Phase 05]: Row-to-proof mapping is machine-checked data (_FM_PAIRS), not a comment, so a deleted row, a deleted proof label, or a deleted pair entry each fail the suite
+- [Phase 05]: S3 left open: plan's own Multi-Source Coverage Audit states S3 closed in 05-02 T3; requirements mark-complete was not run for S3 in this plan's state update
 
 ### Pending Todos
 
@@ -153,6 +157,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-21T15:20:33.791Z
-Stopped at: Phase 5 context gathered
-Resume file: .planning/phases/05-the-shim-s-failure-mode-contract/05-CONTEXT.md
+Last session: 2026-08-21T17:52:21.847Z
+Stopped at: Completed 05-01-PLAN.md
+Resume file: None
