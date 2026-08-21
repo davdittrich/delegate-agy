@@ -2745,6 +2745,21 @@ _fm_row="$(printf '%s\n' "$_FM_TABLE" | grep -F "$_FM_ANCHOR_PIN" | head -1)"
 [[ "$_fm_row" == *"because"* || "$_fm_row" == *"identical"* ]] \
     || { FM01_OK=0; FM01_DETAIL="$FM01_DETAIL readme:pin_missing_reason"; }
 
+# The hung-agy row (delegate-agy-rod.3, CONTEXT D-01): exit-124 timeout, same
+# table-scoped window and same three row checks as the two rows above.
+_FM_ANCHOR_HANG='ERROR: agy timeout after '
+
+_fm_hang_rows="$(printf '%s\n' "$_FM_TABLE" | grep -cF "$_FM_ANCHOR_HANG")" || _fm_hang_rows=0
+[[ "$_fm_hang_rows" -eq 1 ]] || { FM01_OK=0; FM01_DETAIL="$FM01_DETAIL readme:hang_rows_${_fm_hang_rows}"; }
+
+_fm_row="$(printf '%s\n' "$_FM_TABLE" | grep -F "$_FM_ANCHOR_HANG" | head -1)"
+[[ "$_fm_row" == *"agy-bridge"* ]] \
+    || { FM01_OK=0; FM01_DETAIL="$FM01_DETAIL readme:hang_missing_bridge_name"; }
+[[ "$_fm_row" == *"gemini"* ]] \
+    || { FM01_OK=0; FM01_DETAIL="$FM01_DETAIL readme:hang_missing_shim_name"; }
+[[ "$_fm_row" == *"because"* || "$_fm_row" == *"identical"* ]] \
+    || { FM01_OK=0; FM01_DETAIL="$FM01_DETAIL readme:hang_missing_reason"; }
+
 # Row-to-proof mapping is DATA, not a comment: deleting a row, deleting its
 # proof's ok/bad label, or deleting the pair entry itself each fail this case
 # instead of silently unbinding a claim from its evidence. Ceiling, stated
@@ -2755,10 +2770,10 @@ _fm_row="$(printf '%s\n' "$_FM_TABLE" | grep -F "$_FM_ANCHOR_PIN" | head -1)"
 # themselves (RB02, RB03, EC06, SH14, SH9, I16), each of which already
 # asserts its own literal, and by 05-02 Task 3's human read-through.
 _FM_SELF="$HERE/run-tests.sh"
-_FM_PAIRS=(DEP:RB03 DEP:RB02 PIN:I16)  # count: 3 at end of 05-01; 05-02 adds HANG:EC06, LIST:SH14, LIST:EC06, NAME:SH9 -> 7
+_FM_PAIRS=(DEP:RB03 DEP:RB02 PIN:I16 HANG:EC06)  # count: 4 after 05-02 Task 1; Task 2 adds LIST:SH14, LIST:EC06, NAME:SH9 -> 7
 
 _fm_pairs_n="${#_FM_PAIRS[@]}"
-[[ "$_fm_pairs_n" -eq 3 ]] || { FM01_OK=0; FM01_DETAIL="$FM01_DETAIL pairs:count_${_fm_pairs_n}"; }
+[[ "$_fm_pairs_n" -eq 4 ]] || { FM01_OK=0; FM01_DETAIL="$FM01_DETAIL pairs:count_${_fm_pairs_n}"; }
 
 for _fm_pair in "${_FM_PAIRS[@]}"; do
     _fm_key="${_fm_pair%%:*}"
