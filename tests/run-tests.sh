@@ -1581,6 +1581,58 @@ else
         "pipe_form_count=$SH15D_PIPE herestring_form_count=$SH15D_HERE"
 fi
 
+# SH16 (D-04, delegate-agy-ltf): the unrecognized-long-flag catch-all must
+# shift exactly once. Pre-fix, that arm conditionally consumed the FOLLOWING
+# token as the unknown flag's own "value" whenever that token did not itself
+# look like a flag -- and the user's own prompt is exactly such a token, so
+# `gemini --froboz "some prompt"` silently dropped the prompt. GEMINI.md (not
+# argv) is where the prompt actually lands (agy's --print value is a fixed
+# pointer string), so FAKE_AGY_ECHO_PROMPT=1 is what proves delivery here.
+# GEMINI_SHIM_STDIN_TIMEOUT=1 keeps the pre-fix RED fast: with the bug present
+# PROMPT_ARGS ends empty, the shim falls through to the bounded stdin-read
+# path, and the default 30s bound would turn a fast RED into a 30s stall. One
+# second is enough because this case never supplies stdin.
+SH16_TOKEN="SH16-PROMPT-SURVIVES"
+SH16_OK=1
+SH16_DETAIL=""
+
+# 1. An unrecognized long flag must not eat the prompt token that follows it.
+SH16_OUT="$(GEMINI_SHIM_STDIN_TIMEOUT=1 FAKE_AGY_ECHO_PROMPT=1 bash "$SHIM" --froboz "$SH16_TOKEN" 2>/dev/null)"
+SH16_RC=$?
+[[ "$SH16_RC" -eq 0 ]] || { SH16_OK=0; SH16_DETAIL="${SH16_DETAIL}rc=$SH16_RC (want 0) for --froboz TOKEN; "; }
+[[ "$SH16_OUT" == *"$SH16_TOKEN"* ]] || { SH16_OK=0; SH16_DETAIL="${SH16_DETAIL}prompt token missing after unrecognized flag, out=$SH16_OUT; "; }
+rm -f "$_SHIM_CACHE"
+
+# 2. Regression guard: a genuinely value-taking flag, in LONG form, is
+#    unaffected -- it matches its own explicit arm long before the catch-all
+#    is ever reached. `pro` resolves via config/model-map.json + the default
+#    fixture, deterministically, to gemini-3.1-pro-high.
+SH16_DUMP="$SANDBOX/sh16_argv.log"
+: > "$SH16_DUMP"
+FAKE_AGY_DUMP_ARGV="$SH16_DUMP" FAKE_AGY_STDOUT="ok" \
+    bash "$SHIM" --model pro -p x >/dev/null 2>"$SANDBOX/sh16_model.err"
+SH16_MODEL_RC=$?
+SH16_MODEL_ARG="$(awk '/^--model$/{getline; print; exit}' "$SH16_DUMP")"
+[[ "$SH16_MODEL_RC" -eq 0 ]] || { SH16_OK=0; SH16_DETAIL="${SH16_DETAIL}rc=$SH16_MODEL_RC (want 0) for --model pro; "; }
+[[ "$SH16_MODEL_ARG" == "gemini-3.1-pro-high" ]] || { SH16_OK=0; SH16_DETAIL="${SH16_DETAIL}--model long form not resolved, got=$SH16_MODEL_ARG; "; }
+rm -f "$_SHIM_CACHE" "$SH16_DUMP" "$SANDBOX/sh16_model.err"
+
+# 3. The inline `--flag=value` form for an unknown flag is ONE argv token --
+#    it must still be consumed whole (not leak its value into the prompt, nor
+#    steal the genuine prompt token that follows it).
+SH16_SENTINEL="SH16-INLINE-VALUE-LEAK"
+SH16_OUT2="$(GEMINI_SHIM_STDIN_TIMEOUT=1 FAKE_AGY_ECHO_PROMPT=1 bash "$SHIM" "--froboz=$SH16_SENTINEL" -p "$SH16_TOKEN" 2>/dev/null)"
+SH16_RC2=$?
+[[ "$SH16_RC2" -eq 0 ]] || { SH16_OK=0; SH16_DETAIL="${SH16_DETAIL}rc=$SH16_RC2 (want 0) for --froboz=value; "; }
+[[ "$SH16_OUT2" == *"$SH16_TOKEN"* ]] || { SH16_OK=0; SH16_DETAIL="${SH16_DETAIL}prompt missing after --froboz=value, out=$SH16_OUT2; "; }
+[[ "$SH16_OUT2" != *"$SH16_SENTINEL"* ]] || { SH16_OK=0; SH16_DETAIL="${SH16_DETAIL}inline flag value leaked into prompt, out=$SH16_OUT2; "; }
+
+if [[ "$SH16_OK" -eq 1 ]]; then
+    ok "SH16 unrecognized long flag shifts exactly once, prompt token survives (D-04)"
+else
+    bad "SH16 unrecognized long flag shifts exactly once, prompt token survives (D-04)" "$SH16_DETAIL"
+fi
+
 # IN01 (IN-01): the tmp-then-mv cache write in both scripts leaves the new
 # file at process-umask permissions (typically 644) until the chmod 600 two
 # lines later runs -- a process killed between mv and chmod, or a concurrent
