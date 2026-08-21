@@ -248,13 +248,13 @@ Plans:
   3. A fresh `scripts/install.sh` run against merged `master` produces working `agy-bridge` and `gemini` launchers, and both suites pass on that tree.
   4. The release notes name each defect 1.6.2 closes and state plainly that every existing installation must re-run the installer, because the pin only points forward.
 
-**Plans**: 1/6 plans executed
+**Plans**: 2/6 plans executed
 
 Plans:
 **Wave 1**
 
 - [x] 06-01-PLAN.md — tracer: root-cause `RB24`'s trap-preservation flake, restoring the host's TERM/INT/HUP handlers before `run_bounded` tears down its timer, in all three copies of the block, proven by a deterministic forcing case (`RB30`) observed red before the fix
-- [ ] 06-02-PLAN.md — close the two investigation tickets, recording the verified GEMINI.md policy isolation and the SIGTERM-alone contradiction as PROJECT.md Key Decisions rows
+- [x] 06-02-PLAN.md — close the two investigation tickets, recording the verified GEMINI.md policy isolation and the SIGTERM-alone contradiction as PROJECT.md Key Decisions rows
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -289,7 +289,7 @@ Phases 1, 1.5, 3, and 4 have no dependencies on each other and may be planned or
 | 3. The exit-code contract | 4/4 | Complete    | 2026-08-21 |
 | 4. Installer and launcher surface | 3/3 | Complete    | 2026-08-21 |
 | 5. The shim's failure-mode contract | 2/2 | Complete    | 2026-08-21 |
-| 6. Ship 1.6.2 | 1/6 | In Progress|  |
+| 6. Ship 1.6.2 | 2/6 | In Progress|  |
 
 ## Requirement Coverage
 
@@ -303,7 +303,7 @@ Phases 1, 1.5, 3, and 4 have no dependencies on each other and may be planned or
 | S2 — Survive a Claude Code registry schema change | Phase 4 | — |
 | S3 — Shim defects must not escape into PATH callers | Phase 5 | — |
 | S4 — Shared model cache safe under two writers | Phase 2 | `8ph` |
-| S5 — Verifiable against a real `agy` | Phase 1.5 | `xfa` |
+| S5 — Verifiable against a real `agy` | Phase 1.5 | — (`xfa` closed, Phase 6 D-02) |
 
 9/9 requirements mapped, each to exactly one phase. No orphans, no duplicates.
 

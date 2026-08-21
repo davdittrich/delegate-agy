@@ -4,16 +4,16 @@ milestone: v1.6.2
 current_phase: 06
 current_phase_name: Ship 1.6.2
 status: executing
-stopped_at: Completed 06-01-PLAN.md
-last_updated: "2026-08-21T23:10:04.000Z"
+stopped_at: Completed 06-02-PLAN.md
+last_updated: "2026-08-21T23:19:06.000Z"
 last_activity: 2026-08-21
-last_activity_desc: 06-01 complete — RB30 trap-restore window fix (delegate-agy-sup / D-08)
-state_head: d887a8f
+last_activity_desc: 06-02 complete — xfa/i43 findings recorded and closed (D-02, D-03)
+state_head: bad56a9
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 29
-  completed_plans: 24
+  completed_plans: 25
 milestone_name: milestone
 ---
 
@@ -29,17 +29,17 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 06 (Ship 1.6.2) — EXECUTING
-Plan: 06-01 complete (RB30 trap-restore window fix)
-Status: Executing — 5 of 6 plans remaining
-Last activity: 2026-08-21 — 06-01 complete
+Plan: 06-02 complete (xfa/i43 findings recorded and closed)
+Status: Executing — 4 of 6 plans remaining
+Last activity: 2026-08-21 — 06-02 complete
 
-Progress: [████████████████████] 24/29 plans overall (Phase 06: 1/6 plans)
+Progress: [████████████████████] 25/29 plans overall (Phase 06: 2/6 plans)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 16
+- Total plans completed: 17
 - Average duration: —
 - Total execution time: —
 
@@ -50,7 +50,7 @@ Progress: [████████████████████] 24/29 p
 | 01.5 | 6 | - | - |
 | 04 | 3 | - | - |
 | 05 | 2 | - | - |
-| 06 | 1 | 35min | 35min |
+| 06 | 2 | 43min | 22min |
 
 **Recent Trend:**
 
@@ -84,6 +84,7 @@ Progress: [████████████████████] 24/29 p
 | Phase 05 P01 | 68min | 2 tasks | 2 files |
 | Phase 05 P02 | 55m | 3 tasks | 3 files |
 | Phase 06 P01 | 35min | 2 tasks | 4 files |
+| Phase 06 P02 | 8min | 2 tasks | 1 file |
 
 ## Accumulated Context
 
@@ -125,6 +126,7 @@ Recent decisions affecting current work:
 - [Phase 06]: 06-01: RB30 forces the D-08 trap-restore window deterministically by shadowing `_rb_cancel_timer` (guard-then-kill-then-delegate) rather than re-running RB24's scheduler-timed race more times -- a timing-based case could stay green on the unfixed helper indefinitely
 - [Phase 06]: 06-01: Fix is a pure statement reorder -- move the watchdog arm's teardown `_rb_cancel_timer` call to after the trap restore -- applied byte-identically to all three copies (agy_bridge.sh, gemini_shim.sh, contract-check.sh); RB02 enforces the byte-identity mechanically
 - [Phase 06]: 06-01: delegate-agy-sup (D-08) and the `delegate-agy-tmm` epic stay open by design; per-plan bug-ticket closure is deferred to 06-06's release-gate dossier
+- [Phase 06]: 06-02: delegate-agy-xfa (gemini-md-binds isolation) and delegate-agy-i43 (sigterm-ignored contradiction) both closed against new PROJECT.md Key Decisions rows (D-02, D-03) rather than left open or silently dropped -- xfa verified good with a one-run caveat, i43 recorded as a genuine contradiction (agy died on SIGTERM alone, rc=124) with the `-k` escalation kept as defense-in-depth, not removed on one sample
 
 ### Pending Todos
 
@@ -133,8 +135,8 @@ None yet.
 ### Blockers/Concerns
 
 - **The shim's blast radius is box-wide.** `~/.local/bin/gemini` shadows the real binary for interactive shells, Octopus, and Metaswarm. Weight any shim defect above an equivalent bridge defect.
-- **The per-run GEMINI.md policy may not be authoritative.** A probe from a throwaway CWD had agy answer that it found `GEMINI.md` in five unrelated projects, so agy discovers context outside its working directory. `agy_bridge.sh`'s per-type tool restriction assumes its own GEMINI.md binds. Not yet reproduced through the bridge, which also passes `--sandbox` and `--add-dir` (`delegate-agy-xfa`, P1, Phase 1.5).
-- **agy is live; the docs that said otherwise are corrected, the phases are not yet re-read.** Verified 2026-08-19 against agy 1.1.13: `--version` and `agy models` both return in seconds, and a real `--type review` delegation returned 4721 bytes. `agy --model` accepts BOTH ids and display names; a bogus name gives rc=1 with an `Available models:` list rendered in display names. PROJECT.md and ROADMAP.md are corrected and Phase 7 moved to Phase 1.5; `delegate-agy-9qp` stays open until Phase 1.5 lands the fixtures and the README statement. **Not established:** whether agy ignores SIGTERM -- every probe call returned on its own, so no bound fired and the `-k` rationale rests on its original observation, untested.
+- **The per-run GEMINI.md policy may not be authoritative.** A probe from a throwaway CWD had agy answer that it found `GEMINI.md` in five unrelated projects, so agy discovers context outside its working directory. `agy_bridge.sh`'s per-type tool restriction assumes its own GEMINI.md binds. Not yet reproduced through the bridge, which also passes `--sandbox` and `--add-dir` (`delegate-agy-xfa`, P1, Phase 1.5). **Resolved (Phase 6, D-02):** re-probed at the real bridge invocation shape with a nonce/decoy discriminator — the forbidden tool was declined and nothing leaked, on one run, one prompt shape, one model, one agy version; `delegate-agy-xfa` is closed against PROJECT.md's Key Decisions row.
+- **agy is live; the docs that said otherwise are corrected, the phases are not yet re-read.** Verified 2026-08-19 against agy 1.1.13: `--version` and `agy models` both return in seconds, and a real `--type review` delegation returned 4721 bytes. `agy --model` accepts BOTH ids and display names; a bogus name gives rc=1 with an `Available models:` list rendered in display names. PROJECT.md and ROADMAP.md are corrected and Phase 7 moved to Phase 1.5; `delegate-agy-9qp` stays open until Phase 1.5 lands the fixtures and the README statement. **Not established:** whether agy ignores SIGTERM -- every probe call returned on its own, so no bound fired and the `-k` rationale rests on its original observation, untested. **Contradicted (Phase 1.5/6, D-03):** a later real-delegation probe (`--type code`, ~50000-word essay, `timeout -k 5 8`) got rc=124 at elapsed=8s -- agy died on SIGTERM alone that run. `delegate-agy-i43` is closed against PROJECT.md's Key Decisions row: the `-k` escalation stays as defense-in-depth, not removed on one contradicting sample, since the original `agy models` observation it was built for is untouched.
 - **Phase 1 did not pass on the first attempt, and the record must not read as if it did.** The code review of `bb54c6f` found two Criticals in `run_bounded` itself, both reproduced at runtime, both introduced by this phase: (1) `exec 9>&2` was inherited by the bounded child and every descendant, so under `out=$(gemini ... 2>&1)` -- the commonest capture shape for a CLI that shadows `gemini` box-wide -- a surviving agy descendant held the caller's capture pipe open forever, on a run that exited 0 in under a second, on BOTH mechanisms; (2) SIGHUP was not relayed, so on the watchdog arm a HUP returned from `wait` as 129, cancelled the timer and left agy running with no bound on it at all, while the coreutils arm reaped -- a direct break of the mechanism parity the whole phase rests on. Also fixed in the same round: `trap - TERM INT` destroyed the host's cleanup handlers instead of restoring them (a later Ctrl-C then left the full user prompt in `/tmp/gemini-shim.XXXXXX/GEMINI.md`, since bash runs no EXIT trap for a signal-killed process); the pgid lookup shelled out to `awk`/`ps` and silently stopped reaping descendants where neither resolved; its `/proc` parse returned the PPID for any comm containing whitespace, which then became a `kill -- -<pgid>` operand aimed at an unrelated process group; and RB01 counted violating LINES rather than OCCURRENCES, so two occurrences on one line and a decoy string both scanned clean. **The lesson worth carrying: the suite was green, mutation-checked in five places, and none of it saw any of this** -- every gap was structural (`_PUREBIN_TOOLS` hardcodes the binaries the pgid lookup needed; no case ever sent HUP; no case ever asserted the trap table; the harness fixed fd 9 for ITSELF and left the shipped scripts alone). Regression cases RB23-RB26 and RB22-over-HUP now exist, each demonstrated red against the shipped code before its fix. Suite PASS=135 FAIL=0 (re-confirmed 2026-08-20). R11 is now Validated (PROJECT.md, Phase 1): 28/29 UAT checks passed directly, 1 (macOS job-control notice) explicitly accepted unverified (no macOS host available), 15/15 security threats closed. Two bugs surfaced by this phase's own code review (delegate-agy-vtx, delegate-agy-84e) are fixed and closed, guarded by RB20a/b and RB21a/b.
 
 - **RB01's static scan doesn't cover `tests/contract-check.sh`.** T-01-06's regression guard (RB01) scans only the two shipped scripts. `contract-check.sh` (added Phase 1.5) carries 3 agy call sites, hand-verified `run_bounded`-wrapped, but not in RB01's loop — a future edit there could add an unbounded call site with the suite staying green. `delegate-agy-d4t` filed (Phase 1 security audit, 2026-08-20).
@@ -155,6 +157,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-21T23:10:04.000Z
-Stopped at: Completed 06-01-PLAN.md
+Last session: 2026-08-21T23:19:06.000Z
+Stopped at: Completed 06-02-PLAN.md
 Resume file: None
