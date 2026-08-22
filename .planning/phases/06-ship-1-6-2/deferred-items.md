@@ -50,3 +50,14 @@ caused by the current task's own changes).
   This regression will block that gate until fixed. Recorded in
   `.planning/WINDOWS.md` (entry id 6, kind `deviation`) and flagged as a
   blocker in `.planning/STATE.md`.
+
+- **RESOLVED (commit `5722252`, orchestrator-level fix ahead of plan 06-06):**
+  hypothesis above confirmed exactly on inspection. Added a fourth exemption
+  to `_cc_check_scan` for a `for VAR in ...` loop header — the header only
+  binds a loop variable, and the loop body reaches the file through that
+  variable, never through the literal `$CONTRACT_CHECK` name, so it can never
+  itself be the call site D-02 cares about. Same fix resolved `CC03m`, which
+  scans a full-file copy that inherits the same pre-existing violation
+  regardless of its injected probe — not a separate comment-stripping bug.
+  Full suite: `PASS=165 FAIL=0`. Ticket `delegate-agy-nko` closed. Gate for
+  plan 06-06 is unblocked.

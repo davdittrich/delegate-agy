@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 6
+open_count: 5
 waived_count: 0
-fixed_count: 0
+fixed_count: 1
 total_count: 6
-last_updated: 2026-08-22T00:45:45.963Z
+last_updated: 2026-08-22T00:59:06.469Z
 ---
 
 # Broken Windows Ledger
@@ -20,7 +20,7 @@ last_updated: 2026-08-22T00:45:45.963Z
 | 3 | 01 | unrun-verify | .planning/phases/01-the-missing-timeout-decision/01-06-PLAN.md |  | PROJECT.md's Key Decisions always-bounded row (phase criterion 1) is unverified by the suite (plan 01-06 task 3 human-check, SUMMARY coverage D8) | open |  | 2026-08-19T14:44:39.110Z |  |
 | 4 | 01 | deviation | .worktrees/agy-1.6.2/tests/fake-agy.sh |  | FAKE_AGY_FORK_HANG made SIGHUP-immune outside plan 01-06's files_modified, because the pty hangup made RB06c a vacuous pass (Rule 2) | open |  | 2026-08-19T14:44:39.172Z |  |
 | 5 | 01 | deviation | .planning/REQUIREMENTS.md |  | R11's Evidence line still cites pre-phase case ids (delegate-agy-8k0); left untouched by plan 01-06 as REQUIREMENTS.md is outside its files_modified, case ids posted to the ticket for a single later edit | open |  | 2026-08-19T14:44:39.235Z |  |
-| 6 | 06 | deviation | tests/run-tests.sh |  | CC03/CC03m fail (violations=1, production_occurrences=4; CC03m: commented false_positive 1/4) on master since 06-04's completion commit 1c114d3 -- pre-existing, confirmed via git-worktree bisection before plan 06-05's README-only change; blocks plan 06-06's ship-gate FAIL=0 requirement | open |  | 2026-08-22T00:45:45.963Z |  |
+| 6 | 06 | deviation | tests/run-tests.sh |  | CC03/CC03m fail (violations=1, production_occurrences=4; CC03m: commented false_positive 1/4) on master since 06-04's completion commit 1c114d3 -- pre-existing, confirmed via git-worktree bisection before plan 06-05's README-only change; blocks plan 06-06's ship-gate FAIL=0 requirement | fixed |  | 2026-08-22T00:45:45.963Z | 2026-08-22T00:59:06.469Z |
 
 ````json
 [
@@ -91,10 +91,10 @@ last_updated: 2026-08-22T00:45:45.963Z
     "file": "tests/run-tests.sh",
     "line": null,
     "description": "CC03/CC03m fail (violations=1, production_occurrences=4; CC03m: commented false_positive 1/4) on master since 06-04's completion commit 1c114d3 -- pre-existing, confirmed via git-worktree bisection before plan 06-05's README-only change; blocks plan 06-06's ship-gate FAIL=0 requirement",
-    "status": "open",
+    "status": "fixed",
     "reason": "",
     "recorded_at": "2026-08-22T00:45:45.963Z",
-    "resolved_at": null
+    "resolved_at": "2026-08-22T00:59:06.469Z"
   }
 ]
 ````
