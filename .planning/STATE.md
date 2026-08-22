@@ -4,11 +4,11 @@ milestone: v1.6.2
 current_phase: 06
 current_phase_name: Ship 1.6.2
 status: executing
-stopped_at: Completed 06-05-PLAN.md
-last_updated: "2026-08-22T00:49:33.307Z"
+stopped_at: Completed 06-06-PLAN.md
+last_updated: "2026-08-22T01:15:00.000Z"
 last_activity: 2026-08-22
-last_activity_desc: 06-05 complete — criterion-2 content proof recorded, 1.6.2 changelog finished (D-09); pre-existing CC03/CC03m regression found and blocker-tracked (delegate-agy-nko), not fixed in this plan
-state_head: d22083ec8d94d17ce2ef0db6e41cdd6fee10b881
+last_activity_desc: 06-06 complete — release-gate proof recorded (clean-clone install at GATE_SHA=37c9926, both suites green PASS=165/FAIL=0 + hooks 28/0), all eight owned tickets + Phase 5 epic closed with cited evidence, all four Success Criteria assembled for human sign-off; Phase 6 plans 6/6, awaiting sign-off before /gsd:ship
+state_head: 37c9926b28c64b4ad8dd7e248cf09f8a685d016f
 progress:
   total_phases: 7
   completed_phases: 6
@@ -28,12 +28,12 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 
 ## Current Position
 
-Phase: 06 (Ship 1.6.2) — EXECUTING
-Plan: 06-05 complete (criterion-2 content proof recorded; 1.6.2 changelog finished per D-09)
-Status: Executing — 1 of 6 plans remaining
-Last activity: 2026-08-22 — 06-05 complete
+Phase: 06 (Ship 1.6.2) — PLANS COMPLETE, AWAITING SIGN-OFF
+Plan: 06-06 complete (release-gate proof recorded — clean-clone install at GATE_SHA, both suites green, all eight owned tickets + Phase 5 epic closed, four Success Criteria assembled)
+Status: All 6 of 6 plans in Phase 6 complete — awaiting human sign-off on the four Success Criteria (see 06-06-SUMMARY.md's "Open for human verification"), then `/gsd:ship`
+Last activity: 2026-08-22 — 06-06 complete
 
-Progress: [████████████████████] 29/29 plans overall (Phase 06: 5/6 plans)
+Progress: [████████████████████] 30/30 plans overall (Phase 06: 6/6 plans — complete, human sign-off pending before ship)
 
 ## Performance Metrics
 
@@ -96,6 +96,8 @@ Progress: [████████████████████] 29/29 p
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [Phase 6, plan 06-06]: Task 1's install proof cloned the local repository (not `origin`, which still resolves to `a001d0e`, well behind local `master`), detached at `GATE_SHA=37c9926b28c64b4ad8dd7e248cf09f8a685d016f`. Ship-time obligation: whoever runs `/gsd:ship` must confirm the pushed remote resolves to `GATE_SHA` before tagging.
+- [Phase 6, plan 06-06]: None of this phase's eight owned tickets were deferred, including `delegate-agy-sup`'s intermittent flake — fixed and closed instead, per the user's explicit override of the general instinct to defer a pre-existing flake (D-01).
 - Follow-ups discovered during work block the release they belong to — first applied to 1.6.2, so all 7 open tickets gate Phase 6.
 - Resolve models from the live `agy models` list, never a frozen display-name map.
 - The launcher's exec target is an install-time literal; the registry read is comparison-only.
@@ -166,6 +168,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-22T00:49:33.256Z
-Stopped at: Completed 06-05-PLAN.md
+Last session: 2026-08-22T01:15:00.000Z
+Stopped at: Completed 06-06-PLAN.md — Phase 6 release gate assembled, all 6 plans in phase complete, awaiting human sign-off on the four Success Criteria in 06-06-SUMMARY.md before `/gsd:ship`
 Resume file: None

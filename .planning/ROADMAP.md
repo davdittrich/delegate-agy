@@ -25,7 +25,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: The exit-code contract** - Every documented code reachable, distinct, and quoted in the docs as the code actually prints it (completed 2026-08-21)
 - [x] **Phase 4: Installer and launcher surface** - Registry read stays comparison-only; no install path aborts halfway (completed 2026-08-21)
 - [x] **Phase 5: The shim's failure-mode contract** - One table stating what `gemini` does to a caller that never heard of agy, one test per row (completed 2026-08-21)
-- [ ] **Phase 6: Ship 1.6.2** - The held release lands on master with every follow-up it surfaced already closed
+- [x] **Phase 6: Ship 1.6.2** - The held release lands on master with every follow-up it surfaced already closed (completed 2026-08-22; all 6 plans done, release-gate dossier in 06-06-SUMMARY.md, human sign-off pending before `/gsd:ship`)
 
 ## Phase Details
 
@@ -270,7 +270,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 06-06-PLAN.md — release gate: fresh install from a clean clone into a sandboxed home, both suites green, all eight tickets closed, four-criteria dossier assembled for sign-off
+- [x] 06-06-PLAN.md — release gate: fresh install from a clean clone into a sandboxed home, both suites green, all eight tickets closed, four-criteria dossier assembled for sign-off
 
 **Note**: criterion 3's "both suites pass" gate covers `bash tests/run-tests.sh` and the installer suite, and is deliberately **not** widened to include `bash tests/contract-check.sh` (D-05). Making a release gate depend on a live third-party binary means an agy outage blocks a tag; the contract check's verdicts inform the release, they do not gate it.
 
@@ -289,7 +289,7 @@ Phases 1, 1.5, 3, and 4 have no dependencies on each other and may be planned or
 | 3. The exit-code contract | 4/4 | Complete    | 2026-08-21 |
 | 4. Installer and launcher surface | 3/3 | Complete    | 2026-08-21 |
 | 5. The shim's failure-mode contract | 2/2 | Complete    | 2026-08-21 |
-| 6. Ship 1.6.2 | 5/6 | In Progress|  |
+| 6. Ship 1.6.2 | 6/6 | Complete (awaiting human sign-off before `/gsd:ship`) | 2026-08-22 |
 
 ## Requirement Coverage
 
