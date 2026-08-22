@@ -1692,6 +1692,26 @@ else
         "bridge_guard_count=$IN01_BRIDGE shim_guard_count=$IN01_SHIM"
 fi
 
+# IN02 (IN-02): the twin `grep -qxF` model-validation sites (bridge's --model
+# check against $VALID_MODELS, shim's live-id pass-through check against
+# $LIVE_MODELS) are guarded individually by R9d and SH15d, which each assert
+# one file's site is present in its SIGPIPE-safe herestring form. Neither
+# catches a one-sided edit to the pair, so IN02 states the pair as one joint
+# invariant with one failure message naming both counts. Ceiling: this counts
+# occurrences of source text in both files; it does not execute either script
+# and cannot detect two expressions that both still match but have drifted
+# apart in meaning.
+IN02_BRIDGE_PATTERN='grep -qxF "$MODEL" <<< "$VALID_MODELS"'
+IN02_SHIM_PATTERN='grep -qxF "$m" <<< "$LIVE_MODELS"'
+IN02_BRIDGE="$(grep -cF "$IN02_BRIDGE_PATTERN" "$BRIDGE")" || IN02_BRIDGE=0
+IN02_SHIM="$(grep -cF "$IN02_SHIM_PATTERN" "$SHIM")" || IN02_SHIM=0
+if [[ "$IN02_BRIDGE" -eq 1 && "$IN02_SHIM" -eq 1 ]]; then
+    ok "IN02 both model-validation twin sites are present in their herestring form (IN-02)"
+else
+    bad "IN02 both model-validation twin sites are present in their herestring form (IN-02)" \
+        "bridge_count=$IN02_BRIDGE shim_count=$IN02_SHIM"
+fi
+
 echo "== watchdog fixtures (RB00) =="
 
 # RB00a: the sanitized PATH must genuinely resolve no bounding binary, AND still
