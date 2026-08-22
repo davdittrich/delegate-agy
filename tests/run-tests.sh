@@ -19,7 +19,7 @@
 #  - vfn.11 (I*): the self-contained installer/uninstaller — pinned-path
 #    launcher wrappers (fail-loud-on-break, NO cache glob), non-clobber +
 #    full-$PATH shadow scan, refuse-root, idempotency, consent-gated rc patch,
-#    atomic tokensave register (exit 3/4/5, leaves original on failure),
+#    agy-MCP-config read-only detection,
 #    python3-guard fail-open, decline-hint, the /agy-setup one-liner path
 #    validation, uninstall reversal, and repo-untouched.
 #
@@ -1115,24 +1115,26 @@ fi
 
 # ST2
 CATCHALL="$(grep -h 'allowlist catch-all' "$ROOT/config/policies/search.md" | head -1)"
-if [[ "$CATCHALL" == *"ctx_call"* && "$CATCHALL" == *"tokensave_"* && "$CATCHALL" == *"mcp__"* ]]; then
-    ok "ST2 catch-all covers ctx_call + tokensave_ + mcp__ leak vectors"
+# Retired server name, kept ONLY as the string this catch-all must not contain.
+_ST2_RETIRED_TOOL="tokensave_"
+if [[ "$CATCHALL" == *"ctx_call"* && "$CATCHALL" == *"mcp__"* && "$CATCHALL" != *"$_ST2_RETIRED_TOOL"* ]]; then
+    ok "ST2 catch-all covers ctx_call + mcp__ and names no retired server"
 else
-    bad "ST2 catch-all covers ctx_call + tokensave_ + mcp__ leak vectors" "$CATCHALL"
+    bad "ST2 catch-all covers ctx_call + mcp__ and names no retired server" "$CATCHALL"
 fi
 
 # ST3
 ST3_PERMIT_OK=1
 for f in code review-analysis implement; do
-    grep -q 'ctx_read, ctx_search, tokensave_context' "$ROOT/config/policies/$f.md" \
-        || ST3_PERMIT_OK=0
+    grep -q 'ctx_read, ctx_search' "$ROOT/config/policies/$f.md" || ST3_PERMIT_OK=0
+    grep -q 'tokensave' "$ROOT/config/policies/$f.md" && ST3_PERMIT_OK=0
 done
 ST3_EXEC_LEAK="$(grep -h '^PERMITTED:' "$ROOT"/config/policies/*.md \
     | grep -Ec 'ctx_shell|ctx_call|ctx_edit|ctx_execute')"
 if [[ "$ST3_PERMIT_OK" -eq 1 && "$ST3_EXEC_LEAK" -eq 0 ]]; then
-    ok "ST3 MCP policies permit read-only ctx/tokensave, never exec/edit tools"
+    ok "ST3 MCP policies permit read-only ctx, never exec/edit tools"
 else
-    bad "ST3 MCP policies permit read-only ctx/tokensave, never exec/edit tools" "permit_ok=$ST3_PERMIT_OK exec_leak=$ST3_EXEC_LEAK"
+    bad "ST3 MCP policies permit read-only ctx, never exec/edit tools" "permit_ok=$ST3_PERMIT_OK exec_leak=$ST3_EXEC_LEAK"
 fi
 
 echo "== agent + skill docs: exit-3, WebSearch, version (vfn T5/T6) =="
@@ -1194,7 +1196,7 @@ trap '_t7_restore; cleanup' EXIT
 _t7_save; mkdir -p "$(dirname "$_T7_HINT")"
 
 # M1
-printf '%s\n' '{"lean_ctx":true,"tokensave":false}' > "$_T7_HINT"; rm -f "$_T7_CACHE"
+printf '%s\n' '{"lean_ctx":true}' > "$_T7_HINT"; rm -f "$_T7_CACHE"
 FAKE_AGY_ECHO_PROMPT=1 _run OUT RC bash "$BRIDGE" --type code -- "x"
 if [[ "$OUT" == *"TOOL PREFERENCE"* ]]; then
     ok "M1 stanza present when an MCP server is on (code)"
@@ -1203,7 +1205,7 @@ else
 fi
 
 # M2
-printf '%s\n' '{"lean_ctx":false,"tokensave":false}' > "$_T7_HINT"; rm -f "$_T7_CACHE"
+printf '%s\n' '{"lean_ctx":false}' > "$_T7_HINT"; rm -f "$_T7_CACHE"
 FAKE_AGY_ECHO_PROMPT=1 _run OUT RC bash "$BRIDGE" --type code -- "x"
 if [[ "$OUT" != *"TOOL PREFERENCE"* ]]; then
     ok "M2 stanza absent when all MCP servers off (code)"
@@ -1223,7 +1225,7 @@ fi
 echo "== gemini_shim.sh: no stanza + --sandbox floor (vfn T4/T5) =="
 
 # SH1
-printf '%s\n' '{"lean_ctx":true,"tokensave":true}' > "$_T7_HINT"; rm -f "$_T7_CACHE"
+printf '%s\n' '{"lean_ctx":true}' > "$_T7_HINT"; rm -f "$_T7_CACHE"
 FAKE_AGY_ECHO_PROMPT=1 _run OUT RC bash "$SHIM" -p "x"
 SH1_OK=1
 [[ "$OUT" == *"TOOL PREFERENCE"* ]] && SH1_OK=0
@@ -4193,70 +4195,55 @@ else
         "rc=$I19B_RC warns=$I19B_WARN_COUNT log=$(tail -6 "$SANDBOX/last-install.log")"
 fi
 
-# I9: register on invalid JSON -> original untouched, temp cleaned, exit-3 msg.
-IH="$(_fresh_home)"
-mkdir -p "$IH/.gemini/antigravity-cli"
-printf '%s' 'NOT VALID JSON {{{' > "$IH/.gemini/antigravity-cli/mcp_config.json"
-_ORIG="$(cat "$IH/.gemini/antigravity-cli/mcp_config.json")"
-printf '#!/bin/sh\nexit 0\n' > "$IH/bin/tokensave"; chmod +x "$IH/bin/tokensave"
-env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" \
-    AGY_PLUGIN_DIR="$ROOT" AGY_SETUP_REGISTER_TOKENSAVE=1 \
-    bash "$INSTALL" > "$SANDBOX/last-install.log" 2>&1
-_NOW="$(cat "$IH/.gemini/antigravity-cli/mcp_config.json")"
-NTMP="$(ls "$IH/.gemini/antigravity-cli/".mcp_config.* 2>/dev/null | wc -l)"
-if [[ "$_ORIG" == "$_NOW" ]] && grep -qi 'not valid JSON\|refusing to overwrite' "$SANDBOX/last-install.log" \
-   && [[ "$NTMP" -eq 0 ]]; then
-    ok "I9 register on invalid JSON: original untouched, temp cleaned, error surfaced"
-else
-    bad "I9 register on invalid JSON: original untouched, temp cleaned, error surfaced" "same=$([[ "$_ORIG" == "$_NOW" ]] && echo yes) ntmp=$NTMP log=$(grep -i json "$SANDBOX/last-install.log" | head -2)"
-fi
-
-# I9b: register happy-path.
+# I9 install never mutates the agy MCP config (retired opt-in is inert)
 IH="$(_fresh_home)"
 mkdir -p "$IH/.gemini/antigravity-cli"
 printf '%s\n' '{"mcpServers":{"lean-ctx":{"command":"lean-ctx"}}}' > "$IH/.gemini/antigravity-cli/mcp_config.json"
-printf '#!/bin/sh\nexit 0\n' > "$IH/bin/tokensave"; chmod +x "$IH/bin/tokensave"
+_ORIG="$(cat "$IH/.gemini/antigravity-cli/mcp_config.json")"
+# The retired opt-in surface, kept ONLY as an inertness fixture.
+_I9_RETIRED_BIN="tokensave"
+_I9_RETIRED_ENV="AGY_SETUP_REGISTER_TOKENSAVE=1"
+printf '#!/bin/sh\nexit 0\n' > "$IH/bin/$_I9_RETIRED_BIN"; chmod +x "$IH/bin/$_I9_RETIRED_BIN"
 env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" \
-    AGY_PLUGIN_DIR="$ROOT" AGY_SETUP_REGISTER_TOKENSAVE=1 \
-    bash "$INSTALL" > "$SANDBOX/last-install.log" 2>&1
+    AGY_PLUGIN_DIR="$ROOT" "$_I9_RETIRED_ENV" \
+    bash "$INSTALL" > "$SANDBOX/last-install.log" 2>&1; I9_RC=$?
+_NOW="$(cat "$IH/.gemini/antigravity-cli/mcp_config.json")"
 NCFG_BAK="$(ls "$IH/.gemini/antigravity-cli/mcp_config.json".bak-agy-* 2>/dev/null | wc -l)"
-if grep -q '"tokensave"' "$IH/.gemini/antigravity-cli/mcp_config.json" \
-   && grep -q '"lean-ctx"' "$IH/.gemini/antigravity-cli/mcp_config.json" \
-   && [[ "$NCFG_BAK" -ge 1 ]]; then
-    ok "I9b register happy-path: tokensave added, lean-ctx preserved, backup made"
+NTMP="$(ls "$IH/.gemini/antigravity-cli/".mcp_config.* 2>/dev/null | wc -l)"
+HINT="$IH/.config/agy-delegate/config.json"
+if [[ "$_ORIG" == "$_NOW" && "$I9_RC" -eq 0 && "$NCFG_BAK" -eq 0 && "$NTMP" -eq 0 ]] \
+   && grep -q '"lean_ctx": true' "$HINT"; then
+    ok "I9 install never mutates the agy MCP config (retired opt-in is inert)"
 else
-    bad "I9b register happy-path: tokensave added, lean-ctx preserved, backup made" "cfg=$(cat "$IH/.gemini/antigravity-cli/mcp_config.json") baks=$NCFG_BAK"
+    bad "I9 install never mutates the agy MCP config (retired opt-in is inert)" "same=$([[ "$_ORIG" == "$_NOW" ]] && echo yes) rc=$I9_RC baks=$NCFG_BAK ntmp=$NTMP hint=$(cat "$HINT" 2>/dev/null)"
 fi
 
-# I10: python3-absent register fails open (skips, install completes).
+# I10 python3-absent install completes and writes no hint (fail-open)
 IH="$(_fresh_home)"
-mkdir -p "$IH/.gemini/antigravity-cli" "$IH/nopy"
+mkdir -p "$IH/nopy"
 for b in bash cat grep sed date mktemp mkdir rm mv cp chmod ls readlink id printf command env; do
     _src="$(command -v "$b" 2>/dev/null)"; [[ -n "$_src" ]] && ln -sf "$_src" "$IH/nopy/$b" 2>/dev/null || true
 done
 cp "$HERE/fake-agy.sh" "$IH/nopy/agy"; chmod +x "$IH/nopy/agy"
 _cc_fixtures_beside "$IH/nopy"
-printf '#!/bin/sh\nexit 0\n' > "$IH/nopy/tokensave"; chmod +x "$IH/nopy/tokensave"
-printf '%s\n' '{"mcpServers":{}}' > "$IH/.gemini/antigravity-cli/mcp_config.json"
 env -i HOME="$IH" PATH="$IH/nopy" AGY_PLUGIN_DIR="$ROOT" \
-    AGY_SETUP_REGISTER_TOKENSAVE=1 \
     bash "$INSTALL" > "$SANDBOX/last-install.log" 2>&1; I10_RC=$?
 if [[ "$I10_RC" -eq 0 && -f "$IH/.local/bin/agy-bridge" ]] \
-   && ! grep -q '"tokensave"' "$IH/.gemini/antigravity-cli/mcp_config.json" \
-   && grep -qi 'python3 not found' "$SANDBOX/last-install.log"; then
-    ok "I10 python3-absent register fails open (skips, install completes)"
+   && [[ ! -f "$IH/.config/agy-delegate/config.json" ]]; then
+    ok "I10 python3-absent install completes and writes no hint (fail-open)"
 else
-    bad "I10 python3-absent register fails open (skips, install completes)" "rc=$I10_RC log=$(tail -4 "$SANDBOX/last-install.log")"
+    bad "I10 python3-absent install completes and writes no hint (fail-open)" "rc=$I10_RC log=$(tail -4 "$SANDBOX/last-install.log")"
 fi
 
-# I11: decline -> availability hint records tokensave:false.
+# I11 availability hint carries exactly the lean_ctx key
 IH="$(_fresh_home)"
 _install_in "$IH" >/dev/null 2>&1
 HINT="$IH/.config/agy-delegate/config.json"
-if [[ -f "$HINT" ]] && grep -q '"tokensave": false' "$HINT"; then
-    ok "I11 decline -> availability hint has tokensave:false"
+HINT_KEYS="$(grep -oE '"[a-z_]+":' "$HINT" | tr -d '":' | sort | tr '\n' ' ')"
+if [[ -f "$HINT" && "$HINT_KEYS" == "lean_ctx " ]]; then
+    ok "I11 availability hint carries exactly the lean_ctx key"
 else
-    bad "I11 decline -> availability hint has tokensave:false" "hint=$(cat "$HINT" 2>/dev/null)"
+    bad "I11 availability hint carries exactly the lean_ctx key" "hint=$(cat "$HINT" 2>/dev/null) keys=$HINT_KEYS"
 fi
 
 # I12: /agy-setup one-liner rejects non-matching/nonexistent resolved path.
@@ -4331,8 +4318,8 @@ _md_fallback_case() {
 
     # Fake `claude`: the block invokes `claude plugin list --json`; the stub
     # just cats whatever payload the driver points CLAUDE_STUB_PAYLOAD at,
-    # matching this suite's established inline-fake convention (I9b's
-    # `tokensave` fake).
+    # matching this suite's established inline-fake convention (I9's
+    # retired-opt-in stub).
     printf '#!/bin/sh\ncat "$CLAUDE_STUB_PAYLOAD"\n' > "$stubdir/claude"
     chmod +x "$stubdir/claude"
 
@@ -4561,22 +4548,20 @@ else
     bad "I13 uninstall reverses install (wrappers gone, shadowed original restored)" "rc=$I13_RC log=$(tail -4 "$SANDBOX/last-uninstall.log")"
 fi
 
-# I13b: uninstall de-registers tokensave + removes hint (flag set).
+# I13b uninstall removes the availability hint
 IH="$(_fresh_home)"
-mkdir -p "$IH/.gemini/antigravity-cli"
-printf '%s\n' '{"mcpServers":{}}' > "$IH/.gemini/antigravity-cli/mcp_config.json"
-printf '#!/bin/sh\nexit 0\n' > "$IH/bin/tokensave"; chmod +x "$IH/bin/tokensave"
-env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" \
-    AGY_PLUGIN_DIR="$ROOT" AGY_SETUP_REGISTER_TOKENSAVE=1 \
-    bash "$INSTALL" > "$SANDBOX/last-install.log" 2>&1
-env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" \
-    AGY_UNINSTALL_TOKENSAVE=1 \
-    bash "$UNINSTALL" > "$SANDBOX/last-uninstall.log" 2>&1
-if ! grep -q '"tokensave"' "$IH/.gemini/antigravity-cli/mcp_config.json" \
-   && [[ ! -f "$IH/.config/agy-delegate/config.json" ]]; then
-    ok "I13b uninstall de-registers tokensave + removes hint (flag set)"
+_install_in "$IH" >/dev/null 2>&1
+HINT="$IH/.config/agy-delegate/config.json"
+if [[ ! -f "$HINT" ]]; then
+    bad "I13b uninstall removes the availability hint" "vacuous: hint never existed after install"
 else
-    bad "I13b uninstall de-registers tokensave + removes hint (flag set)" "cfg=$(cat "$IH/.gemini/antigravity-cli/mcp_config.json") hint=$([[ -f "$IH/.config/agy-delegate/config.json" ]] && echo present)"
+    env -i HOME="$IH" PATH="$IH/bin:$IH/.local/bin:/usr/bin:/bin" \
+        bash "$UNINSTALL" > "$SANDBOX/last-uninstall.log" 2>&1; I13B_RC=$?
+    if [[ "$I13B_RC" -eq 0 && ! -f "$HINT" ]]; then
+        ok "I13b uninstall removes the availability hint"
+    else
+        bad "I13b uninstall removes the availability hint" "rc=$I13B_RC hint=$([[ -f "$HINT" ]] && echo present)"
+    fi
 fi
 
 # I14: uninstall is idempotent (second run exits 0).
