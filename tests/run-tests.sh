@@ -5312,7 +5312,11 @@ echo "== the suite never reaches a real agy through the check (CC03) =="
 #     when the segment mentions _rb_extract -- a static sed READ of
 #     contract-check.sh's own source for RB02's byte-identity check
 #     (:1998), never an invocation; D-02 is about reaching a real agy, and
-#     reading source text structurally cannot.
+#     reading source text structurally cannot -- or when the segment is a
+#     `for VAR in ...` loop header (RB01's own "$BRIDGE" "$SHIM"
+#     "$CONTRACT_CHECK" file list, :2494): the header only binds a loop
+#     variable, and the loop body reaches the file through that variable,
+#     never through the literal name, so the header cannot be the call site.
 #   exempt -- the bracketed range, inclusive of both marker lines. Cleared
 #     only when the segment's FIRST WORD is _cc03m_probe -- a payload
 #     argument to the mutation harness, not a real invocation. Anything
@@ -5389,6 +5393,12 @@ _cc_check_scan() {
         # A static sed READ of contract-check.sh's own source for RB02's
         # byte-identity check (:1998) -- never an invocation.
         if [[ "$seg" == *_rb_extract* ]]; then continue; fi
+        # A for-loop header's `in` list enumerates a path for a LATER segment
+        # (RB01's own "$BRIDGE" "$SHIM" "$CONTRACT_CHECK" file list, :2494) --
+        # the loop body reaches the file only through the loop variable
+        # (`$_rb01_f`), which carries no CONTRACT_CHECK text of its own, so
+        # this header can never itself be the call site D-02 cares about.
+        if [[ "$seg" =~ ^[[:space:]]*for[[:space:]]+[A-Za-z_][A-Za-z0-9_]*[[:space:]]+in([[:space:]]|$) ]]; then continue; fi
         if [[ "$seg" =~ (^|[[:space:];])PATH=([^[:space:]]*) ]]; then
             val="${BASH_REMATCH[2]}"
             val="${val%\"}"; val="${val#\"}"
