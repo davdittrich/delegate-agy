@@ -1678,6 +1678,29 @@ else
     bad "SH16 unrecognized long flag shifts exactly once, prompt token survives (D-04)" "$SH16_DETAIL"
 fi
 
+# SH17 (CR-01, delegate-agy-3bw): --include-directories must not become the
+# terminal --add-dir. fake-agy resolves GEMINI.md/TASK from the LAST --add-dir
+# seen (tests/fake-agy.sh:274-296), so a caller directory landing last means
+# agy looks for GEMINI.md in the CALLER's dir (which has none) instead of
+# $WORK_DIR (where the shim embeds the real TASK) -- exactly the shim's own
+# documented primary Metaswarm pattern: `--yolo ... --include-directories <dir>`.
+SH17_DIR="$SANDBOX/sh17-include-dir"
+mkdir -p "$SH17_DIR"
+SH17_TOKEN="SH17-TASK-DELIVERED"
+SH17_DUMP="$SANDBOX/sh17_argv.log"
+: > "$SH17_DUMP"
+SH17_OUT="$(FAKE_AGY_DUMP_ARGV="$SH17_DUMP" FAKE_AGY_ECHO_PROMPT=1 bash "$SHIM" --yolo --include-directories "$SH17_DIR" -p "$SH17_TOKEN" 2>/dev/null)"
+SH17_RC=$?
+SH17_LAST_ADDDIR="$(awk '/^--add-dir$/{v=""; getline v} END{print v}' "$SH17_DUMP")"
+SH17_CALLER_SEEN=0; grep -qF "$SH17_DIR" "$SH17_DUMP" && SH17_CALLER_SEEN=1
+rm -f "$_SHIM_CACHE"
+if [[ "$SH17_RC" -eq 0 && "$SH17_CALLER_SEEN" -eq 1 && "$SH17_LAST_ADDDIR" != "$SH17_DIR" && "$SH17_OUT" == *"$SH17_TOKEN"* ]]; then
+    ok "SH17 --include-directories reaches agy, stays before trailing WORK_DIR --add-dir (CR-01)"
+else
+    bad "SH17 --include-directories reaches agy, stays before trailing WORK_DIR --add-dir (CR-01)" \
+        "rc=$SH17_RC caller_seen=$SH17_CALLER_SEEN last=$SH17_LAST_ADDDIR out=$SH17_OUT argv=$(cat "$SH17_DUMP")"
+fi
+
 # IN01 (IN-01): the tmp-then-mv cache write in both scripts leaves the new
 # file at process-umask permissions (typically 644) until the chmod 600 two
 # lines later runs -- a process killed between mv and chmod, or a concurrent
