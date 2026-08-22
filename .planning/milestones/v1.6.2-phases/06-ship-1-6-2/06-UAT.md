@@ -4,6 +4,10 @@ verified: 2026-08-22T16:02:37Z
 resolved: 2026-08-22T16:10:00Z
 status: passed
 must_haves_verified: 4/4
+audit_acknowledged:
+  milestone: v1.6.2
+  at: 2026-08-22
+  gap_snapshot: "passed::scenarios=0"
 ---
 
 # Phase 06: Ship 1.6.2 — UAT
