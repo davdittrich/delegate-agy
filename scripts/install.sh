@@ -23,7 +23,6 @@
 #     ~/.gemini. NEVER touches the repo.
 #
 # Env flags (opt-in, default off):
-#   AGY_SETUP_REGISTER_TOKENSAVE=1  register tokensave as an agy MCP server
 #   AGY_SETUP_PATCH_ALIASES=1       apply the recursive-gemini rc alias patch
 #
 # Override the installer's self-resolved plugin dir (used by tests / manual
@@ -259,113 +258,39 @@ PY
     done
 fi
 
-# ── opt-in: register tokensave as an agy MCP server + availability hint ──────
+# ── detect lean-ctx MCP availability + write hint (read-only; never mutates
+# the agy MCP config) ─────────────────────────────────────────────────────────
 AGY_MCP_CFG="$HOME/.gemini/antigravity-cli/mcp_config.json"
 HINT_DIR="$HOME/.config/agy-delegate"
 HINT="$HINT_DIR/config.json"
-TOKENSAVE_BIN="$(command -v tokensave 2>/dev/null || echo "$HOME/.local/bin/tokensave")"
 
-AGY_HAS_LEANCTX=0
-AGY_HAS_TOKENSAVE=0
 _agy_detect() {
     if ! command -v python3 >/dev/null 2>&1; then
-        echo "0 0"
+        echo "0"
         return 0
     fi
     python3 - "$AGY_MCP_CFG" <<'PY'
 import sys, json, os
-p = sys.argv[1]; lc = ts = False
+p = sys.argv[1]; lc = False
 if os.path.exists(p):
     try:
         s = json.load(open(p)).get('mcpServers', {})
-        lc = 'lean-ctx' in s; ts = 'tokensave' in s
+        lc = 'lean-ctx' in s
     except Exception:
         pass
-print(f"{int(lc)} {int(ts)}")
+print(f"{int(lc)}")
 PY
 }
-read -r AGY_HAS_LEANCTX AGY_HAS_TOKENSAVE < <(_agy_detect)
+read -r AGY_HAS_LEANCTX < <(_agy_detect)
 
-_register_tokensave() {
-    if ! command -v python3 >/dev/null 2>&1; then
-        echo "WARNING: python3 not found — skipping tokensave registration (fail-open)." >&2
-        return 0
-    fi
-    if [[ ! -f "$AGY_MCP_CFG" ]]; then
-        echo "WARNING: agy mcp_config not found at '$AGY_MCP_CFG' — is agy initialised? Skipping." >&2
-        return 0
-    fi
-    # Re-read the config IMMEDIATELY before the write (minimize TOCTOU).
-    python3 - "$AGY_MCP_CFG" "$TOKENSAVE_BIN" <<'PY'
-import sys, json, os, hashlib, tempfile, time
-cfg, tsbin = sys.argv[1], sys.argv[2]
-raw = open(cfg, 'rb').read()
-try:
-    d = json.loads(raw)
-except Exception as e:
-    print(f"ERROR: agy mcp_config is not valid JSON ({e}); refusing to overwrite a "
-          f"recoverable config. Aborting.", file=sys.stderr)
-    sys.exit(3)
-srv = d.setdefault('mcpServers', {})
-if 'tokensave' in srv:
-    print("tokensave already registered for agy — no change.")
-    sys.exit(0)
-bak = cfg + '.bak-agy-' + time.strftime('%Y%m%d%H%M%S')
-open(bak, 'wb').write(raw)
-if (hashlib.sha256(open(bak, 'rb').read()).hexdigest()
-        != hashlib.sha256(raw).hexdigest()) or os.path.getsize(bak) != len(raw):
-    print(f"ERROR: backup verification failed for {bak}; aborting without modifying "
-          f"{cfg}.", file=sys.stderr)
-    sys.exit(4)
-srv['tokensave'] = {"command": tsbin, "args": ["serve"]}
-dirn = os.path.dirname(cfg) or '.'
-fd, tmp = tempfile.mkstemp(prefix='.mcp_config.', dir=dirn)
-os.close(fd); os.chmod(tmp, 0o600)
-try:
-    with open(tmp, 'w') as f:
-        json.dump(d, f, indent=2); f.write('\n')
-    json.load(open(tmp))
-except Exception as e:
-    os.unlink(tmp)
-    print(f"ERROR: wrote invalid JSON temp ({e}); removed temp, {cfg} unchanged. "
-          f"Backup at {bak}.", file=sys.stderr)
-    sys.exit(5)
-os.replace(tmp, cfg)
-print(f"Registered tokensave for agy (backup: {bak}).")
-PY
-}
-
-if [[ -x "$TOKENSAVE_BIN" && "$AGY_HAS_TOKENSAVE" == "0" ]]; then
-    DO_REG="${AGY_SETUP_REGISTER_TOKENSAVE:-}"
-    if [[ -z "$DO_REG" ]]; then
-        if [[ -t 0 ]]; then
-            read -rp "Register tokensave as an agy MCP server? Grants agy code-graph READ + local-project MUTATE tools. [y/N] " ans
-            [[ "$ans" =~ ^[Yy]$ ]] && DO_REG=1 || DO_REG=0
-        else
-            echo "tokensave is available but not registered for agy. Re-run with" \
-                 "AGY_SETUP_REGISTER_TOKENSAVE=1 to register. Skipping."
-            DO_REG=0
-        fi
-    fi
-    if [[ "$DO_REG" == "1" ]]; then
-        if _register_tokensave; then
-            read -r AGY_HAS_LEANCTX AGY_HAS_TOKENSAVE < <(_agy_detect)
-        else
-            echo "tokensave registration did not complete (see error above); your" \
-                 "existing config is unchanged." >&2
-        fi
-    fi
-fi
-
-# ── write MCP availability hint (tokensave:false on decline) ──────────────────
 mkdir -p "$HINT_DIR"
 if command -v python3 >/dev/null 2>&1; then
-    python3 - "$HINT" "$AGY_HAS_LEANCTX" "$AGY_HAS_TOKENSAVE" <<'PY'
+    python3 - "$HINT" "$AGY_HAS_LEANCTX" <<'PY'
 import sys, json
-p, lc, ts = sys.argv[1], sys.argv[2] == '1', sys.argv[3] == '1'
-json.dump({"lean_ctx": lc, "tokensave": ts}, open(p, 'w'), indent=2)
+p, lc = sys.argv[1], sys.argv[2] == '1'
+json.dump({"lean_ctx": lc}, open(p, 'w'), indent=2)
 open(p, 'a').write('\n')
-print(f"Wrote MCP availability hint {p}: lean_ctx={lc} tokensave={ts}")
+print(f"Wrote MCP availability hint {p}: lean_ctx={lc}")
 PY
 fi
 

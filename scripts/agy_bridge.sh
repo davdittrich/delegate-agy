@@ -453,7 +453,7 @@ Options:
   --help                     show this message
   --                         treat remaining args as prompt text
 
-  Optional: ~/.config/agy-delegate/config.json {"lean_ctx":bool,"tokensave":bool}
+  Optional: ~/.config/agy-delegate/config.json {"lean_ctx":bool}
   (written by /agy-setup) hints MCP availability; live-probed if absent.
 
 HELP
@@ -667,48 +667,46 @@ fi
     || { echo "ERROR: failed to embed prompt into GEMINI.md" >&2; exit 2; }
 
 # ── MCP-server autodetect (cached 60-min, config-hint fast-path, live fallback) ─
-# Bias agy toward lean-ctx/tokensave reads ONLY for MCP-permitted types. The
-# stanza is advisory GEMINI.md text — it does NOT relax --sandbox/--add-dir.
-_MCP_LEANCTX=0; _MCP_TOKENSAVE=0
+# Bias agy toward lean-ctx reads ONLY for MCP-permitted types. The stanza is
+# advisory GEMINI.md text — it does NOT relax --sandbox/--add-dir.
+_MCP_LEANCTX=0
 if command -v python3 >/dev/null 2>&1; then
     # Guarded like CACHE_FILE above: HOME may be unset, and this block runs on
     # every delegation. A missing home degrades to autodetect-every-time.
     _MCP_CACHE="${HOME:-/nonexistent}/.cache/agy-bridge-mcp"
     if [[ -s "$_MCP_CACHE" ]] && [[ -z "$(find "$_MCP_CACHE" -mmin +60 2>/dev/null)" ]]; then
         _MCP_LEANCTX=$(sed -n '1p' "$_MCP_CACHE" 2>/dev/null)
-        _MCP_TOKENSAVE=$(sed -n '2p' "$_MCP_CACHE" 2>/dev/null)
     else
-        read _MCP_LEANCTX _MCP_TOKENSAVE < <(python3 - \
+        _MCP_LEANCTX=$(python3 - \
             "${HOME:-/nonexistent}/.config/agy-delegate/config.json" \
             "${HOME:-/nonexistent}/.gemini/antigravity-cli/mcp_config.json" <<'PY'
 import sys, json, os
 hint, live = sys.argv[1], sys.argv[2]
-lc = ts = False
+lc = False
 def rd(p):
     try: return json.load(open(p))
     except Exception: return None
 d = rd(hint) if os.path.exists(hint) else None
 if isinstance(d, dict):
-    lc = d.get('lean_ctx') is True; ts = d.get('tokensave') is True
+    lc = d.get('lean_ctx') is True
 else:
     d = rd(live) if os.path.exists(live) else None
     if isinstance(d, dict):
         s = d.get('mcpServers', {}) or {}
-        lc = 'lean-ctx' in s; ts = 'tokensave' in s
-print(f"{int(lc)} {int(ts)}")
+        lc = 'lean-ctx' in s
+print(f"{int(lc)}")
 PY
 )
-        _MCP_LEANCTX="${_MCP_LEANCTX:-0}"; _MCP_TOKENSAVE="${_MCP_TOKENSAVE:-0}"
+        _MCP_LEANCTX="${_MCP_LEANCTX:-0}"
         mkdir -p "${_MCP_CACHE%/*}" 2>/dev/null || true
-        { printf '%s\n%s\n' "$_MCP_LEANCTX" "$_MCP_TOKENSAVE" > "$_MCP_CACHE.tmp.$$" \
+        { printf '%s\n' "$_MCP_LEANCTX" > "$_MCP_CACHE.tmp.$$" \
             && mv "$_MCP_CACHE.tmp.$$" "$_MCP_CACHE"; } 2>/dev/null || true
         chmod 600 "$_MCP_CACHE" 2>/dev/null || true
     fi
 fi
 # MCP-permitted types = the SAME $TYPE the policy case uses; search + shim excluded.
-if [[ "$TYPE" =~ ^(code|review|analysis|implement)$ ]] \
-   && { [[ "$_MCP_LEANCTX" == "1" ]] || [[ "$_MCP_TOKENSAVE" == "1" ]]; }; then
-    printf '\n---\nTOOL PREFERENCE: when reading files or inspecting code structure, prefer the lean-ctx tools (ctx_read/ctx_search) and tokensave_context over raw full-file dumps — they are token-efficient. Standard file tools remain available within your sandbox.\n' \
+if [[ "$TYPE" =~ ^(code|review|analysis|implement)$ ]] && [[ "$_MCP_LEANCTX" == "1" ]]; then
+    printf '\n---\nTOOL PREFERENCE: when reading files or inspecting code structure, prefer the lean-ctx tools (ctx_read/ctx_search) over raw full-file dumps — they are token-efficient. Standard file tools remain available within your sandbox.\n' \
         >> "$WORK_DIR/GEMINI.md"
 fi
 AGY_POINTER='Complete the TASK described in your GEMINI.md context. Output only the result.'
