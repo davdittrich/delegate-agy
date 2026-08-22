@@ -2476,13 +2476,22 @@ _rb_agy_scan() {
     printf '%s %s' "$viol" "$occ"
 }
 
-# RB01: the real scripts. `bash -n` first -- a file that does not parse cannot
-# be scanned meaningfully, and a scan of an unparseable file would report zero
+# RB01: the real scripts, plus contract-check.sh -- the test harness invokes
+# the real agy binary too, and an unbounded call there hangs the suite exactly
+# as an unbounded shipped call hangs the box (D-06). The floor below is a
+# total across all scanned files, not per file: a future rename that empties
+# contract-check.sh's own contribution still clears the floor on the other
+# two files' occurrences. That ceiling predates this widen and applies
+# unchanged to the two-file version; naming it here, not building a per-file
+# floor.
+#
+# `bash -n` first -- a file that does not parse cannot be scanned
+# meaningfully, and a scan of an unparseable file would report zero
 # violations for the wrong reason.
 RB01_OK=1
 RB01_DETAIL=""
 RB01_TOTAL=0
-for _rb01_f in "$BRIDGE" "$SHIM"; do
+for _rb01_f in "$BRIDGE" "$SHIM" "$CONTRACT_CHECK"; do
     if ! bash -n "$_rb01_f" 2>"$SANDBOX/rb01-syntax.log"; then
         RB01_OK=0
         RB01_DETAIL="$RB01_DETAIL ${_rb01_f##*/}:unparseable"

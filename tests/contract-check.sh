@@ -414,7 +414,21 @@ run_bounded() {
 # AGY_BIN: resolve exactly as scripts/agy_bridge.sh:23 does, so $0 inside a
 # PATH-resolved fake is an absolute path. Absence is a verdict input, not a
 # fatal error -- the "could not ask" path is a required deliverable (D-08).
-AGY_BIN="$(command -v agy 2>/dev/null || true)"
+#
+# _CC_NO_AGY is set from this same resolution's exit status, not by a
+# separate `-z "$AGY_BIN"` test -- RB01's scan matches any expansion of
+# $AGY_BIN, and a standalone emptiness guard is not a run_bounded call, so
+# it would score as a false-positive "unbounded invocation" despite calling
+# nothing. Branching on `command -v`'s own exit status keeps this flag's
+# origin free of any $AGY_BIN mention, so the seven guard clauses below can
+# test the flag instead of re-mentioning the variable, leaving only the four
+# real run_bounded call sites as scannable occurrences.
+if AGY_BIN="$(command -v agy 2>/dev/null)"; then
+    _CC_NO_AGY=0
+else
+    AGY_BIN=""
+    _CC_NO_AGY=1
+fi
 
 # ── Exit-code contract (D-06, D-07) ──────────────────────────────────────────
 readonly CC_EXIT_OK=0
@@ -528,7 +542,7 @@ _cc_preflight() {
     _CC_MODELS_OUT="$_CC_SCRATCH/models.stdout"
     _CC_MODELS_ERR="$_CC_SCRATCH/models.stderr"
 
-    if [[ -z "$AGY_BIN" ]]; then
+    if [[ "$_CC_NO_AGY" -eq 1 ]]; then
         _CC_PREFLIGHT_REASON="no agy on PATH; command -v agy did not resolve"
         return 0
     fi
@@ -566,7 +580,7 @@ _cc_preflight() {
 _cc_probe_agy_version_shape() {
     local name="agy-version-shape"
 
-    if [[ -z "$AGY_BIN" ]]; then
+    if [[ "$_CC_NO_AGY" -eq 1 ]]; then
         _cc_row "$name" unverified "no agy on PATH; command -v agy did not resolve"
         return 0
     fi
@@ -601,7 +615,7 @@ _cc_probe_agy_version_shape() {
 _cc_probe_models_format() {
     local name="models-format"
 
-    if [[ -z "$AGY_BIN" ]]; then
+    if [[ "$_CC_NO_AGY" -eq 1 ]]; then
         _cc_row "$name" unverified "no agy on PATH; command -v agy did not resolve"
         return 0
     fi
@@ -645,7 +659,7 @@ _cc_probe_models_format() {
 _cc_probe_non_gemini_rows() {
     local name="non-gemini-rows"
 
-    if [[ -z "$AGY_BIN" ]]; then
+    if [[ "$_CC_NO_AGY" -eq 1 ]]; then
         _cc_row "$name" unverified "no agy on PATH; command -v agy did not resolve"
         return 0
     fi
@@ -699,7 +713,7 @@ _CC_IMPOSSIBLE_MODEL="gemini-99.9-flash-high"
 _cc_probe_invalid_model_rejection() {
     local name="invalid-model-rejection"
 
-    if [[ -z "$AGY_BIN" ]]; then
+    if [[ "$_CC_NO_AGY" -eq 1 ]]; then
         _cc_row "$name" unverified "no agy on PATH; command -v agy did not resolve"
         return 0
     fi
@@ -830,7 +844,7 @@ _cc_fixture_for() {
 _cc_probe_gemini_md_binds() {
     local name="gemini-md-binds"
 
-    if [[ -z "$AGY_BIN" ]]; then
+    if [[ "$_CC_NO_AGY" -eq 1 ]]; then
         _cc_row "$name" unverified "no agy on PATH; command -v agy did not resolve"
         _cc_row_note empty-success-capture unverified "no agy on PATH; billed half not attempted"
         return 0
@@ -1009,7 +1023,7 @@ _cc_probe_gemini_md_binds() {
 _cc_probe_sigterm_and_model_arg() {
     local name="sigterm-ignored" name2="model-arg-accepts"
 
-    if [[ -z "$AGY_BIN" ]]; then
+    if [[ "$_CC_NO_AGY" -eq 1 ]]; then
         _cc_row "$name" unverified "no agy on PATH; command -v agy did not resolve"
         _cc_row "$name2" unverified "no agy on PATH; command -v agy did not resolve"
         return 0
