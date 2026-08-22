@@ -646,10 +646,8 @@ AGY_ARGS=(--print "$AGY_POINTER" --add-dir "$WORK_DIR")
 # workspace reads still work; yolo stays unrestricted (--dangerously-skip-permissions).
 # Read-only-ness itself remains prompt-side (the shim-* policies permit no write tool);
 # --sandbox blocks ESCAPE outside the granted dirs.
-# WORK_DIR is re-granted last so it stays the terminal --add-dir (where GEMINI.md
-# is auto-loaded), mirroring agy_bridge.sh's --sandbox …--add-dir "$WORK_DIR" order.
 if [[ "$YOLO" -ne 1 && "$APPROVAL_MODE" != "yolo" ]]; then
-    AGY_ARGS+=(--sandbox --add-dir "$PWD" --add-dir "$WORK_DIR")
+    AGY_ARGS+=(--sandbox --add-dir "$PWD")
 fi
 
 [[ -n "$MODEL" ]] && AGY_ARGS+=(--model "$MODEL")
@@ -663,6 +661,12 @@ fi
 for dir in "${INCLUDE_DIRS[@]}"; do
     AGY_ARGS+=(--add-dir "$dir")
 done
+
+# WORK_DIR must be appended unconditionally LAST, after every caller-supplied
+# --add-dir, so it stays the terminal grant agy uses to auto-load GEMINI.md
+# (where the real TASK is embedded) — mirroring agy_bridge.sh's own
+# collect-user-dirs-then-trailing-WORK_DIR order (CR-01, delegate-agy-3bw).
+AGY_ARGS+=(--add-dir "$WORK_DIR")
 
 # ── Run agy (prompt embedded in the 0600 GEMINI.md; only the static pointer
 #    is passed as --print's value — avoids ARG_MAX and keeps ps/argv clean) ──
