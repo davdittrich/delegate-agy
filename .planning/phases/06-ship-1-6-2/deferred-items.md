@@ -61,3 +61,8 @@ caused by the current task's own changes).
   regardless of its injected probe — not a separate comment-stripping bug.
   Full suite: `PASS=165 FAIL=0`. Ticket `delegate-agy-nko` closed. Gate for
   plan 06-06 is unblocked.
+**Status:** acknowledged
+
+Acknowledged at milestone v1.6.2 close, 2026-08-22 — resolved per the note
+above; this field only suppresses the milestone-close audit's open-item
+flag, it does not change the RESOLVED finding it mirrors.

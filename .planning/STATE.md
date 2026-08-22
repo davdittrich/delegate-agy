@@ -160,11 +160,12 @@ None yet.
 
 ## Deferred Items
 
-Items acknowledged and carried forward from previous milestone close:
+Items acknowledged and deferred at milestone close, most recent first:
 
-| Category | Item | Status | Deferred At |
-|----------|------|--------|-------------|
-| *(none)* | | | |
+| Category | Item | Status | Deferred At | Milestone |
+|----------|------|--------|-------------|-----------|
+| uat_gaps | 06/06-UAT.md | passed, 0 pending scenarios | 2026-08-22 | v1.6.2 |
+| deferred_items | 06/deferred-items.md: CC03/CC03m fail on master, pre-existing since 06-04 (resolved commit 5722252, ticket delegate-agy-nko closed) | acknowledged | 2026-08-22 | v1.6.2 |
 
 ## Session Continuity
 
