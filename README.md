@@ -406,12 +406,20 @@ tests/fixtures/                — captured real-agy output the fake and CC05 ar
 
 ### 1.6.2
 
+**Every existing installation must re-run `scripts/install.sh` for this release to take effect.** The launchers exec a target pinned at install time, and a superseded pin now fails loud with exit 127 instead of silently running the old copy — so a shipped fix that is never re-installed sits on disk and never executes.
+
 - `agy-bridge` no longer hangs when agy does. Both agy invocations now escalate to `SIGKILL`: the model fetch 3s after `$AGY_MODELS_TIMEOUT` (default 20s), the delegation call 5s after `$TIMEOUT`. agy ignores `SIGTERM`, so plain `timeout` sent the signal and then blocked forever — the delegation call outlived even its own 600s bound. Both entry points enforce every bound through one shared helper, using coreutils `timeout -k` where it exists and a bash watchdog where it does not, so a host without coreutils no longer costs the bridge its startup or the shim its bound. A failed fetch now falls back to the stale cached list with a warning instead of hard-failing while a usable list sits on disk.
 - A failed `agy models` surfaces agy's own stderr instead of discarding it. That text is the only diagnostic when the real fault is auth or the network.
 - A model list carrying no `gemini-` ids reports a degraded/unauthenticated agy rather than blaming the `--type` the user picked.
 - An agy killed by something other than its own timeout — an OOM killer, an external `kill -9`, a container preemption — is now named as such rather than surfacing as a bare `agy exit 137`. A 137 arriving before the bound elapsed cannot be the bridge's own `-k` escalation, so it is reported distinctly and the 137 exit status is preserved.
 - Both pinned launchers (`agy-bridge` and the `gemini` shim) refuse to run (exit 127) when Claude Code's install registry reports a different active version, naming both versions; each prints the exact repin command when the active version is numeric and the constructed installer path exists on disk, otherwise a generic pointer to `/agy-setup`. Previously a superseded pin only warned on stderr and kept running the stale copy, so a shipped fix could sit installed-but-never-executed. Replaces the newer-sibling directory scan.
 - `/agy-setup` leads with a readable two-step install (print the path, run it) instead of the 9-line resolve-and-validate pipeline; the pipeline remains as a fallback where no registry file exists.
+- The `gemini` shim no longer swallows the token after an unrecognized long flag, so a prompt following an unknown `--flag` reaches agy instead of being consumed as that flag's value; an unknown flag that genuinely carries data must use the inline `--flag=value` form.
+- A successful `agy models` call that returns nothing, with no cached list on disk, now reports the degraded/unauthenticated diagnostic instead of the generic fetch-failure message; the exit code and the untouched cache are unchanged.
+- The bounded-execution helper now hands the host's `TERM`/`INT`/`HUP` handlers back before tearing down its own timer, closing a window in which a signal arriving during teardown left the caller's cleanup handler replaced.
+- The static check that every `agy` invocation is a bounded call now also covers the repository's contract-check script, which invokes agy four times and was previously unscanned.
+- A standing regression guard now states as one assertion that both model-list validators use the SIGPIPE-safe herestring form, so a one-sided edit to the pair fails with a message naming both sides.
+- agy's per-run policy isolation was verified to bind at the bridge's actual invocation shape rather than being assumed from the CWD-binding comment, and a delegation call was observed dying on `SIGTERM` alone — which narrows, but did not remove, the kill-after escalation's stated rationale; the escalation was kept and the contradiction recorded in the project's decision log.
 
 ### 1.6.1
 
