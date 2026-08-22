@@ -4,10 +4,10 @@ milestone: v1.6.2
 current_phase: 06
 current_phase_name: Ship 1.6.2
 status: executing
-stopped_at: Completed quick task 260822-m01 (remove tokensave)
-last_updated: "2026-08-22T14:41:00.876Z"
+stopped_at: /gsd:ship preflight — completed 06-REVIEW.md and CR-01 fix, resuming verify_phase_goal
+last_updated: "2026-08-22T15:50:00.000Z"
 last_activity: 2026-08-22
-last_activity_desc: "Human sign-off received on all four release-gate Success Criteria (06-06-SUMMARY.md). Epic delegate-agy-tmm closed. Phase 6 plans 6/6, sign-off complete — ready for /gsd:ship (must confirm pushed origin/master resolves to GATE_SHA 37c9926 before tagging)."
+last_activity_desc: "/gsd:ship's verification.status gate found phase 06 missing a VERIFICATION.md (verify_phase_goal was never dispatched after 06-06). Ran the #2868 recovery path: code_review_gate found 1 blocker (CR-01, gemini_shim.sh --include-directories breaking the WORK_DIR-last --add-dir invariant, silently misdirecting agy for the shim's own documented Metaswarm pattern) plus 2 warnings/2 info (06-REVIEW.md, committed b6b693a). Per project's own follow-ups-are-blockers rule, fixed CR-01 test-first (delegate-agy-3bw, closed): RED SH17 (c3bfea3), GREEN fix (f02d6ae), suite PASS=165 FAIL=0."
 state_head: 2b6b9b10d467e1080eefe0d74eec331ce3c9b9c6
 progress:
   total_phases: 7
