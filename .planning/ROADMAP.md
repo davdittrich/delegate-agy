@@ -248,7 +248,7 @@ Plans:
   3. A fresh `scripts/install.sh` run against merged `master` produces working `agy-bridge` and `gemini` launchers, and both suites pass on that tree.
   4. The release notes name each defect 1.6.2 closes and state plainly that every existing installation must re-run the installer, because the pin only points forward.
 
-**Plans**: 3/6 plans executed
+**Plans**: 4/6 plans executed
 
 Plans:
 **Wave 1**
@@ -262,7 +262,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 06-04-PLAN.md — `RB01`'s unbounded-call scan widened to `tests/contract-check.sh` with that file restructured to scan clean, plus `IN02`, a cross-file guard over both model-list validators' herestring sites
+- [x] 06-04-PLAN.md — `RB01`'s unbounded-call scan widened to `tests/contract-check.sh` with that file restructured to scan clean, plus `IN02`, a cross-file guard over both model-list validators' herestring sites
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -289,7 +289,7 @@ Phases 1, 1.5, 3, and 4 have no dependencies on each other and may be planned or
 | 3. The exit-code contract | 4/4 | Complete    | 2026-08-21 |
 | 4. Installer and launcher surface | 3/3 | Complete    | 2026-08-21 |
 | 5. The shim's failure-mode contract | 2/2 | Complete    | 2026-08-21 |
-| 6. Ship 1.6.2 | 3/6 | In Progress|  |
+| 6. Ship 1.6.2 | 4/6 | In Progress|  |
 
 ## Requirement Coverage
 

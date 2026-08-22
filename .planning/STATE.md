@@ -4,16 +4,16 @@ milestone: v1.6.2
 current_phase: 06
 current_phase_name: Ship 1.6.2
 status: executing
-stopped_at: Completed 06-03-PLAN.md
-last_updated: "2026-08-21T23:58:28.221Z"
+stopped_at: Completed 06-04-PLAN.md
+last_updated: "2026-08-22T00:23:41.000Z"
 last_activity: 2026-08-22
-last_activity_desc: 06-03 complete — D-04 (SH16, gemini_shim.sh flag-eating) and D-07 (R9f, agy_bridge.sh zero-byte fetch) fixed, EC06 regression fixed
-state_head: 406114ade090af01425296203f1915a2d88e4764
+last_activity_desc: 06-04 complete — IN02 joint model-validation guard added (D-05); RB01 widened to contract-check.sh and its seven false-positive guards fixed (D-06)
+state_head: ea3dd79e0e8fe6623ab156f8c88cac3bde723e99
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 29
-  completed_plans: 27
+  completed_plans: 28
 milestone_name: milestone
 ---
 
@@ -29,11 +29,11 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 06 (Ship 1.6.2) — EXECUTING
-Plan: 06-03 complete (D-04 and D-07 fixed, test-first)
-Status: Executing — 3 of 6 plans remaining
-Last activity: 2026-08-22 — 06-03 complete
+Plan: 06-04 complete (IN02 joint model-validation guard added; RB01 widened + contract-check.sh fixed)
+Status: Executing — 2 of 6 plans remaining
+Last activity: 2026-08-22 — 06-04 complete
 
-Progress: [████████████████████] 26/29 plans overall (Phase 06: 3/6 plans)
+Progress: [████████████████████] 27/29 plans overall (Phase 06: 4/6 plans)
 
 ## Performance Metrics
 
@@ -50,7 +50,7 @@ Progress: [████████████████████] 26/29 p
 | 01.5 | 6 | - | - |
 | 04 | 3 | - | - |
 | 05 | 2 | - | - |
-| 06 | 2 | 43min | 22min |
+| 06 | 4 | 117min | 29min |
 
 **Recent Trend:**
 
@@ -86,6 +86,7 @@ Progress: [████████████████████] 26/29 p
 | Phase 06 P01 | 35min | 2 tasks | 4 files |
 | Phase 06 P02 | 8min | 2 tasks | 1 file |
 | Phase 06 P03 | 50min | 2 tasks | 4 files |
+| Phase 06 P04 | 24min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -130,6 +131,8 @@ Recent decisions affecting current work:
 - [Phase 06]: 06-02: delegate-agy-xfa (gemini-md-binds isolation) and delegate-agy-i43 (sigterm-ignored contradiction) both closed against new PROJECT.md Key Decisions rows (D-02, D-03) rather than left open or silently dropped -- xfa verified good with a one-run caveat, i43 recorded as a genuine contradiction (agy died on SIGTERM alone, rc=124) with the `-k` escalation kept as defense-in-depth, not removed on one sample
 - [Phase 06]: [Phase 06]: 06-03: D-04's allowlist carve-out has zero members -- every value-taking gemini_shim.sh flag already has an explicit case arm before the catch-all, so the fix is a bare single shift, no allowlist array
 - [Phase 06]: [Phase 06]: 06-03: D-07 reuses R9's exact degraded-message text verbatim at the new zero-byte/no-cache bail rather than inventing a third message; fixed Phase 3's EC06 regression test (stale exactly-once literal count) rather than forking the text
+- [Phase 06]: 06-04: IN02 (D-05) states the bridge/shim model-validation herestring pair as one joint assertion naming both counts, rather than a third single-file guard alongside R9d/SH15d
+- [Phase 06]: 06-04: RB01 (D-06) widened to scan contract-check.sh; its seven false-positive `-z "$AGY_BIN"` guards route through a `_CC_NO_AGY` flag set from `command -v agy`'s own exit status, not a second `$AGY_BIN` expansion, keeping the scanner's own regex untouched
 
 ### Pending Todos
 
@@ -160,6 +163,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-21T23:58:28.172Z
-Stopped at: Completed 06-03-PLAN.md
+Last session: 2026-08-22T00:24:39.000Z
+Stopped at: Completed 06-04-PLAN.md
 Resume file: None
