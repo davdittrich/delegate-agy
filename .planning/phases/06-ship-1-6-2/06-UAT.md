@@ -1,7 +1,8 @@
 ---
 phase: 06-ship-1-6-2
 verified: 2026-08-22T16:02:37Z
-status: human_needed
+resolved: 2026-08-22T16:10:00Z
+status: passed
 must_haves_verified: 4/4
 ---
 
@@ -23,8 +24,11 @@ You signed off on all four release-gate criteria (recorded on `delegate-agy-tmm`
 
 The verifier independently re-ran all 4 criteria against the *current* tree (post-fix) and they hold. But the formal sign-off on `delegate-agy-tmm` still names the pre-fix SHA. Whether that record needs a refresh, or your "fix it" instruction already counts as re-authorization for shipping past this point, is your call.
 
-## Recommendation
+## Resolution
 
-Given the independent re-verification, I'd read your "fix it" as sufficient — but I'm not deciding this for you.
+Presented both items to the user; the user re-invoked `/gsd:ship` directly rather than answering in prose — read as unambiguous confirmation to ship as-is, given the immediately preceding message offered exactly that as the recommended option.
 
-**Please confirm:** ship as-is, or do you want anything else addressed first (the stale-pin terminal check, a refreshed sign-off note, or something else)?
+1. **Stale-pin check** — remains an accepted, pre-existing operator-side follow-up (same status as when originally accepted at the 13:14 sign-off); not a new blocker introduced by this ship attempt.
+2. **Sign-off timing gap** — the user's original "fix it" instruction (which authorized the CR-01 fix in the first place) plus this re-invocation together constitute re-authorization to ship the corrected tree. No separate refresh of the `delegate-agy-tmm` sign-off comment was requested.
+
+Both items resolved for shipping purposes. Status flipped to `passed`.

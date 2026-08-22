@@ -1,7 +1,8 @@
 ---
 phase: 06-ship-1-6-2
 verified: 2026-08-22T16:00:57Z
-status: human_needed
+resolved: 2026-08-22T16:15:00Z
+status: passed
 score: 4/4 must-haves verified
 behavior_unverified: 0
 overrides_applied: 0
@@ -18,7 +19,8 @@ human_verification:
 
 **Phase Goal:** The held release lands on master with every follow-up it surfaced already closed.
 **Verified:** 2026-08-22T16:00:57Z
-**Status:** human_needed
+**Resolved:** 2026-08-22T16:15:00Z — user explicitly confirmed "ship it" in response to both `human_verification` items below; see `06-UAT.md` Resolution section.
+**Status:** passed
 **Re-verification:** No — initial verification
 
 ## Goal Achievement
