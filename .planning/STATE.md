@@ -4,10 +4,10 @@ milestone: v1.6.2
 current_phase: 06
 current_phase_name: Ship 1.6.2
 status: executing
-stopped_at: Completed 06-06-PLAN.md
-last_updated: "2026-08-22T01:15:00.000Z"
+stopped_at: Phase 6 signed off — ready for /gsd:ship
+last_updated: "2026-08-22T01:20:00.000Z"
 last_activity: 2026-08-22
-last_activity_desc: 06-06 complete — release-gate proof recorded (clean-clone install at GATE_SHA=37c9926, both suites green PASS=165/FAIL=0 + hooks 28/0), all eight owned tickets + Phase 5 epic closed with cited evidence, all four Success Criteria assembled for human sign-off; Phase 6 plans 6/6, awaiting sign-off before /gsd:ship
+last_activity_desc: Human sign-off received on all four release-gate Success Criteria (06-06-SUMMARY.md). Epic delegate-agy-tmm closed. Phase 6 plans 6/6, sign-off complete — ready for /gsd:ship (must confirm pushed origin/master resolves to GATE_SHA 37c9926 before tagging).
 state_head: 37c9926b28c64b4ad8dd7e248cf09f8a685d016f
 progress:
   total_phases: 7
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 
 ## Current Position
 
-Phase: 06 (Ship 1.6.2) — PLANS COMPLETE, AWAITING SIGN-OFF
+Phase: 06 (Ship 1.6.2) — SIGNED OFF, READY FOR SHIP
 Plan: 06-06 complete (release-gate proof recorded — clean-clone install at GATE_SHA, both suites green, all eight owned tickets + Phase 5 epic closed, four Success Criteria assembled)
-Status: All 6 of 6 plans in Phase 6 complete — awaiting human sign-off on the four Success Criteria (see 06-06-SUMMARY.md's "Open for human verification"), then `/gsd:ship`
-Last activity: 2026-08-22 — 06-06 complete
+Status: All 6 of 6 plans complete, all four Success Criteria signed off by the user. Epic delegate-agy-tmm closed. Next: `/gsd:ship` (must confirm pushed `origin/master` resolves to GATE_SHA `37c9926` before tagging — origin currently lags at `a001d0e`)
+Last activity: 2026-08-22 — Phase 6 sign-off received
 
 Progress: [████████████████████] 30/30 plans overall (Phase 06: 6/6 plans — complete, human sign-off pending before ship)
 
