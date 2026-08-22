@@ -25,4 +25,8 @@
 - Proved by content grep (not git log) that `a001d0e`'s revert is fully undone on `master`, and finished the `### 1.6.2` changelog with a re-run notice and six new bullets — surfaced a pre-existing, out-of-scope test regression (CC03/CC03m) in the process, now blocker-tracked for plan 06-06.
 - All eight tickets Phase 6 owns are closed with cited evidence, a clone pinned to `GATE_SHA=37c9926` installs cleanly into a sandboxed home with both suites green (PASS=165 FAIL=0, hooks 28/0), the real launcher paths are byte-unchanged, and all four Success Criteria are assembled below with literal evidence for human sign-off.
 
+**Known verification overrides:** 2 newly acknowledged, 0 carried forward from a prior close (see STATE.md Deferred Items) — both were already substantively resolved in their own artifact text (phase 6's UAT shows `passed`/0 pending scenarios; the CC03/CC03m deferred item's own note ends "RESOLVED... ticket closed"), acknowledged to suppress the milestone-close audit's disclosure flag, not to paper over an open gap.
+
+**Closeout type:** override_closeout — all 7 phases independently verified `passed` via `init.manager`; the override applies only to the two disclosure acknowledgments above.
+
 ---
