@@ -1,15 +1,16 @@
 ---
 command: agy-setup
-description: Print the one secure command to install agy-delegate's launcher wrappers (agy-bridge + gemini shim)
-version: 1.6.1
+description: Print the plugin's install path and the command to install agy-delegate's launcher wrappers (agy-bridge + gemini shim)
+version: 1.6.2
 category: ai-delegation
 tags: [agy, setup, install, bridge, gemini]
 ---
 
 agy-delegate ships a self-contained, hardened installer that YOU run in your
 own terminal (`scripts/install.sh`). This command does NOT run it for you — it
-prints the exact, validated one-line command to copy-paste, plus the opt-in
-variants and the uninstall command.
+prints two commands to copy-paste: one to find the plugin's install path so
+you can read it yourself, and one to run the installer against that path —
+plus the opt-in variants and the uninstall command.
 
 ## Shadow notice (read before installing)
 
@@ -20,57 +21,81 @@ invoke agy instead). It also writes `~/.local/bin/agy-bridge`. Both are pinned
 launchers that exec an absolute path recorded at install time; if the plugin is
 moved (pinned path gone) they fail loud and ask you to re-run this install. If
 the plugin is updated but Claude Code's cache leaves the old version directory
-in place too (observed behavior), the pinned path still resolves, so the
-wrapper keeps running the pinned (now stale) copy and prints a stderr warning
-naming both versions instead of failing — re-run this install to repin. To
-undo everything, run the uninstall command at the bottom.
+in place too (observed behavior), the pinned path still resolves — so the
+wrapper compares its pinned version against the version Claude Code reports as
+installed and refuses to run the stale copy, exiting `127` with both versions
+and the repin command. Re-run this install to repin. To undo everything, run
+the uninstall command at the bottom.
 
 ## Install (copy-paste this)
 
-The command resolves the plugin's own `scripts/install.sh` from
-`claude plugin list --json`, **validates** the resolved string matches
-`*/agy-delegate/*/scripts/install.sh` AND is a regular file, and only then
-runs it. It refuses anything that does not match — no blind `bash`-ing of an
-attacker-controlled path.
+Find the plugin's install path, then run its installer. Both steps print a path
+you can read before anything executes:
+
+```bash
+AGY_PATH="$(grep -A6 '"agy-delegate@' ~/.claude/plugins/installed_plugins.json \
+  | sed -n 's/.*"installPath"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
+echo "$AGY_PATH"
+```
+
+That prints something like
+`/home/you/.claude/plugins/cache/agy-delegate/agy-delegate/1.6.2`. Check it
+looks right, then run:
+
+```bash
+bash "$AGY_PATH/scripts/install.sh"
+```
+
+If the registry file is missing (older Claude Code, or a non-standard config
+dir), fall back to resolving it through the CLI — this form validates the
+resolved string before executing it, because it comes from command output
+rather than your own eyes:
 
 ```bash
 RESOLVED="$(claude plugin list --json 2>/dev/null \
-  | python3 -c 'import sys,json;[print(x.get("installPath","")) for x in json.load(sys.stdin) if x.get("id","").startswith("agy-delegate@")]' \
-  | head -1)/scripts/install.sh"; \
+  | python3 -c 'import sys,json
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    d = []
+print(next((x.get("installPath","") for x in d if x.get("id","").startswith("agy-delegate@")), ""))')/scripts/install.sh"; \
 case "$RESOLVED" in \
   */agy-delegate/*/scripts/install.sh) [[ -f "$RESOLVED" ]] \
-    && bash "$RESOLVED" \
+    && echo "Resolved: $RESOLVED" \
     || echo "ERROR: resolved installer '$RESOLVED' is not a regular file — is agy-delegate installed?" >&2 ;; \
   *) echo "ERROR: refusing to run '$RESOLVED' — does not match */agy-delegate/*/scripts/install.sh" >&2 ;; \
 esac
 ```
 
-## Opt-in variants
-
-Register tokensave as an agy MCP server (grants agy code-graph READ + local
-project MUTATE tools) without the interactive prompt — prepend
-`AGY_SETUP_REGISTER_TOKENSAVE=1`:
+Check the printed `Resolved: ...` path looks right, then run:
 
 ```bash
-AGY_SETUP_REGISTER_TOKENSAVE=1 bash "$RESOLVED"
+bash "$RESOLVED"
 ```
+
+## Opt-in variant
 
 Apply the recursive-`gemini` shell-rc alias patch (default is dry-run/advisory)
 — prepend `AGY_SETUP_PATCH_ALIASES=1`:
 
 ```bash
-AGY_SETUP_PATCH_ALIASES=1 bash "$RESOLVED"
+AGY_SETUP_PATCH_ALIASES=1 bash "$AGY_PATH/scripts/install.sh"
 ```
 
-(Both flags can be combined; `"$RESOLVED"` is the validated installer path from
-the install command above.)
+(`$AGY_PATH` is the variable set in step 1 above; if you used the CLI
+fallback instead, replace `$AGY_PATH` with `$RESOLVED` in the command above
+— e.g. `AGY_SETUP_PATCH_ALIASES=1 bash "$RESOLVED"`.)
 
 ## Uninstall
 
 Reverses the install: removes only our signature-marked wrappers (restoring any
-shadowed original), and — with `AGY_UNINSTALL_TOKENSAVE=1` — de-registers
-tokensave and removes the availability hint.
+shadowed original), and removes the availability hint.
 
 ```bash
-bash "$(dirname "$RESOLVED")/uninstall.sh"
+bash "$AGY_PATH/scripts/uninstall.sh"
 ```
+
+(`$AGY_PATH` is the variable set in the Install section's step 1 above. If
+the registry file was missing there and you used the CLI fallback instead,
+run `/agy-uninstall` — it resolves and validates the uninstaller path the
+same way.)

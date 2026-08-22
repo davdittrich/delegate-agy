@@ -1,0 +1,13 @@
+{
+  "source_path": "/home/dd/Gemini/delegate-agy/docs/superpowers/specs/ps3.6-probe-results.md",
+  "type": "SPEC",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "WU-0 Probe Results — ps3.6 SubagentStart hook",
+  "summary": "Empirical probe findings on Claude Code SubagentStart hook behavior, agent_type formats, and additionalContext injection.",
+  "scope": ["SubagentStart hook", "SubagentStop hook", "additionalContext injection", "agent_type matcher format", "hooks.json auto-discovery", "AGY_HOOKS_DEBUG_FILE"],
+  "cross_refs": [],
+  "locked": false,
+  "precedence": 1,
+  "notes": "Content is empirical probe/test results (result table + GO verdict), not forward design or a technical contract; type assigned via manifest override rather than inferred from taxonomy signals."
+}

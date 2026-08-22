@@ -1,0 +1,13 @@
+{
+  "source_path": "/home/dd/Gemini/delegate-agy/docs/superpowers/specs/2026-07-13-agy-delegate-leanctx-optimization-spike-results.md",
+  "type": "SPEC",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "WU0 (T0 / delegate-agy-vfn.1) spike results — measured verdicts",
+  "summary": "Empirical spike measurements of agy-bridge timeout and --sandbox FS-confinement behavior, with verdicts constraining downstream WU implementation.",
+  "scope": ["agy CLI", "agy-bridge", "ctx_shell timeout", "--sandbox API floor", "gemini_shim.sh", "allowlist sandboxing", "bridge invocation design"],
+  "cross_refs": ["config/policies/review-analysis.md", "README.md", "agy_bridge.sh", "gemini_shim.sh"],
+  "locked": false,
+  "precedence": 1,
+  "notes": "Empirical/measured spike results (not forward design) that dictate technical constraints for downstream WUs (T3/T4/T5/T6); companion design document is referenced but not linked by path in this file."
+}

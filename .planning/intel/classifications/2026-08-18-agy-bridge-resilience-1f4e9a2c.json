@@ -1,0 +1,13 @@
+{
+  "source_path": "/home/dd/Gemini/delegate-agy/docs/superpowers/plans/2026-08-18-agy-bridge-resilience.md",
+  "type": "SPEC",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "agy-bridge Resilience & Repin Implementation Plan",
+  "summary": "Implementation plan hardening agy-bridge's model fetch, launcher pin verification, and agy-setup output against hangs and stale pins.",
+  "scope": ["agy_bridge.sh", "install.sh", "agy-setup", "agy-uninstall", "timeout handling", "launcher pin verification", "model resolution"],
+  "cross_refs": ["scripts/agy_bridge.sh", "scripts/install.sh", "tests/fake-agy.sh", "tests/run-tests.sh", ".claude/commands/agy-setup.md", ".claude/commands/agy-uninstall.md", "README.md", ".claude-plugin/plugin.json"],
+  "locked": false,
+  "precedence": 1,
+  "notes": "Type assigned via manifest override, not inferred. Work described here is already committed (13 commits on fix/agy-bridge-resilience). Document is known to be partially superseded by shipped code: it asserts two agy call sites where four exist, contains wrong test-count expectations, and prescribes a sed range fix that proved incomplete during implementation. Where this document and current code disagree, the code is authoritative -- downstream synthesis should not treat every claim here as current design intent."
+}
