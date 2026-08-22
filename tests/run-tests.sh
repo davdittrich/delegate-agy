@@ -1125,9 +1125,11 @@ fi
 
 # ST3
 ST3_PERMIT_OK=1
+# Retired server name, kept ONLY as the string these PERMITTED lists must not contain.
+_ST3_RETIRED_TOOL="tokensave"
 for f in code review-analysis implement; do
     grep -q 'ctx_read, ctx_search' "$ROOT/config/policies/$f.md" || ST3_PERMIT_OK=0
-    grep -q 'tokensave' "$ROOT/config/policies/$f.md" && ST3_PERMIT_OK=0
+    grep -q "$_ST3_RETIRED_TOOL" "$ROOT/config/policies/$f.md" && ST3_PERMIT_OK=0
 done
 ST3_EXEC_LEAK="$(grep -h '^PERMITTED:' "$ROOT"/config/policies/*.md \
     | grep -Ec 'ctx_shell|ctx_call|ctx_edit|ctx_execute')"

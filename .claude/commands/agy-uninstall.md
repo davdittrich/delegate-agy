@@ -1,6 +1,6 @@
 ---
 command: agy-uninstall
-description: Print the plugin's install path and the command to remove agy-delegate's launcher wrappers (agy-bridge + gemini shim) and optionally de-register tokensave
+description: Print the plugin's install path and the command to remove agy-delegate's launcher wrappers (agy-bridge + gemini shim)
 version: 1.6.2
 category: ai-delegation
 tags: [agy, uninstall, cleanup]
@@ -14,9 +14,13 @@ you can read it yourself, and one to run the uninstaller against that path.
 The uninstaller reverses `scripts/install.sh`: it removes **only** our
 signature-marked wrappers `~/.local/bin/agy-bridge` and `~/.local/bin/gemini`
 (restoring any original binary that was shadowed and backed up at install
-time), and — with `AGY_UNINSTALL_TOKENSAVE=1` — de-registers the `tokensave`
-MCP server and removes the availability hint. It is idempotent and refuses to
+time), and removes the availability hint. It is idempotent and refuses to
 run as root.
+
+If you previously registered `tokensave` as an agy MCP server via the
+now-retired opt-in, remove that entry by hand from
+`~/.gemini/antigravity-cli/mcp_config.json` — this uninstaller no longer
+manages it.
 
 ## Uninstall (copy-paste this)
 
@@ -63,15 +67,3 @@ Check the printed `Resolved: ...` path looks right, then run:
 ```bash
 bash "$RESOLVED"
 ```
-
-## Also de-register tokensave + remove the availability hint
-
-Prepend `AGY_UNINSTALL_TOKENSAVE=1`:
-
-```bash
-AGY_UNINSTALL_TOKENSAVE=1 bash "$AGY_PATH/scripts/uninstall.sh"
-```
-
-(`$AGY_PATH` is the variable set in step 1 above; if you used the CLI
-fallback instead, replace `$AGY_PATH/scripts/uninstall.sh` with
-`"$RESOLVED"` — e.g. `AGY_UNINSTALL_TOKENSAVE=1 bash "$RESOLVED"`.)

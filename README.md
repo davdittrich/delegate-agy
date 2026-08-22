@@ -120,8 +120,7 @@ to repin the wrappers either way.
 > and scans the full `$PATH` to warn which real `gemini` it shadows. Reverse
 > everything with `scripts/uninstall.sh` (see below).
 
-Opt-in flags (default off): `AGY_SETUP_REGISTER_TOKENSAVE=1` registers tokensave
-as an agy MCP server; `AGY_SETUP_PATCH_ALIASES=1` applies the recursive-`gemini`
+Opt-in flag (default off): `AGY_SETUP_PATCH_ALIASES=1` applies the recursive-`gemini`
 shell-rc alias patch (otherwise a dry-run advisory). `/agy-setup` prints the
 exact variant commands.
 
@@ -145,10 +144,9 @@ implement    gemini-*-pro-high (latest)     600s
 **6. Uninstall.**
 
 `scripts/uninstall.sh` removes the two wrappers only if they carry our signature
-marker (restoring any shadowed original from its backup), and — with
-`AGY_UNINSTALL_TOKENSAVE=1` — de-registers tokensave and removes the availability
-hint. It is idempotent and refuses to run as root. `/agy-setup` prints the exact
-command.
+marker (restoring any shadowed original from its backup), and removes the
+availability hint. It is idempotent and refuses to run as root. `/agy-setup`
+prints the exact command.
 
 ## Usage
 

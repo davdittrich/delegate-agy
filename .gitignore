@@ -14,7 +14,6 @@ CLAUDE.md
 .agents/
 .codex/
 .headroom/
-.tokensave/
 
 # Beads / Dolt files (added by bd init)
 .dolt/

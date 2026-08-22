@@ -73,15 +73,7 @@ Check the printed `Resolved: ...` path looks right, then run:
 bash "$RESOLVED"
 ```
 
-## Opt-in variants
-
-Register tokensave as an agy MCP server (grants agy code-graph READ + local
-project MUTATE tools) without the interactive prompt — prepend
-`AGY_SETUP_REGISTER_TOKENSAVE=1`:
-
-```bash
-AGY_SETUP_REGISTER_TOKENSAVE=1 bash "$AGY_PATH/scripts/install.sh"
-```
+## Opt-in variant
 
 Apply the recursive-`gemini` shell-rc alias patch (default is dry-run/advisory)
 — prepend `AGY_SETUP_PATCH_ALIASES=1`:
@@ -90,16 +82,14 @@ Apply the recursive-`gemini` shell-rc alias patch (default is dry-run/advisory)
 AGY_SETUP_PATCH_ALIASES=1 bash "$AGY_PATH/scripts/install.sh"
 ```
 
-(Both flags can be combined. `$AGY_PATH` is the variable set in step 1
-above; if you used the CLI fallback instead, replace `$AGY_PATH` with
-`$RESOLVED` in each command above — e.g.
-`AGY_SETUP_REGISTER_TOKENSAVE=1 bash "$RESOLVED"`.)
+(`$AGY_PATH` is the variable set in step 1 above; if you used the CLI
+fallback instead, replace `$AGY_PATH` with `$RESOLVED` in the command above
+— e.g. `AGY_SETUP_PATCH_ALIASES=1 bash "$RESOLVED"`.)
 
 ## Uninstall
 
 Reverses the install: removes only our signature-marked wrappers (restoring any
-shadowed original), and — with `AGY_UNINSTALL_TOKENSAVE=1` — de-registers
-tokensave and removes the availability hint.
+shadowed original), and removes the availability hint.
 
 ```bash
 bash "$AGY_PATH/scripts/uninstall.sh"
