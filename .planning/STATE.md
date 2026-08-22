@@ -4,16 +4,16 @@ milestone: v1.6.2
 current_phase: 06
 current_phase_name: Ship 1.6.2
 status: executing
-stopped_at: Phase 6 signed off — ready for /gsd:ship
-last_updated: "2026-08-22T01:20:00.000Z"
+stopped_at: Completed quick task 260822-m01 (remove tokensave)
+last_updated: "2026-08-22T14:41:00.876Z"
 last_activity: 2026-08-22
-last_activity_desc: Human sign-off received on all four release-gate Success Criteria (06-06-SUMMARY.md). Epic delegate-agy-tmm closed. Phase 6 plans 6/6, sign-off complete — ready for /gsd:ship (must confirm pushed origin/master resolves to GATE_SHA 37c9926 before tagging).
-state_head: 37c9926b28c64b4ad8dd7e248cf09f8a685d016f
+last_activity_desc: "Human sign-off received on all four release-gate Success Criteria (06-06-SUMMARY.md). Epic delegate-agy-tmm closed. Phase 6 plans 6/6, sign-off complete — ready for /gsd:ship (must confirm pushed origin/master resolves to GATE_SHA 37c9926 before tagging)."
+state_head: 2b6b9b10d467e1080eefe0d74eec331ce3c9b9c6
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 29
-  completed_plans: 28
+  completed_plans: 29
 milestone_name: milestone
 ---
 
@@ -88,6 +88,7 @@ Progress: [████████████████████] 30/30 p
 | Phase 06 P03 | 50min | 2 tasks | 4 files |
 | Phase 06 P04 | 24min | 2 tasks | 2 files |
 | Phase 06 P05 | 40min | 2 tasks | 1 files |
+| Phase quick-260822-m01 P01 | 25min | 3 tasks | 17 files |
 
 ## Accumulated Context
 
@@ -137,6 +138,7 @@ Recent decisions affecting current work:
 - [Phase 06]: 06-04: IN02 (D-05) states the bridge/shim model-validation herestring pair as one joint assertion naming both counts, rather than a third single-file guard alongside R9d/SH15d
 - [Phase 06]: 06-04: RB01 (D-06) widened to scan contract-check.sh; its seven false-positive `-z "$AGY_BIN"` guards route through a `_CC_NO_AGY` flag set from `command -v agy`'s own exit status, not a second `$AGY_BIN` expansion, keeping the scanner's own regex untouched
 - [Phase 06]: D-09's ambiguous 'six newly-fixed items' resolved as five fix bullets plus one investigation-closure note (not four fixes, since the fifth — trap-preservation — was discussed under D-08 but omitted from D-09's own parenthetical list)
+- [Phase 06]: D-02 overturned mid-plan: removed retired-tool mentions from FORBIDDEN catch-alls too, not just PERMITTED lists (260822-m01)
 
 ### Pending Todos
 
@@ -168,6 +170,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-22T01:15:00.000Z
-Stopped at: Completed 06-06-PLAN.md — Phase 6 release gate assembled, all 6 plans in phase complete, awaiting human sign-off on the four Success Criteria in 06-06-SUMMARY.md before `/gsd:ship`
+Last session: 2026-08-22T14:41:00.826Z
+Stopped at: Completed quick task 260822-m01 (remove tokensave)
 Resume file: None
