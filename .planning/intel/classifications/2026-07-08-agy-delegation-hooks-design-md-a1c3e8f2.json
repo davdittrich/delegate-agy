@@ -1,0 +1,13 @@
+{
+  "source_path": "/home/dd/Gemini/delegate-agy/docs/superpowers/specs/2026-07-08-agy-delegation-hooks-design.md",
+  "type": "SPEC",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "Design: agy delegation hook — SubagentStart context injection (ps3.6 v1)",
+  "summary": "Technical design for a SubagentStart hook that injects an opt-in delegation advisory into allowlisted Claude Code subagents via agy-bridge.",
+  "scope": ["SubagentStart hook", "agy-delegate plugin", "agy-bridge", "hooks/agy-hooks-lib.sh", "hooks/agy-subagent-policy.sh", "allowlist matching", "metaswarm subagents", "plugin manifest wiring", "observability/debug transport", "hook test harness"],
+  "cross_refs": ["docs/superpowers/specs/ps3.6-probe-results.md", "hooks.md", "agy_bridge.sh", "gemini_shim.sh", ".claude-plugin/plugin.json", "hooks/hooks.json", "tests/hooks/run-hook-tests.sh"],
+  "locked": false,
+  "precedence": 1,
+  "notes": ""
+}

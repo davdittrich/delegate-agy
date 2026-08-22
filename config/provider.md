@@ -42,7 +42,7 @@ The agy-bridge / `gemini` shim do NOT pass the prompt as the `--print` value or 
 
 1. **Web Search with Citations** — Native `search_web` tool with URL sources
 2. **Extended Context** — Gemini 3.1 Pro handles large codebases
-3. **MCP Integration** — lean-ctx MCP tools (`ctx_read`/`ctx_search`/… — autodetected) are available inside agy sessions; tokensave can be added opt-in via `/agy-setup` (code-graph READ **plus local-project MUTATE** — its edit/session tools declare `readOnlyHint=false`)
+3. **MCP Integration** — lean-ctx MCP tools (`ctx_read`/`ctx_search`/… — autodetected) are available inside agy sessions
 4. **Multi-model Access** — Gemini in one CLI
 5. **File Operations** — agy’s file operations run under `--sandbox`, confined to the `--add-dir` granted directories (the per-run workdir on the bridge, plus any caller-supplied `--add-dir` paths)
 
@@ -53,9 +53,9 @@ agy's tool policy is enforced at two distinct layers — one prompt-advisory, on
 
 - **Prompt-advisory (GEMINI.md).** The `PERMITTED`/`FORBIDDEN` lists plus the allowlist catch-all in the per-run `GEMINI.md` are *prompt-advisory*: agy is instructed to refuse non-permitted tools, but the policy file is not itself API-enforced. It relies on the model honoring the instruction.
 - **API-level filesystem floor (`--sandbox`).** `--sandbox` is the real API-level floor — it confines every read/write to the `--add-dir` granted directories. The **bridge always** passes `--sandbox`; the **shim read-only modes** pass it (with `--add-dir "$PWD"`); **shim-yolo does NOT** (deliberately unrestricted — it runs `--dangerously-skip-permissions`).
-- **Allowlist catch-all.** The catch-all forbids every `ctx_*`/`tokensave_*`/`mcp__*` tool and the `ctx_call` gateway — relevant once lean-ctx/tokensave are registered for agy.
+- **Allowlist catch-all.** The catch-all forbids every `ctx_*`/`mcp__*` tool and the `ctx_call` gateway — relevant once lean-ctx is registered for agy.
 
-**Tool-preference stanza (autodetect).** For MCP-permitted types (`code`/`review`/`analysis`/`implement`) the bridge appends a tool-preference stanza biasing agy toward `ctx_read`/`ctx_search`/`tokensave_context` when those servers are registered for agy. Availability is read from the shared config-hint `~/.config/agy-delegate/config.json` (`{"lean_ctx":bool,"tokensave":bool}`, written by `/agy-setup`; live-probed if absent).
+**Tool-preference stanza (autodetect).** For MCP-permitted types (`code`/`review`/`analysis`/`implement`) the bridge appends a tool-preference stanza biasing agy toward `ctx_read`/`ctx_search` when lean-ctx is registered for agy. Availability is read from the shared config-hint `~/.config/agy-delegate/config.json` (`{"lean_ctx":bool}`, written by `/agy-setup`; live-probed if absent).
 
 **Web search precedence.** General web search prefers the Claude-side `WebSearch` tool (cc-websearch-served when installed); use agy only for grounded citations or a second model.
 ## Timeout Guidance

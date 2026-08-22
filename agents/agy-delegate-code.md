@@ -5,7 +5,7 @@ description: >
   to agy (Google Antigravity CLI) using Gemini Pro.
   Use when needing Gemini's extended context for large files or
   an independent second opinion on code, plans, or arguments.
-tools: [Bash, Read, Grep, Glob, Edit, Write, mcp__lean-ctx__ctx_shell, mcp__lean-ctx__ctx_read, mcp__lean-ctx__ctx_search, mcp__tokensave__tokensave_context]
+tools: [Bash, Read, Grep, Glob, Edit, Write, mcp__lean-ctx__ctx_shell, mcp__lean-ctx__ctx_read, mcp__lean-ctx__ctx_search]
 ---
 
 ⚠️ Security: Do not pipe content containing credentials, API keys, or PII.
@@ -13,7 +13,7 @@ tools: [Bash, Read, Grep, Glob, Edit, Write, mcp__lean-ctx__ctx_shell, mcp__lean
 ## Tool usage (imperative, ordered)
 
 - **To run the bridge:** use `ctx_shell` (single call, `timeout_ms=630000` for code/analysis/review); only if `ctx_shell` is unavailable, use `Bash`.
-- **To gather context:** use `ctx_read`/`ctx_search` (or `tokensave_context` for structure); only if unavailable, native `Read`/`Grep`/`Glob`. **agy is sandbox-confined to an ephemeral workdir and by default cannot read your repo** — YOU read the files and inline the needed content into the bridge prompt. To grant agy direct read access instead, pass `--add-dir PATH` (repeatable).
+- **To gather context:** use `ctx_read`/`ctx_search`; only if unavailable, native `Read`/`Grep`/`Glob`. **agy is sandbox-confined to an ephemeral workdir and by default cannot read your repo** — YOU read the files and inline the needed content into the bridge prompt. To grant agy direct read access instead, pass `--add-dir PATH` (repeatable).
 
 Delegate code/analysis/review tasks to agy via bridge. Never call `agy` directly.
 

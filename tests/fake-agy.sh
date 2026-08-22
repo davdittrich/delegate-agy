@@ -12,7 +12,9 @@
 # Behavior controlled via env vars so tests can simulate agy outcomes:
 #   FAKE_AGY_EXIT         exit code for a --print run (default 0)
 #   FAKE_AGY_STDOUT       bytes written to stdout for a --print run (default empty)
-#   FAKE_AGY_STDERR       bytes written to stderr for a --print run (default empty)
+#   FAKE_AGY_STDERR       bytes written to stderr for a --print run (default empty);
+#                         also honored by FAKE_AGY_MODELS_EMPTY on the `models`
+#                         subcommand (the one non-`--print` site that needs it)
 #   FAKE_AGY_ECHO_PROMPT  if "1", echo ONLY the extracted TASK text (everything
 #                         after the `TASK:` marker line in GEMINI.md) to stdout,
 #                         instead of the STDOUT/STDERR/EXIT triple above. Lets a
@@ -24,9 +26,73 @@
 #                         alter parsing, output, or exit code. Lets a test assert
 #                         the exact flags the wrapper passed to agy (e.g. the
 #                         --sandbox read-only floor).
+#   FAKE_AGY_MODELS_HANG  `agy models` traps SIGTERM and sleeps 300s, emulating
+#                         the observed real-agy hang. Only `timeout -k`
+#                         (SIGKILL) ends it. Ignored outside `models`.
+#   FAKE_AGY_PRINT_HANG   same as FAKE_AGY_MODELS_HANG but on the --print
+#                         (delegation) path. Traps SIGTERM and sleeps 300s;
+#                         only `timeout -k` (SIGKILL) ends it.
+#   FAKE_AGY_FORK_HANG    like FAKE_AGY_PRINT_HANG, but the --print path ALSO
+#                         forks a child that ignores SIGTERM too. A kill aimed
+#                         at this process's PID alone therefore leaves a live
+#                         survivor; only a kill that reaches the whole process
+#                         group ends both. Both PIDs are recorded (see the two
+#                         vars below) before either process blocks, so a reader
+#                         can never race it. SIGHUP is ignored alongside SIGTERM
+#                         so that a test running this under an allocated pseudo-
+#                         terminal measures the caller's process-group kill and
+#                         not the session's hangup. Ignored outside --print.
+#   FAKE_AGY_PID_FILE     if set to a path, FAKE_AGY_FORK_HANG writes this
+#                         process's own PID there. Purely observational.
+#   FAKE_AGY_CHILD_PID_FILE
+#                         if set to a path, FAKE_AGY_FORK_HANG writes the
+#                         forked child's PID there. Purely observational.
+#   FAKE_AGY_LEAK_CHILD   the --print (delegation) path forks a child that
+#                         OUTLIVES it and then exits 0 immediately -- the shape
+#                         a real agy leaves behind (an MCP server, a language
+#                         server, any detached helper) on a successful, fast
+#                         run. The value is that child's lifetime in seconds, so
+#                         a caller held open by a descriptor the child inherited
+#                         fails in bounded time instead of hanging. Its PID is
+#                         recorded in FAKE_AGY_CHILD_PID_FILE. Ignored outside
+#                         --print.
+#   FAKE_AGY_VERSION_HANG same as FAKE_AGY_MODELS_HANG but on the --version
+#                         path. Traps SIGTERM and sleeps 300s; only
+#                         `timeout -k` (SIGKILL) ends it. Ignored outside
+#                         `--version`.
+#   FAKE_AGY_PRINT_KILL9  the --print (delegation) path exits 137 quickly,
+#                         well inside any --timeout bound -- emulating an
+#                         external SIGKILL (OOM killer, manual `kill -9`,
+#                         cgroup/container preemption) unrelated to the
+#                         bridge's own `-k` escalation.
+#   FAKE_AGY_MODELS_FAIL  `agy models` exits 1 with a FAKE-AGY-AUTH-FAILURE
+#                         diagnostic on stderr, simulating an auth/network
+#                         fault. Ignored outside `models`.
+#   FAKE_AGY_MODELS_GARBAGE
+#                         `agy models` exits 0 but with no gemini ids in its
+#                         output. Ignored outside `models`.
+#   FAKE_AGY_MODELS_EMPTY `agy models` exits 0 having written zero bytes to
+#                         stdout (a successful-but-unauthenticated/degraded
+#                         reply), also honoring FAKE_AGY_STDERR. Ignored
+#                         outside `models`.
 #
-# The `models` and `--version` subcommands are answered deterministically so the
-# bridge's model-allowlist check and the shim's --version path work under test.
+#   AGY_FIXTURES_DIR      NOT a FAKE_AGY_* knob -- deliberately: this is a
+#                         resolution path, not a behavior-simulation knob.
+#                         Tier 1 of the three-tier lookup `_fake_fixture` uses
+#                         to find `agy-models.tsv`: when set and naming a
+#                         directory, that directory is read first. Tier 2 is
+#                         `$(dirname "$0")/fixtures` (wherever this script was
+#                         copied); tier 3 is `$AGY_PLUGIN_DIR/tests/fixtures`.
+#                         A total resolution failure -- no tier resolves, or
+#                         the resolved fixture is unreadable or carries no
+#                         data rows -- is loud and non-zero, naming every path
+#                         tried, never a silent empty list.
+#
+# The `models` subcommand's real-shaped rows come from a captured fixture
+# (tests/fixtures/agy-models.tsv), read at runtime by _fake_fixture -- this
+# stub carries no independent copy of a model list, so it cannot disagree
+# with the fixture because it has nothing to disagree with. `--version` stays
+# a fixed literal below; SH12 asserts it verbatim.
 set -u
 
 # Observational argv dump (env-gated, additive). Runs first so it captures the
@@ -36,22 +102,164 @@ if [[ -n "${FAKE_AGY_DUMP_ARGV:-}" ]]; then
     printf '%s\n' "$@" > "$FAKE_AGY_DUMP_ARGV"
 fi
 
+# _fake_fixture NAME -- resolve tests/fixtures/NAME through the three-tier
+# lookup documented above (AGY_FIXTURES_DIR, then $(dirname "$0")/fixtures,
+# then $AGY_PLUGIN_DIR/tests/fixtures), read it as DATA ONLY -- grep, never
+# sourced or eval'd -- strip its `# `-prefixed provenance header, and write
+# the remaining bytes to stdout unchanged. One function, not three: the
+# resolution has exactly one caller.
+#
+# Failure handling is the load-bearing part. If no tier resolves, the file is
+# absent/unreadable, or nothing but header lines survive the strip, this
+# fails LOUD -- a diagnostic naming every path tried goes to stderr and the
+# function returns non-zero. It must never fall through to printing nothing:
+# an empty `agy models` is the degraded-list shape S1 exists to catch, and a
+# silent empty emission would make a resolution bug look like a passing test
+# of the wrong thing.
+_fake_fixture() {
+    local name="$1"
+    local cand1="AGY_FIXTURES_DIR=${AGY_FIXTURES_DIR:-<unset>}"
+    local cand2="$(dirname "$0")/fixtures"
+    local cand3="${AGY_PLUGIN_DIR:-<AGY_PLUGIN_DIR unset>}/tests/fixtures"
+    local dir=""
+
+    if [[ -n "${AGY_FIXTURES_DIR:-}" && -d "${AGY_FIXTURES_DIR:-}" ]]; then
+        dir="$AGY_FIXTURES_DIR"
+    elif [[ -d "$cand2" ]]; then
+        dir="$cand2"
+    elif [[ -n "${AGY_PLUGIN_DIR:-}" && -d "$cand3" ]]; then
+        dir="$cand3"
+    fi
+
+    if [[ -z "$dir" ]]; then
+        printf 'FATAL: fake-agy.sh could not resolve a fixtures directory for %s; tried: %s | %s | %s\n' \
+            "$name" "$cand1" "$cand2" "$cand3" >&2
+        return 1
+    fi
+
+    local path="$dir/$name" rows
+    if [[ ! -r "$path" ]]; then
+        printf 'FATAL: fake-agy.sh could not read fixture %s\n' "$path" >&2
+        return 1
+    fi
+    rows="$(grep -v '^#' "$path")"
+    if [[ -z "$rows" ]]; then
+        printf 'FATAL: fake-agy.sh fixture %s has no data rows\n' "$path" >&2
+        return 1
+    fi
+    printf '%s\n' "$rows"
+}
+
 case "${1:-}" in
     models)
-        # Real agy emits "id<TAB>display name" per line (header goes to stderr).
-        printf '%s\t%s\n' \
-            "gemini-3.6-flash-high" "Gemini 3.6 Flash (High)" \
-            "gemini-3.6-flash-medium" "Gemini 3.6 Flash (Medium)" \
-            "gemini-3.6-flash-low" "Gemini 3.6 Flash (Low)" \
-            "gemini-3.5-flash-high" "Gemini 3.5 Flash (High)" \
-            "gemini-3.5-flash-medium" "Gemini 3.5 Flash (Medium)" \
-            "gemini-3.5-flash-low" "Gemini 3.5 Flash (Low)" \
-            "gemini-3.1-pro-high" "Gemini 3.1 Pro (High)" \
-            "gemini-3.1-pro-low" "Gemini 3.1 Pro (Low)"
-        exit 0 ;;
+        # Hang mode: trap SIGTERM and sleep, emulating the observed real-agy
+        # behavior where `timeout 25 agy models` never returns. Only `timeout -k`
+        # (SIGKILL) can end this.
+        if [[ -n "${FAKE_AGY_MODELS_HANG:-}" ]]; then
+            trap '' TERM
+            sleep 300
+            exit 0
+        fi
+        # Failure mode: non-zero exit with a diagnostic on stderr, the shape a
+        # real auth/network fault takes.
+        if [[ -n "${FAKE_AGY_MODELS_FAIL:-}" ]]; then
+            echo "FAKE-AGY-AUTH-FAILURE: not authenticated" >&2
+            exit 1
+        fi
+        # Garbage mode: exit 0 with output carrying no gemini ids at all.
+        if [[ -n "${FAKE_AGY_MODELS_GARBAGE:-}" ]]; then
+            echo "FAKE-AGY-DEGRADED: not authenticated" >&2
+            printf '%s\n' "Please run 'agy auth login' first." "no models available"
+            exit 0
+        fi
+        # Empty mode (D-07): exit 0 having written ZERO BYTES to stdout -- the
+        # shape a successful-but-unauthenticated/degraded `agy models` call
+        # takes in the wild. This deliberately looks like the rule
+        # _fake_fixture enforces above (never fall through to printing
+        # nothing) but is not a violation of it: here the emptiness IS the
+        # scenario under test, requested explicitly by this env var and
+        # short-circuiting before any fixture resolution runs, so it can
+        # never be confused with a fixture-resolution bug. FAKE_AGY_STDERR is
+        # honored here too, via the same guarded one-liner as the delegation
+        # sites below (:238, :293): the bridge's zero-byte-fetch exit happens
+        # during model discovery, before any delegation ever runs, so this is
+        # the only place that can put agy's own stderr on that code path.
+        if [[ -n "${FAKE_AGY_MODELS_EMPTY:-}" ]]; then
+            [[ -n "${FAKE_AGY_STDERR:-}" ]] && printf '%s' "$FAKE_AGY_STDERR" >&2
+            exit 0
+        fi
+        # Real agy emits "id<TAB>display name" per line (header goes to
+        # stderr). Rows come from a captured fixture, resolved and read by
+        # _fake_fixture -- this stub carries no independent copy of a model
+        # list.
+        _fake_fixture agy-models.tsv && exit 0
+        exit 1 ;;
     --version)
+        if [[ -n "${FAKE_AGY_VERSION_HANG:-}" ]]; then
+            trap '' TERM
+            sleep 300
+            exit 0
+        fi
         echo "agy 0.0.0-fake"; exit 0 ;;
 esac
+
+# Delegation hang mode: same shape as FAKE_AGY_MODELS_HANG, but on the --print
+# path. Traps SIGTERM and sleeps, emulating agy ignoring the signal, so only a
+# `timeout -k` escalation can end it.
+if [[ -n "${FAKE_AGY_PRINT_HANG:-}" ]]; then
+    trap '' TERM
+    sleep 300
+    exit 0
+fi
+
+# Delegation fork-hang mode: same shape as FAKE_AGY_PRINT_HANG, plus a forked
+# child that ignores SIGTERM too. The child is a real process (not a subshell
+# that exits), so killing this PID alone demonstrably leaves it running -- the
+# only shape that tells a process-group kill apart from a direct-child kill.
+# Both PIDs are written BEFORE anything blocks, so a reader cannot race them.
+# The child's stdio goes to /dev/null so it never holds a caller's capture pipe
+# open, and this process blocks in `wait` rather than in a `sleep`, so no third
+# process exists to be orphaned when the pair is reaped.
+#
+# SIGHUP is ignored alongside SIGTERM, and that is load-bearing rather than
+# belt-and-braces. Under an allocated pseudo-terminal the kernel HUPs the
+# session when the terminal goes away, which reaps this pair for a reason that
+# has nothing to do with the caller's process-group kill -- measured: the
+# with-terminal descendant assertion passed even against a shim mutated to kill
+# by pid alone, so it was vacuous. Ignoring HUP makes the with-terminal case
+# measure the same mechanism the terminal-less one does. Note `trap ''` sets
+# SIG_IGN and an ignored disposition SURVIVES `exec`, which is what keeps the
+# replacement `sleep` immune too.
+if [[ -n "${FAKE_AGY_FORK_HANG:-}" ]]; then
+    trap '' TERM HUP
+    bash -c 'trap "" TERM HUP; exec sleep 300' </dev/null >/dev/null 2>&1 &
+    _fake_child=$!
+    [[ -n "${FAKE_AGY_CHILD_PID_FILE:-}" ]] && printf '%s\n' "$_fake_child" > "$FAKE_AGY_CHILD_PID_FILE"
+    [[ -n "${FAKE_AGY_PID_FILE:-}" ]] && printf '%s\n' "$$" > "$FAKE_AGY_PID_FILE"
+    wait "$_fake_child"
+    exit 0
+fi
+
+# Delegation "leaked descendant" mode: the mirror image of FAKE_AGY_FORK_HANG.
+# This process exits 0 at once, having forked a child that keeps running -- so
+# the run SUCCEEDS and nothing times out, and whatever that child inherited is
+# the only thing still holding anything open. Which descriptors it inherits is
+# the property under test, so nothing is closed for it beyond stdio: the caller
+# is the one that owes the bounded command a clean descriptor set.
+if [[ -n "${FAKE_AGY_LEAK_CHILD:-}" ]]; then
+    bash -c 'exec sleep "$1"' _ "$FAKE_AGY_LEAK_CHILD" </dev/null >/dev/null 2>&1 &
+    [[ -n "${FAKE_AGY_CHILD_PID_FILE:-}" ]] && printf '%s\n' "$!" > "$FAKE_AGY_CHILD_PID_FILE"
+    [[ -n "${FAKE_AGY_STDOUT:-}" ]] && printf '%s' "$FAKE_AGY_STDOUT"
+    exit 0
+fi
+
+# Delegation "killed early" mode: exits 137 quickly, well inside any --timeout
+# bound, emulating an external SIGKILL that has nothing to do with the
+# bridge's own -k escalation (which can only fire at/after the bound).
+if [[ -n "${FAKE_AGY_PRINT_KILL9:-}" ]]; then
+    [[ -n "${FAKE_AGY_STDERR:-}" ]] && printf '%s' "$FAKE_AGY_STDERR" >&2
+    exit 137
+fi
 
 # Otherwise this is a real --print run. Parse the real agy flag set:
 #   --print <value> --sandbox --model <value> --add-dir <dir> (repeatable)
