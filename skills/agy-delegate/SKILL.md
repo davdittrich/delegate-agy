@@ -86,7 +86,7 @@ Run `agy models` for current model names — values above match bridge defaults 
 | Exit 124 | Timeout — simplify query or pass `--timeout 600` |
 | Model name rejected | Exact string required — run `agy models` for current names |
 | `agy: command not found` | Binary at `~/.local/bin/agy` — check PATH |
-| `agy-bridge: command not found` | Symlink not created — run `/agy-setup` once. Until fixed: WebSearch for search tasks; native tools for code/review. |
+| `agy-bridge: command not found` | Symlink not created — run `/agy-setup` once. Do NOT silently fall back. Stop, state the bridge is unavailable and that proceeding natively (WebSearch for search, native tools for code/review) burns the calling agent's own quota, and ask for explicit confirmation before proceeding; decline → report blocked; confirm → proceed natively exactly as today. |
 | Calling `agy` directly | Use bridge — direct calls miss type routing and exit-code normalization |
 | Empty response / hidden failure (exit 3) | Quota or auth — check error_class (quota=429/RESOURCE_EXHAUSTED → retry later; auth=UNAUTHENTICATED → re-auth agy; else empty_output → inspect stderr) |
 | Reaching for agy on a simple web search | Prefer the WebSearch tool (cc-websearch when installed); use agy --type search only for grounded/cited results or a second model |
