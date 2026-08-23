@@ -1,7 +1,7 @@
 ---
 command: agy-setup
 description: Print the plugin's install path and the command to install agy-delegate's launcher wrappers (agy-bridge + gemini shim)
-version: 1.6.2
+version: 1.6.3
 category: ai-delegation
 tags: [agy, setup, install, bridge, gemini]
 ---
@@ -39,7 +39,7 @@ echo "$AGY_PATH"
 ```
 
 That prints something like
-`/home/you/.claude/plugins/cache/agy-delegate/agy-delegate/1.6.2`. Check it
+`/home/you/.claude/plugins/cache/agy-delegate/agy-delegate/1.6.3`. Check it
 looks right, then run:
 
 ```bash

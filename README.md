@@ -402,6 +402,10 @@ tests/fixtures/                — captured real-agy output the fake and CC05 ar
 
 ## Changelog
 
+### 1.6.3
+
+- Delegating subagents (`agy-delegate-search`, `agy-delegate-code`) and `SKILL.md` no longer silently fall back to native tools (`WebSearch`, `Read`/`Grep`/`Bash`) when the agy bridge is missing (exit 127). They now stop, state that proceeding natively burns the calling agent's own quota instead of agy's, and require explicit confirmation before proceeding; a decline ends the task reported as blocked rather than silently completed. Closes #4.
+
 ### 1.6.2
 
 **Every existing installation must re-run `scripts/install.sh` for this release to take effect.** The launchers exec a target pinned at install time, and a superseded pin now fails loud with exit 127 instead of silently running the old copy — so a shipped fix that is never re-installed sits on disk and never executes.
